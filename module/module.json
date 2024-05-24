@@ -1,0 +1,12 @@
+{
+	"name": "universal_edges",
+	"load": [
+		"control.lua"
+	],
+	"require": [
+		"globals.lua"
+	],
+	"dependencies": {
+		"clusterio": "*"
+	}
+}
