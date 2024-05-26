@@ -8,12 +8,13 @@ export interface Edge {
 	target: EdgeTargetSpecification;
 	length: number;
 	active: boolean;
-	connectors: EdgeConnector[];
+	connectors?: EdgeConnector[]; // Maybe not needed, can do p2p
 }
 
 export interface EdgeTargetSpecification {
 	instanceId: number;
 	origin: number[];
+	surface: number;
 	direction: number;
 	ready: boolean;
 }
@@ -61,6 +62,7 @@ export const EdgeConnector = Type.Object({
 export const EdgeTarget = Type.Object({
 	instanceId: Type.Number(),
 	origin: Type.Array(Type.Number()),
+	surface: Type.Number(),
 	direction: Type.Number(),
 	ready: Type.Boolean(),
 });

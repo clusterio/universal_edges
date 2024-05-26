@@ -1,28 +1,16 @@
 import * as lib from "@clusterio/lib";
-import * as Messages from "./messages";
+import * as messages from "./messages";
 
 lib.definePermission({
-	name: "universal_edges.example.permission.event",
-	title: "Example permission event",
-	description: "Example Description. Event. Change me in index.ts",
+	name: "universal_edges.config.read",
+	title: "Read edge configuration",
+	description: "Read access to edge configuration, including subscriptions",
 });
 
 lib.definePermission({
-	name: "universal_edges.example.permission.request",
-	title: "Example permission request",
-	description: "Example Description. Request. Change me in index.ts",
-});
-
-lib.definePermission({
-	name: "universal_edges.example.permission.subscribe",
-	title: "Example permission subscribe",
-	description: "Example Description. Subscribe. Change me in index.ts",
-});
-
-lib.definePermission({
-	name: "universal_edges.page.view",
-	title: "Example page view permission",
-	description: "Example Description. View. Change me in index.ts",
+	name: "universal_edges.config.write",
+	title: "Write edge configuration",
+	description: "Write access to edge configuration",
 });
 
 declare module "@clusterio/lib" {
@@ -60,9 +48,12 @@ export const plugin: lib.PluginDeclaration = {
 	},
 
 	messages: [
-		Messages.PluginExampleEvent,
-		Messages.PluginExampleRequest,
-		Messages.ExampleSubscribableUpdate,
+		messages.EdgeConnectorUpdate,
+		messages.EdgeTransfer,
+		messages.EdgeUpdate,
+		messages.GetEdgeConfig,
+		messages.GetEdges,
+		messages.SetEdgeConfig,
 	],
 
 	webEntrypoint: "./web",

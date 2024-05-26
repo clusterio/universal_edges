@@ -2,28 +2,53 @@ import path from "path";
 import * as lib from "@clusterio/lib";
 import { BaseControllerPlugin, InstanceInfo } from "@clusterio/controller";
 
-import {
-	PluginExampleEvent, PluginExampleRequest,
-	EdgeUpdate, SubscribableEdge,
-} from "./messages";
+import * as messages from "./messages";
+import { Edge } from "./src/types";
 
 export class ControllerPlugin extends BaseControllerPlugin {
-	edgeDatastore!: Map<string, SubscribableEdge>;
+	edgeDatastore!: Map<string, Edge>;
 	storageDirty = false;
 
 	async init() {
-		this.controller.handle(PluginExampleEvent, this.handlePluginExampleEvent.bind(this));
-		this.controller.handle(PluginExampleRequest, this.handlePluginExampleRequest.bind(this));
-		this.controller.subscriptions.handle(EdgeUpdate, this.handleExampleSubscription.bind(this));
-		this.edgeDatastore = new Map(); // If needed, replace with loading from database file
+		// this.controller.handle(PluginExampleEvent, this.handlePluginExampleEvent.bind(this));
+		// this.controller.handle(PluginExampleRequest, this.handlePluginExampleRequest.bind(this));
+		this.controller.subscriptions.handle(messages.EdgeUpdate, this.handleEdgeConfigSubscription.bind(this));
+		this.edgeDatastore = new Map([
+			["999", {
+				id: "999",
+				updatedAtMs: Date.now(),
+				isDeleted: false,
+				source: {
+					instanceId: 928502558,
+					origin: [0, 0],
+					surface: 1,
+					direction: 0,
+					ready: false,
+				},
+				target: {
+					instanceId: 1446149399,
+					origin: [0, 0],
+					surface: 1,
+					direction: 4,
+					ready: false,
+				},
+				length: 20,
+				active: false,
+			}]
+		]); // If needed, replace with loading from database file
+	}
+
+	async onInstanceStatusChanged(instance: InstanceInfo, prev?: lib.InstanceStatus): Promise<void> {
+		if (instance.status === "running") {
+			// Send edge config updates for relevant edges
+			const edges = [...this.edgeDatastore.values()].filter(edge => edge.source.instanceId === instance.id || edge.target.instanceId === instance.id);
+			this.logger.info(`Instance running ${instance.id} relevant edge count ${edges.length}`)
+			this.controller.sendTo({ instanceId: instance.id }, new messages.EdgeUpdate(edges));
+		}
 	}
 
 	async onControllerConfigFieldChanged(field: string, curr: unknown, prev: unknown) {
 		this.logger.info(`controller::onControllerConfigFieldChanged ${field}`);
-	}
-
-	async onInstanceConfigFieldChanged(instance: InstanceInfo, field: string, curr: unknown, prev: unknown) {
-		this.logger.info(`controller::onInstanceConfigFieldChanged ${instance.id} ${field}`);
 	}
 
 	async onSaveData() {
@@ -41,26 +66,10 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		this.logger.info("controller::onShutdown");
 	}
 
-	async onPlayerEvent(instance: InstanceInfo, event: lib.PlayerEvent) {
-		this.logger.info(`controller::onPlayerEvent ${instance.id} ${JSON.stringify(event)}`);
-	}
-
-	async handlePluginExampleEvent(event: PluginExampleEvent) {
-		this.logger.info(JSON.stringify(event));
-	}
-
-	async handlePluginExampleRequest(request: PluginExampleRequest) {
-		this.logger.info(JSON.stringify(request));
-		return {
-			myResponseString: request.myString,
-			myResponseNumbers: request.myNumberArray,
-		};
-	}
-
-	async handleExampleSubscription(request: lib.SubscriptionRequest) {
+	async handleEdgeConfigSubscription(request: lib.SubscriptionRequest) {
 		const values = [...this.edgeDatastore.values()].filter(
 			value => value.updatedAtMs > request.lastRequestTimeMs,
 		);
-		return values.length ? new EdgeUpdate(values) : null;
+		return values.length ? new messages.EdgeUpdate(values) : null;
 	}
 }

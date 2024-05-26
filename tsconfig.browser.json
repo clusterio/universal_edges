@@ -4,7 +4,7 @@
 		{ "path": "../../packages/lib/tsconfig.browser.json" },
 		{ "path": "../../packages/web_ui/tsconfig.browser.json" },
 	],
-	"include": [ "web/**/*.tsx", "web/**/*.ts", "messages.ts", "package.json" ],
+	"include": [ "web/**/*.tsx", "web/**/*.ts", "src/**/*.ts", "messages.ts", "package.json" ],
 	"compilerOptions": {
 		"outDir": "dist/browser",
 	}

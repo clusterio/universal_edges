@@ -2,22 +2,26 @@ import { plainJson } from "@clusterio/lib";
 import { Type, Static } from "@sinclair/typebox";
 import { Edge } from "./src/types";
 
+/**
+ * Edge configuration change event, subscribable
+ * Only control has to subscribe - the controller automatically sends updates to affected instances
+ */
 export class EdgeUpdate {
 	declare ["constructor"]: typeof EdgeUpdate;
 	static type = "event" as const;
 	static src = "controller" as const;
-	static dst = "control" as const;
+	static dst = ["control", "instance"] as const;
 	static plugin = "universal_edges" as const;
-	static permission = "universal_edges.example.permission.subscribe";
+	static permission = "universal_edges.config.read";
 
-	constructor(edge: Static<typeof Edge>) {
-		Object.assign(this, edge);
-	}
+	constructor(public updates: Static<typeof Edge>[]) { }
 
-	static jsonSchema = Edge;
+	static jsonSchema = Type.Object({
+		updates: Type.Array(Edge)
+	});
 
 	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json);
+		return new this(json.updates);
 	}
 }
 
@@ -86,75 +90,6 @@ export class GetEdges {
 	}
 
 	static Response = plainJson(Type.Array(Edge));
-}
-
-export class SubscribeEdgeConfig {
-	declare ["constructor"]: typeof SubscribeEdgeConfig;
-	static type = "request" as const;
-	static src = "control" as const;
-	static dst = "controller" as const;
-	static plugin = "universal_edges" as const;
-	static permission = "universal_edges.permission.subscribe_config";
-
-	constructor(
-		public id: string,
-	) { }
-
-	static jsonSchema = Type.Object({
-		"id": Type.String(),
-	});
-
-	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json.id);
-	}
-
-	static Response = EdgeUpdate.jsonSchema;
-}
-
-export class SubscribeEdgeConnector {
-	declare ["constructor"]: typeof SubscribeEdgeConnector;
-	static type = "request" as const;
-	static src = "control" as const;
-	static dst = "controller" as const;
-	static plugin = "universal_edges" as const;
-	static permission = "universal_edges.permission.subscribe_connector";
-
-	constructor(
-		public id: string,
-	) { }
-
-	static jsonSchema = Type.Object({
-		"id": Type.String(),
-	});
-
-	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json.id);
-	}
-
-	static Response = EdgeUpdate.jsonSchema;
-}
-
-export class EdgeConfigUpdate {
-	declare ["constructor"]: typeof EdgeConfigUpdate;
-	static type = "event" as const;
-	static src = "controller" as const;
-	static dst = "control" as const;
-	static plugin = "universal_edges" as const;
-	static permission = "universal_edges.permission.subscribe_config";
-
-	constructor(
-		public id: string,
-		public config: Partial<Edge>,
-	) { }
-
-	static jsonSchema = Type.Object({
-		"id": Type.String(),
-		"config": Type.Object({}), // type Edge
-	});
-
-	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json.id, json.config as Partial<Edge>);
-	}
 }
 
 export class EdgeConnectorUpdate {
