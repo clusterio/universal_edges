@@ -31,65 +31,17 @@ export class SetEdgeConfig {
 	static src = "control" as const;
 	static dst = "controller" as const;
 	static plugin = "universal_edges" as const;
-	static permission = "universal_edges.permission.set_config";
+	static permission = "universal_edges.config.write";
 
-	constructor(
-		public id: string,
-		public config: Partial<Edge>,
-	) { }
+	constructor(public edge: Edge,) { }
 
 	static jsonSchema = Type.Object({
-		"id": Type.String(),
-		"config": Edge, // type Edge
+		edge: Edge,
 	});
 
 	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json.id, json.config as Partial<Edge>);
+		return new this(json.edge);
 	}
-}
-
-export class GetEdgeConfig {
-	declare ["constructor"]: typeof GetEdgeConfig;
-	static type = "request" as const;
-	static src = "control" as const;
-	static dst = "controller" as const;
-	static plugin = "universal_edges" as const;
-	static permission = "universal_edges.permission.get_config";
-
-	constructor(
-		public id: string,
-	) { }
-
-	static jsonSchema = Type.Object({
-		"id": Type.String(),
-	});
-
-	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json.id);
-	}
-
-	static Response = plainJson(Type.Object({
-		"config": Type.Object({}), // type Edge
-	}));
-}
-
-export class GetEdges {
-	declare ["constructor"]: typeof GetEdges;
-	static type = "request" as const;
-	static src = "control" as const;
-	static dst = "controller" as const;
-	static plugin = "universal_edges" as const;
-	static permission = "universal_edges.permission.get_edges";
-
-	constructor() { }
-
-	static jsonSchema = Type.Object({});
-
-	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this();
-	}
-
-	static Response = plainJson(Type.Array(Edge));
 }
 
 export class EdgeConnectorUpdate {

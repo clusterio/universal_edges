@@ -11,7 +11,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 
 	async init() {
 		// this.controller.handle(PluginExampleEvent, this.handlePluginExampleEvent.bind(this));
-		// this.controller.handle(PluginExampleRequest, this.handlePluginExampleRequest.bind(this));
+		this.controller.handle(messages.SetEdgeConfig, this.handleSetEdgeConfigRequest.bind(this));
 		this.controller.subscriptions.handle(messages.EdgeUpdate, this.handleEdgeConfigSubscription.bind(this));
 		this.edgeDatastore = new Map([
 			["999", {
@@ -52,7 +52,6 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	}
 
 	async onSaveData() {
-		this.logger.info("controller::onSaveData");
 		// Save edgeDatastore to file
 		if (this.storageDirty) {
 			this.logger.info("Saving edgeDatastore to file");
@@ -71,5 +70,9 @@ export class ControllerPlugin extends BaseControllerPlugin {
 			value => value.updatedAtMs > request.lastRequestTimeMs,
 		);
 		return values.length ? new messages.EdgeUpdate(values) : null;
+	}
+
+	async handleSetEdgeConfigRequest({ edge }: messages.SetEdgeConfig) {
+		this.edgeDatastore.set(edge.id, edge);
 	}
 }

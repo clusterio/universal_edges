@@ -51,8 +51,6 @@ export const plugin: lib.PluginDeclaration = {
 		messages.EdgeConnectorUpdate,
 		messages.EdgeTransfer,
 		messages.EdgeUpdate,
-		messages.GetEdgeConfig,
-		messages.GetEdges,
 		messages.SetEdgeConfig,
 	],
 
