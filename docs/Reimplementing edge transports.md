@@ -33,3 +33,21 @@ The following blocking logic applies:
   - There is no blocking. If the fluid is not being consumed, it will simply fill up the tanks.
 - For power:
   - Same as fluids, but with a modded accumulator
+
+## Messages
+
+### Requests
+
+- SetEdgeConfig - Control -> Controller
+- GetEdgeConfig - Control -> Controller
+- GetEdges - Control -> Controller
+- SubscribeEdgeConfig - Control | Instance -> Controller
+- SubscribeEdgeConnector - Control | Instance -> Controller
+
+### Events
+
+- EdgeConfigUpdate - Controller -> Instance & Control
+- EdgeConnectorUpdate - Instance -> Controller, Controller -> Instance
+  - Controller translates InBelt -> OutBelt etc
+- EdgeTransfer - Instance | Controller -> Instance (Does this allow trains to be eaten? Send trains and delay deletion?)
+  - Edge ID, Type, Amount, Connector position

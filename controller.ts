@@ -1,20 +1,21 @@
+import path from "path";
 import * as lib from "@clusterio/lib";
 import { BaseControllerPlugin, InstanceInfo } from "@clusterio/controller";
 
 import {
 	PluginExampleEvent, PluginExampleRequest,
-	ExampleSubscribableUpdate, ExampleSubscribableValue,
+	EdgeUpdate, SubscribableEdge,
 } from "./messages";
 
 export class ControllerPlugin extends BaseControllerPlugin {
-	exampleDatabase!: Map<string, ExampleSubscribableValue>;
+	edgeDatastore!: Map<string, SubscribableEdge>;
 	storageDirty = false;
 
 	async init() {
 		this.controller.handle(PluginExampleEvent, this.handlePluginExampleEvent.bind(this));
 		this.controller.handle(PluginExampleRequest, this.handlePluginExampleRequest.bind(this));
-		this.controller.subscriptions.handle(ExampleSubscribableUpdate, this.handleExampleSubscription.bind(this));
-		this.exampleDatabase = new Map(); // If needed, replace with loading from database file
+		this.controller.subscriptions.handle(EdgeUpdate, this.handleExampleSubscription.bind(this));
+		this.edgeDatastore = new Map(); // If needed, replace with loading from database file
 	}
 
 	async onControllerConfigFieldChanged(field: string, curr: unknown, prev: unknown) {
@@ -27,6 +28,13 @@ export class ControllerPlugin extends BaseControllerPlugin {
 
 	async onSaveData() {
 		this.logger.info("controller::onSaveData");
+		// Save edgeDatastore to file
+		if (this.storageDirty) {
+			this.logger.info("Saving edgeDatastore to file");
+			this.storageDirty = false;
+			const file = path.resolve(this.controller.config.get("controller.database_directory"), "edgeDatastore.json");
+			await lib.safeOutputFile(file, JSON.stringify(Array.from(this.edgeDatastore)));
+		}
 	}
 
 	async onShutdown() {
@@ -50,9 +58,9 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	}
 
 	async handleExampleSubscription(request: lib.SubscriptionRequest) {
-		const values = [...this.exampleDatabase.values()].filter(
+		const values = [...this.edgeDatastore.values()].filter(
 			value => value.updatedAtMs > request.lastRequestTimeMs,
 		);
-		return values.length ? new ExampleSubscribableUpdate(values) : null;
+		return values.length ? new EdgeUpdate(values) : null;
 	}
 }
