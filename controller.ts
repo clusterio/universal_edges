@@ -73,6 +73,22 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	}
 
 	async handleSetEdgeConfigRequest({ edge }: messages.SetEdgeConfig) {
+		const oldEdge = this.edgeDatastore.get(edge.id);
 		this.edgeDatastore.set(edge.id, edge);
+		// Broadcast changes to affected instances
+		const instancesToUpdate = [
+			oldEdge?.source.instanceId,
+			oldEdge?.target.instanceId,
+			edge.source.instanceId,
+			edge.target.instanceId,
+		];
+		for (let instanceId of instancesToUpdate) {
+			if (instanceId) {
+				let instance = this.controller.instances.get(instanceId);
+				if (instance?.status === "running") {
+					await this.controller.sendTo({ instanceId }, new messages.EdgeUpdate([edge]));
+				}
+			}
+		};
 	}
 }

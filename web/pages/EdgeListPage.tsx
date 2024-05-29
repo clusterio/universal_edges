@@ -73,6 +73,7 @@ export default function EdgeListPage() {
 					values.source.ready = false;
 					values.target.ready = false;
 					values.active = false;
+					values.length = Number(values.length);
 					console.log(values);
 					control.send(new messages.SetEdgeConfig(values));
 				}}

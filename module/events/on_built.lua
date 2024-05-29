@@ -3,7 +3,7 @@ local util = require("modules/universal_edges/util")
 local function on_built(entity)
 	if entity.valid and util.is_transport_belt[entity.name] then
 		local pos = {entity.position.x, entity.position.y}
-		for id, edge in pairs(global.edge_transports.edges) do
+		for id, edge in pairs(global.universal_edges.edges) do
 			if edge.active and game.surfaces[edge.surface] == entity.surface then
 				local offset = belt_check(pos, entity.direction, edge)
 				if offset then

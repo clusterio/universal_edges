@@ -15,7 +15,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 	async onStart() {
 		this.logger.info("instance::onStart");
-		this.sendRcon(`/sc universal_edges.set_config({instance_id = ${this.instance.config.get("instance.id")}}`)
+		this.sendRcon(`/sc universal_edges.set_config({instance_id = ${this.instance.config.get("instance.id")}})`)
 	}
 
 	async onStop() {
