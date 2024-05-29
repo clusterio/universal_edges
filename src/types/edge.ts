@@ -23,6 +23,8 @@ export interface EdgeTargetSpecification {
 export interface EdgeConnector {
 	position: number; // Distance along edge from origin
 	type: "InBelt" | "OutBelt" | "InTrain" | "OutTrain" | "Fluid" | "Power";
+	sourcePlaced: boolean,
+	targetPlaced: boolean,
 	blocked: number; // 0 means blocked, numerical value is the amount of items that can pass
 	// Buffers for fluids and power
 	sourceBuffer?: TwoWayBuffer;
@@ -54,6 +56,8 @@ export const TwoWayBuffer = Type.Object({
 export const EdgeConnector = Type.Object({
 	position: Type.Number(), // Distance along edge from origin
 	type: EdgeConnectorType,
+	sourcePlaced: Type.Boolean(),
+	targetPlaced: Type.Boolean(),
 	blocked: Type.Number(),
 	sourceBuffer: Type.Optional(TwoWayBuffer),
 	targetBuffer: Type.Optional(TwoWayBuffer),

@@ -11,6 +11,6 @@ local belt_type_to_loader_type = {
 }
 
 return {
-	is_transport_belt,
-	belt_type_to_loader_type,
+	is_transport_belt = is_transport_belt,
+	belt_type_to_loader_type = belt_type_to_loader_type,
 }

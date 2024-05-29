@@ -39,14 +39,11 @@ The following blocking logic applies:
 ### Requests
 
 - SetEdgeConfig - Control -> Controller
-- GetEdgeConfig - Control -> Controller
-- GetEdges - Control -> Controller
-- SubscribeEdgeConfig - Control | Instance -> Controller
-- SubscribeEdgeConnector - Control | Instance -> Controller
 
 ### Events
 
-- EdgeConfigUpdate - Controller -> Instance & Control
+- EdgeUpdate - Controller -> Instance & Control
+  - Edge config/active status has been updated
 - EdgeConnectorUpdate - Instance -> Controller, Controller -> Instance
   - Controller translates InBelt -> OutBelt etc
 - EdgeTransfer - Instance | Controller -> Instance (Does this allow trains to be eaten? Send trains and delay deletion?)
@@ -61,3 +58,20 @@ The active status is FALSE when:
 - Source and target is on the same instance
 
 The active status is part of and synchronized with the edge config.
+
+## Connectors
+
+A connector is a singular link, for example a single belt running across the edge. There are different types of connectors for belts, fluids, power and trains, but they use the same code as much as possible.
+
+### Lifecycle
+
+1. Belt is placed facing border
+2. `EdgeConnectorUpdate` is sent to partner instance
+3. Belt is placed facing away from border on partner, `EdgeConnectorUpdate` is sent
+4. Items enter connector and are transfered with `EdgeTransfer`
+5. Partner sends `EdgeConnectorUpdate` for destination blocked status
+6. Belt is removed, edge is removed or edge position changes
+   1. `EdgeConnectorUpdate` is sent to remove the connector on the partner
+   2. Waiting items are voided
+
+It is important to note that `EdgeConnectorUpdate` has to be sent both ways to track the status of the link initiator belts. The connector is not removed before the connected belts are removed from both sides of the link.

@@ -1,6 +1,6 @@
 import { plainJson } from "@clusterio/lib";
 import { Type, Static } from "@sinclair/typebox";
-import { Edge } from "./src/types";
+import { Edge, EdgeConnector } from "./src/types";
 
 /**
  * Edge configuration change event, subscribable
@@ -59,7 +59,7 @@ export class EdgeConnectorUpdate {
 
 	static jsonSchema = Type.Object({
 		"id": Type.String(),
-		"connectors": Type.Array(Type.Object({})), // type Edge["connectors"]
+		"connectors": Type.Array(EdgeConnector), // type Edge["connectors"]
 	});
 
 	static fromJSON(json: Static<typeof this.jsonSchema>) {
