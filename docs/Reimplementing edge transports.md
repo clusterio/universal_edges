@@ -51,3 +51,13 @@ The following blocking logic applies:
   - Controller translates InBelt -> OutBelt etc
 - EdgeTransfer - Instance | Controller -> Instance (Does this allow trains to be eaten? Send trains and delay deletion?)
   - Edge ID, Type, Amount, Connector position
+
+## Active status
+
+The active status is key in managing edges. Generally, this is the value you want to diagnose when something is not working.
+
+The active status is FALSE when:
+- Either instance is not running
+- Source and target is on the same instance
+
+The active status is part of and synchronized with the edge config.

@@ -54,6 +54,7 @@ local function debug_draw()
 			goto continue
 		end
 		local color = { 0, 1, 0 }
+		if not edge.active then color = { 1, 0, 0 } end
 		debug_shapes[#debug_shapes + 1] = rendering.draw_circle {
 			color = color,
 			radius = 0.25,
@@ -90,8 +91,8 @@ end
 local function cleanup()
 	-- Filter out edges that do not have source or target on this instance
 	for id, edge in pairs(global.universal_edges.edges) do
-		if global.universal_edges.config.instance_id ~= edge.source.instance_id
-			and global.universal_edges.config.instance_id ~= edge.target.instance_id
+		if tostring(global.universal_edges.config.instance_id) ~= tostring(edge.source.instanceId)
+			and tostring(global.universal_edges.config.instance_id) ~= tostring(edge.target.instanceId)
 		then
 			global.universal_edges.edges[id] = nil
 		end

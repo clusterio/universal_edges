@@ -39,11 +39,37 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	}
 
 	async onInstanceStatusChanged(instance: InstanceInfo, prev?: lib.InstanceStatus): Promise<void> {
-		if (instance.status === "running") {
-			// Send edge config updates for relevant edges
-			const edges = [...this.edgeDatastore.values()].filter(edge => edge.source.instanceId === instance.id || edge.target.instanceId === instance.id);
-			this.logger.info(`Instance running ${instance.id} relevant edge count ${edges.length}`)
-			this.controller.sendTo({ instanceId: instance.id }, new messages.EdgeUpdate(edges));
+		// Send edge config updates for relevant edges
+		const edges = [...this.edgeDatastore.values()].filter(edge => edge.source.instanceId === instance.id || edge.target.instanceId === instance.id);
+		// Set active status
+		edges.forEach(edge => edge.active = this.isEdgeActive(edge));
+
+		// Update instances consuming the edges
+		const instanceEdgeMap: Map<number, Edge[]> = new Map();
+		edges.forEach(edge => {
+			if (edge.source.instanceId !== undefined) {
+				const arr = instanceEdgeMap.get(edge.source.instanceId) || [];
+				if (!arr.includes(edge)) {
+					arr.push(edge);
+				}
+				instanceEdgeMap.set(edge.source.instanceId, arr);
+			}
+			if (edge.target.instanceId !== undefined) {
+				const arr = instanceEdgeMap.get(edge.target.instanceId) || [];
+				if (!arr.includes(edge)) {
+					arr.push(edge);
+				}
+				instanceEdgeMap.set(edge.target.instanceId, arr);
+			}
+		});
+
+		// Send update
+		for (let instanceId of instanceEdgeMap.keys()) {
+			if (this.controller.instances.get(instanceId)?.status === "running") {
+				const edgesToSend = instanceEdgeMap.get(instanceId)!;
+				this.logger.info(`Instance running ${instanceId} relevant edge count ${edgesToSend.length}`);
+				this.controller.sendTo({ instanceId }, new messages.EdgeUpdate(edgesToSend));
+			}
 		}
 	}
 
@@ -75,6 +101,10 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	async handleSetEdgeConfigRequest({ edge }: messages.SetEdgeConfig) {
 		const oldEdge = this.edgeDatastore.get(edge.id);
 		this.edgeDatastore.set(edge.id, edge);
+
+		// Set active status
+		edge.active = this.isEdgeActive(edge);
+
 		// Broadcast changes to affected instances
 		const instancesToUpdate = [
 			oldEdge?.source.instanceId,
@@ -90,5 +120,14 @@ export class ControllerPlugin extends BaseControllerPlugin {
 				}
 			}
 		};
+	}
+
+	isEdgeActive(edge: Edge) {
+		if (edge.source.instanceId === edge.target.instanceId) return false;
+		const source = this.controller.instances.get(edge.source.instanceId);
+		if (!source || source.status !== "running") return false;
+		const target = this.controller.instances.get(edge.target.instanceId);
+		if (!target || target.status !== "running") return false;
+		return true;
 	}
 }
