@@ -4,6 +4,9 @@ local vectorutil = require("vectorutil")
 local edge_util = require("modules/universal_edges/edge/util")
 local belt_box = require("modules/universal_edges/edge/belt_box")
 local belt_link = require("modules/universal_edges/edge/belt_link")
+local fluid_box = require("modules/universal_edges/edge/fluid_box")
+local fluid_link = require("modules/universal_edges/edge/fluid_link")
+
 local on_built = require("modules/universal_edges/events/on_built")
 local on_removed = require("modules/universal_edges/events/on_removed")
 
@@ -102,6 +105,7 @@ local function cleanup()
 	end
 end
 
+-- Synchronize edge configuration and status
 function universal_edges.edge_update(edge_id, edge_json)
 	log("Updating edge " .. edge_id)
 	local active_status_has_changed = false
@@ -158,6 +162,7 @@ function universal_edges.edge_update(edge_id, edge_json)
 	cleanup()
 end
 
+-- Synchronize connector placement with partner
 function universal_edges.edge_link_update(json)
 	local update = game.json_to_table(json)
 	if update == nil then return end
@@ -166,8 +171,6 @@ function universal_edges.edge_link_update(json)
 	local edge = global.universal_edges.edges[update.edge_id]
 	if not edge then
 		log("Got update for unknown edge " .. serpent.line(update))
-		log("Unknown edge update:"..update.edge_id)
-		log("Edges: "..serpent.block(global.universal_edges.edges))
 		return
 	end
 	local surface = game.surfaces[edge_util.edge_get_local_target(edge).surface]
@@ -179,11 +182,16 @@ function universal_edges.edge_link_update(json)
 		belt_box.create(data.offset, edge, data.is_input, data.belt_type, surface)
 	elseif update.type == "remove_belt_link" then
 		belt_box.remove(data.offset, edge, surface)
+	elseif update.type == "create_fluid_link" then
+		fluid_box.create(data.offset, edge, surface)
+	elseif update.type == "remove_fluid_link" then
+		fluid_box.remove(data.offset, edge, surface)
 	else
 		log("Unknown link update: " .. serpent.line(update.type))
 	end
 end
 
+-- Receive fluid from partner over RCON
 function universal_edges.transfer(json)
 	local data = game.json_to_table(json)
 	if data == nil then return end
@@ -217,6 +225,61 @@ function universal_edges.transfer(json)
 				if update then
 					response_transfers[#response_transfers + 1] = update
 				end
+			end
+		end
+	end
+
+	if data.fluid_transfers then
+		for _offset, fluid_transfer in ipairs(data.fluid_transfers) do
+			local link = (edge.linked_fluids or {})[fluid_transfer.offset]
+			if not link then
+				log("FATAL: received fluids for non-existant link at offset " .. fluid_transfer.offset)
+				return
+			end
+
+			if not link.pipe then
+				log("FATAL: received fluids for a link that does not have a pipe" .. fluid_transfer.offset)
+			end
+
+			if fluid_transfer.amount ~= nil
+				and fluid_transfer.name ~= nil
+				and fluid_transfer.temperature ~= nil
+			then
+				local local_fluid = link.pipe.fluidbox[1]
+				-- Make sure the fluid exists
+				if local_fluid == nil then
+					link.pipe.insert_fluid {
+						name = fluid_transfer.name,
+						amount = 1,
+					}
+					local_fluid = link.pipe.fluidbox[1]
+				end
+				local average = (fluid_transfer.amount + local_fluid.amount) / 2
+				-- Weighted average temperature
+				local average_temperature = (fluid_transfer.amount * fluid_transfer.temperature + local_fluid.amount * local_fluid.temperature) /
+					(fluid_transfer.amount + local_fluid.amount)
+				-- Only transfer balance in one direction - the partner will handle balancing the other way
+				if average > local_fluid.amount then
+					-- Send how much fluid we balanced as response
+					response_transfers[#response_transfers + 1] = {
+						offset = fluid_transfer.offset,
+						name = fluid_transfer.name,
+						amount_balanced = average - local_fluid.amount,
+					}
+
+					-- Update local fluid level
+					local_fluid.name = fluid_transfer.name
+					local_fluid.amount = average
+					local_fluid.temperature = average_temperature
+					link.pipe.fluidbox[1] = local_fluid
+				end
+			end
+			if fluid_transfer.name and fluid_transfer.amount_balanced then
+				-- The partner instance took some fluid to maintain balance, subtract that from the local storage
+				link.pipe.remove_fluid {
+					name = fluid_transfer.name,
+					amount = fluid_transfer.amount_balanced,
+				}
 			end
 		end
 	end
@@ -256,8 +319,10 @@ universal_edges.events = {
 			return
 		end
 
+		-- Attempt to send items and fluids to partner
 		if edge.active then
 			belt_link.poll_links(id, edge, ticks_left)
+			fluid_link.poll_links(id, edge, ticks_left)
 		end
 
 		if ticks_left == 0 then

@@ -79,6 +79,9 @@ local function shift_inventory(inventory, shift)
 	return current_shift, shift_top
 end
 
+--[[
+	Handle items received from transfer, return flow status (is the space for more?)
+]]
 local function push_belt_link(offset, link, item_stacks)
 	if not link.chest or not link.chest.valid then
 		log("FATAL: recevied items but target chest does not exist at off " .. offset)

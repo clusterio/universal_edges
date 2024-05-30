@@ -69,6 +69,13 @@ const beltTransfersType = Type.Array(Type.Object({
 	item_stacks: Type.Optional(Type.Array(Type.Object({}))),
 	set_flow: Type.Optional(Type.Boolean()),
 }));
+const fluidTransfersType = Type.Array(Type.Object({
+	offset: Type.Number(),
+	name: Type.String(),
+	temperature: Type.Optional(Type.Number()),
+	amount: Type.Optional(Type.Number()),
+	amount_balanced: Type.Optional(Type.Number()),
+}));
 export class EdgeTransfer {
 	declare ["constructor"]: typeof EdgeTransfer;
 	static type = "request" as const;
@@ -76,15 +83,20 @@ export class EdgeTransfer {
 	static dst = "instance" as const;
 	static plugin = "universal_edges" as const;
 
-	constructor(public edgeId: string, public beltTransfers: Static<typeof beltTransfersType>) { }
+	constructor(
+		public edgeId: string,
+		public beltTransfers: Static<typeof beltTransfersType>,
+		public fluidTransfers: Static<typeof fluidTransfersType>,
+	) { }
 
 	static jsonSchema = Type.Object({
 		edgeId: Type.String(),
-		beltTransfers: beltTransfersType
+		beltTransfers: beltTransfersType,
+		fluidTransfers: fluidTransfersType,
 	});
 
 	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json.edgeId, json.beltTransfers);
+		return new this(json.edgeId, json.beltTransfers, json.fluidTransfers);
 	}
 
 	static Response = plainJson(Type.Object({

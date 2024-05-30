@@ -1,3 +1,7 @@
+/**
+ * If edge direction is 4 (West), that means the belts enter going north to south.
+ * The right hand side of the edge is always the entrance/exit
+ */
 export const directions = [
 	"East",
 	"South-east",

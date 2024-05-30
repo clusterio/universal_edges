@@ -21,17 +21,28 @@ type BeltTransfer = {
 
 type EdgeTransfer = {
 	edge_id: string,
-	belt_transfers: BeltTransfer[]
+	belt_transfers: BeltTransfer[],
+	fluid_transfers: FluidTransfer[],
+}
+
+type FluidTransfer = {
+	offset: number,
+	name: string,
+	temperature?: number,
+	amount?: number,
+	amount_balanced?: number,
 }
 
 type EdgeBuffer = {
 	edge: Edge,
 	pendingMessage: {
 		beltTransfers: Map<number, BeltTransfer>,
+		fluidTransfers: Map<number, FluidTransfer>,
 	},
 	messageTransfer: lib.RateLimiter,
 	pendingCommand: {
 		beltTransfers: Map<number, BeltTransfer>
+		fluidTransfers: Map<number, FluidTransfer>
 	}
 	commandTransfer: lib.RateLimiter,
 }
@@ -56,6 +67,35 @@ function mergeBeltTransfers(
 		}
 		if (Object.prototype.hasOwnProperty.call(beltTransfer, "set_flow")) {
 			pending.set_flow = beltTransfer.set_flow;
+		}
+	}
+}
+
+function mergeFluidTransfers(
+	pendingFluidTransfers: Map<number, FluidTransfer>,
+	fluidTransfers: FluidTransfer[]
+) {
+	for (let fluidTransfer of fluidTransfers) {
+		let pending = pendingFluidTransfers.get(fluidTransfer.offset);
+		if (!pending) {
+			pending = {
+				offset: fluidTransfer.offset,
+				name: fluidTransfer.name,
+			};
+			pendingFluidTransfers.set(fluidTransfer.offset, pending);
+		}
+		// When sending amount we send the current amount in the tank, hence we want to overwrite instead of adding here
+		if (fluidTransfer.amount)
+			pending.amount = fluidTransfer.amount;
+		if (fluidTransfer.temperature)
+			pending.temperature = fluidTransfer.temperature;
+		// Amount balanced is the amount of fluid we have added on the current instance. This one needs to be additive.
+		if (fluidTransfer.amount_balanced) {
+			if (pending.amount_balanced) {
+				pending.amount_balanced += fluidTransfer.amount_balanced;
+			} else {
+				pending.amount_balanced = fluidTransfer.amount_balanced;
+			}
 		}
 	}
 }
@@ -124,11 +164,13 @@ export class InstancePlugin extends BaseInstancePlugin {
 	async handleEdgeTransferFromGame(data: EdgeTransfer) {
 		let edge = this.edges.get(data.edge_id);
 		if (!edge) {
+			console.log(data)
 			console.log("edge not found");
 			return; // XXX LATER PROBLEM
 		}
 
 		mergeBeltTransfers(edge.pendingMessage.beltTransfers, data.belt_transfers || []);
+		mergeFluidTransfers(edge.pendingMessage.fluidTransfers, data.fluid_transfers || []);
 		edge.messageTransfer.activate();
 	}
 
@@ -141,6 +183,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 					edge,
 					pendingMessage: {
 						beltTransfers: new Map(),
+						fluidTransfers: new Map(),
 					},
 					messageTransfer: new lib.RateLimiter({
 						maxRate: this.instance.config.get("universal_edges.transfer_message_rate"),
@@ -150,6 +193,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 					}),
 					pendingCommand: {
 						beltTransfers: new Map(),
+						fluidTransfers: new Map(),
 					},
 					commandTransfer: new lib.RateLimiter({
 						maxRate: this.instance.config.get("universal_edges.transfer_command_rate"),
@@ -173,6 +217,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 			return; // XXX LATER PROBLEM
 		}
 
+		// Belts
 		let beltTransfers = [];
 		for (let [_offset, beltTransfer] of edge.pendingMessage.beltTransfers) {
 			beltTransfers.push({
@@ -180,6 +225,14 @@ export class InstancePlugin extends BaseInstancePlugin {
 			});
 		}
 		edge.pendingMessage.beltTransfers.clear();
+		// Fluids
+		let fluidTransfers = [];
+		for (let [_offset, fluidTransfer] of edge.pendingMessage.fluidTransfers) {
+			fluidTransfers.push({
+				...fluidTransfer,
+			});
+		}
+		edge.pendingMessage.fluidTransfers.clear();
 
 		try {
 			// Find partner instance
@@ -191,7 +244,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 			await this.instance.sendTo(
 				{ instanceId: partnerInstance },
-				new messages.EdgeTransfer(edge.edge.id, beltTransfers)
+				new messages.EdgeTransfer(edge.edge.id, beltTransfers, fluidTransfers)
 			);
 			// We assume the transfer did not happen if an error occured.
 		} catch (err) {
@@ -201,7 +254,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 	}
 
 	async edgeTransferRequestHandler(message: messages.EdgeTransfer) {
-		let { edgeId, beltTransfers } = message;
+		let { edgeId, beltTransfers, fluidTransfers } = message;
 		let edge = this.edges.get(edgeId);
 		if (!edge) {
 			console.log("impossible the edge was not found!");
@@ -209,6 +262,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 		}
 
 		mergeBeltTransfers(edge.pendingCommand.beltTransfers, beltTransfers);
+		mergeFluidTransfers(edge.pendingCommand.fluidTransfers, fluidTransfers)
 		edge.commandTransfer.activate();
 		return { success: true };
 	}
@@ -220,6 +274,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 			return; // XXX later problem,
 		}
 
+		// Belts
 		let beltTransfers = [];
 		for (let [_offset, beltTransfer] of edge.pendingCommand.beltTransfers) {
 			beltTransfers.push({
@@ -227,10 +282,19 @@ export class InstancePlugin extends BaseInstancePlugin {
 			});
 		}
 		edge.pendingCommand.beltTransfers.clear();
+		// FLuids
+		let fluidTransfers = [];
+		for (let [_offset, fluidTransfer] of edge.pendingCommand.fluidTransfers) {
+			fluidTransfers.push({
+				...fluidTransfer,
+			});
+		}
+		edge.pendingCommand.fluidTransfers.clear();
 
 		let json = lib.escapeString(JSON.stringify({
 			edge_id: edgeId,
 			belt_transfers: beltTransfers,
+			fluid_transfers: fluidTransfers,
 		}));
 		await this.sendRcon(`/sc universal_edges.transfer("${json}")`, true);
 	}
