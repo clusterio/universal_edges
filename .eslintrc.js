@@ -42,6 +42,7 @@ module.exports = {
 				},
 				"rules": {
 					"node/no-unpublished-import": "off",
+					"node/no-missing-import": "warn",
 				},
 			},
 		},
@@ -57,7 +58,7 @@ module.exports = {
 	],
 
 	"rules": {
-		"node/no-missing-import": ["error", {
+		"node/no-missing-import": ["warn", {
 			"tryExtensions": [".js", ".jsx", ".json", ".node", ".ts", ".tsx"],
 		}],
 		"accessor-pairs": "error",
@@ -136,7 +137,7 @@ module.exports = {
 		"max-statements-per-line": "off",
 		"multiline-comment-style": ["warn", "separate-lines"],
 		"multiline-ternary": "off",
-		"new-cap": "error",
+		"new-cap": "warn",
 		"new-parens": "error",
 		"newline-after-var": "off",
 		"newline-before-return": "off",

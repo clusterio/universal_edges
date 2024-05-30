@@ -14,6 +14,7 @@
 		"node": ">=18"
 	},
 	"peerDependencies": {
+		"@clusterio/web_ui": "^2.0.0-alpha.17",
 		"@clusterio/lib": "^2.0.0-alpha.17",
 		"@clusterio/controller": "^2.0.0-alpha.17",
 		"@clusterio/host": "^2.0.0-alpha.17"
