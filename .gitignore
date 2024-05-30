@@ -2,3 +2,4 @@ dist
 bun.lockb
 *.sh
 .DS_Store
+node_modules
