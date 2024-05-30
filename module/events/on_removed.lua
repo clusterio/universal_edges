@@ -7,7 +7,7 @@ local function on_removed(entity)
 	if entity.valid and util.is_transport_belt[entity.name] then
 		local pos = {entity.position.x, entity.position.y}
 		for id, edge in pairs(global.universal_edges.edges) do
-			if game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
+			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				local offset = belt_check(pos, entity.direction, edge)
 				if offset then
 					remove_belt_link(id, edge, offset, entity)

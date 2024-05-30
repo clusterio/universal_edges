@@ -44,53 +44,47 @@ export class SetEdgeConfig {
 	}
 }
 
-export class EdgeConnectorUpdate {
-	declare ["constructor"]: typeof EdgeConnectorUpdate;
+export class EdgeLinkUpdate {
+	declare ["constructor"]: typeof EdgeLinkUpdate;
 	static type = "event" as const;
-	static src = "controller" as const;
-	static dst = "control" as const;
+	static src = "instance" as const;
+	static dst = "instance" as const;
 	static plugin = "universal_edges" as const;
-	static permission = "universal_edges.permission.subscribe_connector";
 
-	constructor(
-		public id: string,
-		public connectors: Edge["connectors"],
-	) { }
+	constructor(public edgeId: string, public type: string, public data: unknown) { }
 
 	static jsonSchema = Type.Object({
-		"id": Type.String(),
-		"connectors": Type.Array(EdgeConnector), // type Edge["connectors"]
+		edgeId: Type.String(),
+		type: Type.String(),
+		data: Type.Unknown(),
 	});
 
 	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json.id, json.connectors as Edge["connectors"]);
+		return new this(json.edgeId, json.type, json.data);
 	}
 }
 
+const beltTransfersType = Type.Array(Type.Object({
+	offset: Type.Number(),
+	item_stacks: Type.Optional(Type.Array(Type.Object({}))),
+	set_flow: Type.Optional(Type.Boolean()),
+}));
 export class EdgeTransfer {
 	declare ["constructor"]: typeof EdgeTransfer;
 	static type = "request" as const;
-	static src = "control" as const;
-	static dst = "controller" as const;
+	static src = "instance" as const;
+	static dst = "instance" as const;
 	static plugin = "universal_edges" as const;
-	static permission = "universal_edges.permission.transfer";
-	constructor(
-		json: Static<typeof EdgeTransfer.jsonSchema>
-	) {
-		Object.assign(this, json);
-	}
 
-	static jsonSchema = Type.Array(Type.Object({
-		"edge_id": Type.Number(),
-		"connectors": Type.Array(Type.Object({
-			"type": Type.String(),
-			"name": Type.String(),
-			"amount": Type.Number(),
-		})),
-	}));
+	constructor(public edgeId: string, public beltTransfers: Static<typeof beltTransfersType>) { }
+
+	static jsonSchema = Type.Object({
+		edgeId: Type.String(),
+		beltTransfers: beltTransfersType
+	});
 
 	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json);
+		return new this(json.edgeId, json.beltTransfers);
 	}
 
 	static Response = plainJson(Type.Object({

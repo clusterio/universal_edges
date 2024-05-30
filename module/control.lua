@@ -1,6 +1,9 @@
 local clusterio_api = require("modules/clusterio/api")
 local vectorutil = require("vectorutil")
 
+local edge_util = require("modules/universal_edges/edge/util")
+local belt_box = require("modules/universal_edges/edge/belt_box")
+local belt_link = require("modules/universal_edges/edge/belt_link")
 local on_built = require("modules/universal_edges/events/on_built")
 local on_removed = require("modules/universal_edges/events/on_removed")
 
@@ -101,16 +104,10 @@ end
 
 function universal_edges.edge_update(edge_id, edge_json)
 	log("Updating edge " .. edge_id)
+	local active_status_has_changed = false
 	if edge_id == nil or edge_json == nil then return end
 	local edge = game.json_to_table(edge_json)
 	if edge == nil then return end
-	if global.universal_edges.edges[edge_id] == nil then
-		game.print("Adding new edge " .. edge_id)
-		edge.ready = false
-		global.universal_edges.edges[edge_id] = edge
-		debug_draw()
-		return
-	end
 	if edge.isDeleted then
 		game.print("Deleting edge " .. edge_id)
 		-- Perform cleanup, remove edge
@@ -118,15 +115,118 @@ function universal_edges.edge_update(edge_id, edge_json)
 		debug_draw()
 		return
 	end
-	-- Do a partial update
-	local old_edge = global.universal_edges.edges[edge_id]
-	old_edge.updatedAtMs = edge.updatedAtMs
-	old_edge.source = edge.source
-	old_edge.target = edge.target
-	old_edge.length = edge.length
-	old_edge.active = edge.active
+	if global.universal_edges.edges[edge_id] == nil then
+		game.print("Adding new edge " .. edge_id)
+		edge.ready = false
+		global.universal_edges.edges[edge_id] = edge
+		active_status_has_changed = true
+	else
+		-- Do a partial update
+		local old_edge = global.universal_edges.edges[edge_id]
+		old_edge.updatedAtMs = edge.updatedAtMs
+		old_edge.source = edge.source
+		old_edge.target = edge.target
+		old_edge.length = edge.length
+		if old_edge.active ~= edge.active then
+			active_status_has_changed = true
+		end
+		old_edge.active = edge.active
+	end
+
+	if active_status_has_changed then
+		if not edge.active then
+			if edge.linked_belts then
+				for _offset, link in pairs(edge.linked_belts) do
+					if link.is_input and link.chest and link.chest.valid then
+						local inventory = link.chest.get_inventory(defines.inventory.chest)
+						inventory.set_bar(1) -- Block new inputs
+					end
+				end
+			end
+		else
+			if edge.linked_belts then
+				for _offset, link in pairs(edge.linked_belts) do
+					if not link.is_input then
+						link.start_index = 1
+					end
+				end
+			end
+		end
+	end
+
 	debug_draw()
 	cleanup()
+end
+
+function universal_edges.edge_link_update(json)
+	local update = game.json_to_table(json)
+	if update == nil then return end
+
+	local data = update.data
+	local edge = global.universal_edges.edges[update.edge_id]
+	if not edge then
+		log("Got update for unknown edge " .. serpent.line(update))
+		log("Unknown edge update:"..update.edge_id)
+		log("Edges: "..serpent.block(global.universal_edges.edges))
+		return
+	end
+	local surface = game.surfaces[edge_util.edge_get_local_target(edge).surface]
+	if not surface then
+		log("Invalid surface for edge id " .. update.edge_id)
+	end
+
+	if update.type == "create_belt_link" then
+		belt_box.create(data.offset, edge, data.is_input, data.belt_type, surface)
+	elseif update.type == "remove_belt_link" then
+		belt_box.remove(data.offset, edge, surface)
+	else
+		log("Unknown link update: " .. serpent.line(update.type))
+	end
+end
+
+function universal_edges.transfer(json)
+	local data = game.json_to_table(json)
+	if data == nil then return end
+
+	local edge = global.universal_edges.edges[data.edge_id]
+	if not edge then
+		rcon.print("invalid edge")
+		return
+	end
+
+	local response_transfers = {}
+	if data.belt_transfers then
+		for _offset, belt_transfer in ipairs(data.belt_transfers) do
+			local link = (edge.linked_belts or {})[belt_transfer.offset]
+			if not link then
+				log("FATAL: recevied items for non-existant link at offset " .. belt_transfer.offset)
+				return
+			end
+
+			if link.is_input and belt_transfer.set_flow ~= nil then
+				local inventory = link.chest.get_inventory(defines.inventory.chest)
+				if belt_transfer.set_flow then
+					inventory.set_bar()
+				else
+					inventory.set_bar(1)
+				end
+			end
+
+			if belt_transfer.item_stacks then
+				local update = belt_link.push_belt_link(belt_transfer.offset, link, belt_transfer.item_stacks)
+				if update then
+					response_transfers[#response_transfers + 1] = update
+				end
+			end
+		end
+	end
+
+	if #response_transfers > 0 then
+		clusterio_api.send_json("universal_edges:transfer", {
+			edge_id = data.edge_id,
+			belt_transfers = response_transfers,
+		})
+	end
 end
 
 universal_edges.events = {
@@ -139,7 +239,30 @@ universal_edges.events = {
 	end,
 
 	[defines.events.on_tick] = function(_event)
+		local ticks_left = -game.tick % global.universal_edges.config.ticks_per_edge
+		local id = global.universal_edges.current_edge_id
+		if id == nil then
+			id = next(global.universal_edges.edges)
+			if id == nil then
+				return -- no edges
+			end
+			global.universal_edges.current_edge_id = id
+		end
+		local edge = global.universal_edges.edges[id]
 
+		-- edge may have been removed while iterating over it
+		if edge == nil then
+			global.universal_edges.current_edge_id = nil
+			return
+		end
+
+		if edge.active then
+			belt_link.poll_links(id, edge, ticks_left)
+		end
+
+		if ticks_left == 0 then
+			global.universal_edges.current_edge_id = next(global.universal_edges.edges, id)
+		end
 	end,
 
 	[defines.events.on_built_entity] = function(event) on_built(event.created_entity) end,

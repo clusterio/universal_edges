@@ -1,16 +1,85 @@
 import * as lib from "@clusterio/lib";
 import { BaseInstancePlugin } from "@clusterio/host";
 import * as messages from "./messages";
+import { Edge } from "./src/types";
 
-type PuginExampleIPC = {
-	tick: number,
-	player_name: string,
+type EdgeLinkUpdate = {
+	type: string,
+	edge_id: string,
+	data: {
+		offset: number,
+		is_input?: boolean,
+		belt_type?: string,
+	}
 };
 
+type BeltTransfer = {
+	offset: number,
+	set_flow?: boolean,
+	item_stacks?: object[],
+};
+
+type EdgeTransfer = {
+	edge_id: string,
+	belt_transfers: BeltTransfer[]
+}
+
+type EdgeBuffer = {
+	edge: Edge,
+	pendingMessage: {
+		beltTransfers: Map<number, BeltTransfer>,
+	},
+	messageTransfer: lib.RateLimiter,
+	pendingCommand: {
+		beltTransfers: Map<number, BeltTransfer>
+	}
+	commandTransfer: lib.RateLimiter,
+}
+
+function mergeBeltTransfers(
+	pendingBeltTransfers: Map<number, BeltTransfer>,
+	beltTransfers: BeltTransfer[]
+) {
+	for (let beltTransfer of beltTransfers) {
+		let pending = pendingBeltTransfers.get(beltTransfer.offset);
+		if (!pending) {
+			pending = {
+				offset: beltTransfer.offset,
+			};
+			pendingBeltTransfers.set(beltTransfer.offset, pending);
+		}
+		if (beltTransfer.item_stacks) {
+			if (!pending.item_stacks) {
+				pending.item_stacks = [];
+			}
+			pending.item_stacks.push(...beltTransfer.item_stacks);
+		}
+		if (Object.prototype.hasOwnProperty.call(beltTransfer, "set_flow")) {
+			pending.set_flow = beltTransfer.set_flow;
+		}
+	}
+}
+
 export class InstancePlugin extends BaseInstancePlugin {
+	edges: Map<string, EdgeBuffer> = new Map();
+
 	async init() {
+
+		this.instance.server.on("ipc-universal_edges:edge_link_update", data => {
+			this.handleEdgeLinkUpdate(data).catch(err => this.logger.error(
+				`Error handling edge_link_update:\n${err.stack}`
+			));
+		});
+
+		this.instance.server.on("ipc-universal_edges:transfer", data => {
+			this.handleEdgeTransferFromGame(data).catch(err => this.logger.error(
+				`Error handling transfer:\n${err.stack}`
+			));
+		});
+
 		this.instance.handle(messages.EdgeUpdate, this.handleEdgeUpdate.bind(this));
-		this.instance.server.handle("universal_edges-plugin_example_ipc", this.handlePluginExampleIPC.bind(this));
+		this.instance.handle(messages.EdgeLinkUpdate, this.edgeLinkUpdateEventHandler.bind(this));
+		this.instance.handle(messages.EdgeTransfer, this.edgeTransferRequestHandler.bind(this));
 	}
 
 	async onStart() {
@@ -22,25 +91,147 @@ export class InstancePlugin extends BaseInstancePlugin {
 		this.logger.info("instance::onStop");
 	}
 
+	async handleEdgeLinkUpdate(update: EdgeLinkUpdate) {
+		let edge = this.edges.get(update.edge_id);
+		if (!edge) {
+			this.logger.warn(`Got update for unknown edge ${update.edge_id}`);
+			return;
+		}
+
+		// Find partner instance
+		let localInstance = this.instance.config.get("instance.id");
+		let partnerInstance = edge.edge.target.instanceId;
+		if (edge.edge.target.instanceId === localInstance) {
+			partnerInstance = edge.edge.source.instanceId;
+		}
+
+		await this.instance.sendTo(
+			{ instanceId: partnerInstance },
+			new messages.EdgeLinkUpdate(
+				edge.edge.id,
+				update.type,
+				update.data,
+			)
+		);
+	}
+
+	async edgeLinkUpdateEventHandler(message: messages.EdgeLinkUpdate) {
+		let { type, edgeId, data } = message;
+		let json = lib.escapeString(JSON.stringify({ type, edge_id: edgeId, data }));
+		await this.sendRcon(`/sc universal_edges.edge_link_update("${json}")`, true);
+	}
+
+	async handleEdgeTransferFromGame(data: EdgeTransfer) {
+		let edge = this.edges.get(data.edge_id);
+		if (!edge) {
+			console.log("edge not found");
+			return; // XXX LATER PROBLEM
+		}
+
+		mergeBeltTransfers(edge.pendingMessage.beltTransfers, data.belt_transfers || []);
+		edge.messageTransfer.activate();
+	}
+
 	async handleEdgeUpdate(event: messages.EdgeUpdate) {
 		for (const edge of event.updates) {
-			this.sendRcon(`/c universal_edges.edge_update("${edge.id}", '${lib.escapeString(JSON.stringify(edge))}')`);
+			// Cache locally to avoid passing extra data from game
+			let edgeBuffer = this.edges.get(edge.id);
+			if (!edgeBuffer) {
+				this.edges.set(edge.id, {
+					edge,
+					pendingMessage: {
+						beltTransfers: new Map(),
+					},
+					messageTransfer: new lib.RateLimiter({
+						maxRate: this.instance.config.get("universal_edges.transfer_message_rate"),
+						action: () => this.edgeTransferSendMessage(edge.id).catch(err => this.logger.error(
+							`Error sending transfer message:\n${err.stack ?? err.message}`
+						)),
+					}),
+					pendingCommand: {
+						beltTransfers: new Map(),
+					},
+					commandTransfer: new lib.RateLimiter({
+						maxRate: this.instance.config.get("universal_edges.transfer_command_rate"),
+						action: () => this.edgeTransferSendCommand(edge.id).catch(err => this.logger.error(
+							`Error sending transfer command:\n${err.stack ?? err.message}`
+						)),
+					}),
+				})
+			} else {
+				edgeBuffer.edge = edge;
+			}
+			// Update ingame config
+			this.sendRcon(`/sc universal_edges.edge_update("${edge.id}", '${lib.escapeString(JSON.stringify(edge))}')`);
 		}
 	}
 
-	// async handlePluginExampleEvent(event: PluginExampleEvent) {
-	// 	this.logger.info(JSON.stringify(event));
-	// }
+	async edgeTransferSendMessage(edgeId: string) {
+		let edge = this.edges.get(edgeId);
+		if (!edge) {
+			console.log("impossible edge not found!");
+			return; // XXX LATER PROBLEM
+		}
 
-	// async handlePluginExampleRequest(request: PluginExampleRequest) {
-	// 	this.logger.info(JSON.stringify(request));
-	// 	return {
-	// 		myResponseString: request.myString,
-	// 		myResponseNumbers: request.myNumberArray,
-	// 	};
-	// }
+		let beltTransfers = [];
+		for (let [_offset, beltTransfer] of edge.pendingMessage.beltTransfers) {
+			beltTransfers.push({
+				...beltTransfer,
+			});
+		}
+		edge.pendingMessage.beltTransfers.clear();
 
-	async handlePluginExampleIPC(event: PuginExampleIPC) {
-		this.logger.info(JSON.stringify(event));
+		try {
+			// Find partner instance
+			let localInstance = this.instance.config.get("instance.id");
+			let partnerInstance = edge.edge.target.instanceId;
+			if (edge.edge.target.instanceId === localInstance) {
+				partnerInstance = edge.edge.source.instanceId;
+			}
+
+			await this.instance.sendTo(
+				{ instanceId: partnerInstance },
+				new messages.EdgeTransfer(edge.edge.id, beltTransfers)
+			);
+			// We assume the transfer did not happen if an error occured.
+		} catch (err) {
+			throw err;
+			// TODO return items
+		}
+	}
+
+	async edgeTransferRequestHandler(message: messages.EdgeTransfer) {
+		let { edgeId, beltTransfers } = message;
+		let edge = this.edges.get(edgeId);
+		if (!edge) {
+			console.log("impossible the edge was not found!");
+			return { success: false }; // XXX later problem
+		}
+
+		mergeBeltTransfers(edge.pendingCommand.beltTransfers, beltTransfers);
+		edge.commandTransfer.activate();
+		return { success: true };
+	}
+
+	async edgeTransferSendCommand(edgeId: string) {
+		let edge = this.edges.get(edgeId);
+		if (!edge) {
+			console.log("how can this happen");
+			return; // XXX later problem,
+		}
+
+		let beltTransfers = [];
+		for (let [_offset, beltTransfer] of edge.pendingCommand.beltTransfers) {
+			beltTransfers.push({
+				...beltTransfer,
+			});
+		}
+		edge.pendingCommand.beltTransfers.clear();
+
+		let json = lib.escapeString(JSON.stringify({
+			edge_id: edgeId,
+			belt_transfers: beltTransfers,
+		}));
+		await this.sendRcon(`/sc universal_edges.transfer("${json}")`, true);
 	}
 }

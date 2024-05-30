@@ -14,11 +14,11 @@ lib.definePermission({
 });
 
 declare module "@clusterio/lib" {
-	export interface ControllerConfigFields {
-		"universal_edges.myControllerField": string;
-	}
+	export interface ControllerConfigFields { }
 	export interface InstanceConfigFields {
-		"universal_edges.myInstanceField": string;
+		"universal_edges.ticks_per_edge": number;
+		"universal_edges.transfer_message_rate": number;
+		"universal_edges.transfer_command_rate": number;
 	}
 }
 
@@ -28,27 +28,33 @@ export const plugin: lib.PluginDeclaration = {
 	description: "Example Description. Plugin. Change me in index.ts",
 
 	controllerEntrypoint: "./dist/node/controller",
-	controllerConfigFields: {
-		"universal_edges.myControllerField": {
-			title: "My Controller Field",
-			description: "This should be removed from index.js",
-			type: "string",
-			initialValue: "Remove Me",
-		},
-	},
+	controllerConfigFields: {},
 
 	instanceEntrypoint: "./dist/node/instance",
 	instanceConfigFields: {
-		"universal_edges.myInstanceField": {
-			title: "My Instance Field",
-			description: "This should be removed from index.js",
-			type: "string",
-			initialValue: "Remove Me",
+		"universal_edges.ticks_per_edge": {
+			title: "Ticks Per Edge",
+			description: "Number of game ticks to use processing each edge.",
+			type: "number",
+			initialValue: 15,
 		},
+		"universal_edges.transfer_message_rate": {
+			title: "Transfer Message Rate",
+			description: "Rate in messages per second to send edge transfers to other instances.",
+			type: "number",
+			initialValue: 50,
+		},
+		"universal_edges.transfer_command_rate": {
+			title: "Transfer Command Rate",
+			description: "Rate in commands per seccond to send edge transfer data into this instance.",
+			type: "number",
+			initialValue: 1000 / 34, // Factorio protocol update rate
+		},
+
 	},
 
 	messages: [
-		messages.EdgeConnectorUpdate,
+		messages.EdgeLinkUpdate,
 		messages.EdgeTransfer,
 		messages.EdgeUpdate,
 		messages.SetEdgeConfig,

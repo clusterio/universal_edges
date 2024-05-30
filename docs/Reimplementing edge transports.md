@@ -66,12 +66,42 @@ A connector is a singular link, for example a single belt running across the edg
 ### Lifecycle
 
 1. Belt is placed facing border
-2. `EdgeConnectorUpdate` is sent to partner instance
-3. Belt is placed facing away from border on partner, `EdgeConnectorUpdate` is sent
-4. Items enter connector and are transfered with `EdgeTransfer`
-5. Partner sends `EdgeConnectorUpdate` for destination blocked status
-6. Belt is removed, edge is removed or edge position changes
+2. `EdgeConnectorUpdate` is sent to controller
+3. Propagated to partner on change and startup
+4. Belt is placed facing away from border on partner, `EdgeConnectorUpdate` is sent
+5. Items enter connector and are transfered with `EdgeTransfer`
+6. Partner sends `EdgeConnectorUpdate` for destination blocked status
+7. Belt is removed, edge is removed or edge position changes
    1. `EdgeConnectorUpdate` is sent to remove the connector on the partner
    2. Waiting items are voided
 
 It is important to note that `EdgeConnectorUpdate` has to be sent both ways to track the status of the link initiator belts. The connector is not removed before the connected belts are removed from both sides of the link.
+
+Old design:
+
+1. Belt is placed facing border
+2. `edge_link_update` is sent to partner
+3. Link is created on partner
+4. Item enters into link, is sent to partner
+5. Partner is full, sends `edge_link_update` with set_flow = false
+
+Issues:
+- Connectors can only created/removed while link is active
+- Set_flow could be sent both ways as a number to balance fluids and electricity
+
+## Electricity transfer
+
+Simply balancing an accumulator is not sufficient since accumulators don't redsitribute. Implementing general accumulator redistribution would be expensive with a lot of solar and accumulators. One solution could be to rebalance with accumulators, then spawning a temporary generator to "drain" the accumulator when it is full.
+
+Alternatively, bidirectional directional power transfer.
+
+On both sides:
+- A burner generator with a special energy item in it with secondary priority
+- An accumulator for charge monitoring
+- An EEI for consumption
+
+If the accumulator charge + fuel in generator gets unbalanced, the EEI is activated on the side with a higher charge to refuel the generator. The generator on the lower side is always running. Fuel is capped at equivalent of X number of full accumulators.
+
+This approach is also good because it makes it clear how much power is imported/exported in the graph.
+
+This approach requires a mod to provide the fuel generator (unless I can figure out how to use EEI with secondary priotity maybe). It is probably not worth implementing both and mods are now low friction enough that I find this acceptble.
