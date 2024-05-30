@@ -65,19 +65,7 @@ A connector is a singular link, for example a single belt running across the edg
 
 ### Lifecycle
 
-1. Belt is placed facing border
-2. `EdgeConnectorUpdate` is sent to controller
-3. Propagated to partner on change and startup
-4. Belt is placed facing away from border on partner, `EdgeConnectorUpdate` is sent
-5. Items enter connector and are transfered with `EdgeTransfer`
-6. Partner sends `EdgeConnectorUpdate` for destination blocked status
-7. Belt is removed, edge is removed or edge position changes
-   1. `EdgeConnectorUpdate` is sent to remove the connector on the partner
-   2. Waiting items are voided
-
-It is important to note that `EdgeConnectorUpdate` has to be sent both ways to track the status of the link initiator belts. The connector is not removed before the connected belts are removed from both sides of the link.
-
-Old design:
+## Belts
 
 1. Belt is placed facing border
 2. `edge_link_update` is sent to partner
@@ -87,13 +75,27 @@ Old design:
 
 Issues:
 - Connectors can only created/removed while link is active
-- Set_flow could be sent both ways as a number to balance fluids and electricity
+
+## Fluids
+
+1. Pipe is placed near border
+2. `edge_link_update` is sent to partner
+3. Link is created on partner
+4. Tank fills with fluid
+5. Current fluid level is sent to partner.
+   1. If partner receives higher fluid level than current, set current level to average between local level and parther level
+   2. Send back amount added as amount_balanced
+   3. Origin removes the amount_balanced from their storage tank
+
+This allows for 2 way flows and makes the flow physics act pretty similar to vanilla pipes.
 
 ## Electricity transfer
 
+### Option 1: Balancing accumulator
+
 Simply balancing an accumulator is not sufficient since accumulators don't redsitribute. Implementing general accumulator redistribution would be expensive with a lot of solar and accumulators. One solution could be to rebalance with accumulators, then spawning a temporary generator to "drain" the accumulator when it is full.
 
-Alternatively, bidirectional directional power transfer.
+### Option 2: bidirectional directional power transfer.
 
 On both sides:
 - A burner generator with a special energy item in it with secondary priority
@@ -105,3 +107,51 @@ If the accumulator charge + fuel in generator gets unbalanced, the EEI is activa
 This approach is also good because it makes it clear how much power is imported/exported in the graph.
 
 This approach requires a mod to provide the fuel generator (unless I can figure out how to use EEI with secondary priotity maybe). It is probably not worth implementing both and mods are now low friction enough that I find this acceptble.
+
+### Option 3: Simplify and just use a single electric energy interface
+
+There is one electric energy interfae on either side. Lets say it holds 100 MJ. It acts like an accumulator. If there is excess power, it will charge. It has *secondary* input priority, this means it will recharge from accumulators while also having *tertiary* output priority, preventing it from recharging accumulators but allowing it to charge other edge links.
+
+1. Substation is placed next to border
+2. Electric energy interface is created on both sides of border with generation 0w usage 0w
+3. generation = min(50mw, max(0, (remote - local) - 10mj))
+4. comsumption = min(50mw, max(0, (local - remote) - 10mj))
+
+usage_priority:
+- solar
+  - Solar panels, free power
+- lamp
+  - lamp
+- primary-output
+  - Portable fusion reactor
+- primary-input
+  - Personal shields
+  - rocket silo
+- secondary-output
+  - burner-generator
+  - steam-engine
+  - steam-turbine
+- secondary-input
+  - assemblers etc
+- tertiary
+  - accumulator
+
+Priority doesn't work quite right.
+
+- When `secondary-input` it charges from accumulators
+- When `secondary-output` it recharges accumulators
+
+but I want both. I can achieve this by either usign 2 entities, or swapping the entity at some point.
+
+1. Swap to output when above 50%, input when below 50%
+2. Use one entity with output and one with input, balancing them continuously in script
+   1. I think this is actually worse for performance and might mess with the graph more, so i avoid it
+
+This is not working, we are going back to fluids with a sense loop
+
+1. Balance EEI energy same as fluids
+2. Use charge sensor accumulator to see how things are going
+   1. If charge sensor < 10%, `secondary-output`
+   2. If charge sensor > 10%
+      1. If EEI < 50% `secondary-input`
+      2. If EEI > 50% `tertiary`

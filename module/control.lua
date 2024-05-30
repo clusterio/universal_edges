@@ -6,6 +6,8 @@ local belt_box = require("modules/universal_edges/edge/belt_box")
 local belt_link = require("modules/universal_edges/edge/belt_link")
 local fluid_box = require("modules/universal_edges/edge/fluid_box")
 local fluid_link = require("modules/universal_edges/edge/fluid_link")
+local power_box = require("modules/universal_edges/edge/power_box")
+local power_link = require("modules/universal_edges/edge/power_link")
 
 local on_built = require("modules/universal_edges/events/on_built")
 local on_removed = require("modules/universal_edges/events/on_removed")
@@ -186,6 +188,10 @@ function universal_edges.edge_link_update(json)
 		fluid_box.create(data.offset, edge, surface)
 	elseif update.type == "remove_fluid_link" then
 		fluid_box.remove(data.offset, edge, surface)
+	elseif update.type == "create_power_link" then
+		power_box.create(data.offset, edge, surface)
+	elseif update.type == "remove_power_link" then
+		power_box.remove(data.offset, edge, surface)
 	else
 		log("Unknown link update: " .. serpent.line(update.type))
 	end
@@ -202,7 +208,9 @@ function universal_edges.transfer(json)
 		return
 	end
 
-	local response_transfers = {}
+	local belt_response_transfers = {}
+	local fluid_response_transfers = {}
+	local power_response_transfers = {}
 	if data.belt_transfers then
 		for _offset, belt_transfer in ipairs(data.belt_transfers) do
 			local link = (edge.linked_belts or {})[belt_transfer.offset]
@@ -223,7 +231,7 @@ function universal_edges.transfer(json)
 			if belt_transfer.item_stacks then
 				local update = belt_link.push_belt_link(belt_transfer.offset, link, belt_transfer.item_stacks)
 				if update then
-					response_transfers[#response_transfers + 1] = update
+					belt_response_transfers[#belt_response_transfers + 1] = update
 				end
 			end
 		end
@@ -238,7 +246,8 @@ function universal_edges.transfer(json)
 			end
 
 			if not link.pipe then
-				log("FATAL: received fluids for a link that does not have a pipe" .. fluid_transfer.offset)
+				log("FATAL: received fluids for a link that does not have a pipe " .. fluid_transfer.offset)
+				return
 			end
 
 			if fluid_transfer.amount ~= nil
@@ -261,7 +270,7 @@ function universal_edges.transfer(json)
 				-- Only transfer balance in one direction - the partner will handle balancing the other way
 				if average > local_fluid.amount then
 					-- Send how much fluid we balanced as response
-					response_transfers[#response_transfers + 1] = {
+					fluid_response_transfers[#fluid_response_transfers + 1] = {
 						offset = fluid_transfer.offset,
 						name = fluid_transfer.name,
 						amount_balanced = average - local_fluid.amount,
@@ -284,11 +293,96 @@ function universal_edges.transfer(json)
 		end
 	end
 
-	if #response_transfers > 0 then
-		clusterio_api.send_json("universal_edges:transfer", {
-			edge_id = data.edge_id,
-			belt_transfers = response_transfers,
-		})
+	if data.power_transfers then
+		for _offset, power_transfer in ipairs(data.power_transfers) do
+			local link = (edge.linked_power or {})[power_transfer.offset]
+			if not link then
+				log("FATAL: Received power for non-existant link at offset " .. power_transfer.offset)
+				return
+			end
+			if not link.eei then
+				log("FATAL: received power for a link that does not have an eei " .. power_transfer.offset)
+				return
+			end
+
+			if power_transfer.energy then
+				local eei = link.eei
+				local eei_pos = eei.position
+				local remote_energy = power_transfer.energy
+				local local_energy = eei.energy
+				local buffer_size = eei.electric_buffer_size
+				local surface = eei.surface
+				local average = (remote_energy + local_energy) / 2
+
+				-- Only transfer balance in one direction - the partner will handle balancing the other way
+				if average > local_energy then
+					-- Send how much fluid we balanced as response
+					power_response_transfers[#power_response_transfers + 1] = {
+						offset = power_transfer.offset,
+						amount_balanced = average - local_energy,
+					}
+					-- Update accumulator
+					eei.energy = average
+				end
+
+				--[[
+					Figure out correct type of eei to use. We have 3 eei variants
+					- tertiary - Acts as accumulator, use when we are low on power
+					- secondary-input - Acts as roboport, use when good on power but EEI is low
+					- secondary-output - Acts as generator, use when good on power and EEI is full
+				]]
+				local fill_percent = (local_energy / buffer_size) * 100
+				local eei_entity_to_use = "ue_eei_output"
+				if (link.charge_sensor.energy / link.charge_sensor.electric_buffer_size) < 0.1 and fill_percent > 10 then
+					-- Accumulators are empty, emergency charge accumulators if we can
+					eei_entity_to_use = "ue_eei_output"
+				else
+					if fill_percent < 20 then
+						-- Transition to ue_eei_input to scavenge power from accumulators
+						eei_entity_to_use = "ue_eei_input"
+					elseif fill_percent < 80 then
+						eei_entity_to_use = "ue_eei_tertiary"
+					else
+						-- Transition to ue_eei_output to store power in accumulators
+						eei_entity_to_use = "ue_eei_output"
+					end
+				end
+
+				-- Swap entity
+				if eei_entity_to_use ~= eei.name then
+					local energy_before = eei.energy
+					eei.destroy()
+					link.eei = surface.create_entity {
+						name = eei_entity_to_use,
+						position = eei_pos,
+						create_build_effect_smoke = false,
+						spawn_decorations = false,
+					}
+					eei = link.eei
+					eei.energy = energy_before
+				end
+			end
+			if power_transfer.amount_balanced then
+				-- Partner balanced power, we need to remove to compensate
+				link.eei.energy = math.max(0, link.eei.energy - power_transfer.amount_balanced)
+			end
+		end
+	end
+
+	local transfer = {
+		edge_id = data.edge_id,
+	}
+	if #belt_response_transfers > 0 then
+		transfer.belt_transfers = belt_response_transfers
+	end
+	if #fluid_response_transfers > 0 then
+		transfer.fluid_transfers = fluid_response_transfers
+	end
+	if #power_response_transfers > 0 then
+		transfer.power_transfers = power_response_transfers
+	end
+	if #belt_response_transfers + #fluid_response_transfers + #power_response_transfers > 0 then
+		clusterio_api.send_json("universal_edges:transfer", transfer)
 	end
 end
 
@@ -323,6 +417,7 @@ universal_edges.events = {
 		if edge.active then
 			belt_link.poll_links(id, edge, ticks_left)
 			fluid_link.poll_links(id, edge, ticks_left)
+			power_link.poll_links(id, edge, ticks_left)
 		end
 
 		if ticks_left == 0 then

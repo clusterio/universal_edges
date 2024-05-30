@@ -1,3 +1,4 @@
 dist
 bun.lockb
 *.sh
+.DS_Store
