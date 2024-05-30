@@ -1,7 +1,9 @@
 "use strict";
 module.exports = {
+	"parser": "@typescript-eslint/parser",
 	"plugins": [
 		"node",
+		"@typescript-eslint",
 	],
 	"env": {
 		"node": true,
@@ -11,6 +13,11 @@ module.exports = {
 	"parserOptions": {
 		"ecmaVersion": 2022,
 	},
+	"extends": [
+		// "eslint:recommended",
+		// "plugin:@typescript-eslint/eslint-recommended",
+		// "plugin:@typescript-eslint/recommended",
+	],
 
 	"overrides": [
 		{
@@ -24,7 +31,7 @@ module.exports = {
 			},
 		},
 		{
-			"files": ["web/**/*.jsx"],
+			"files": ["web/**/*.tsx"],
 			"env": {
 				"browser": true,
 			},
@@ -38,11 +45,20 @@ module.exports = {
 				},
 			},
 		},
+		{
+			"files": ["*.ts"],
+			"parserOptions": {
+				"sourceType": "module",
+				"rules": {
+					"node/no-unpublished-import": "off",
+				},
+			},
+		},
 	],
 
 	"rules": {
 		"node/no-missing-import": ["error", {
-			"tryExtensions": [".js", ".jsx", ".json", ".node"],
+			"tryExtensions": [".js", ".jsx", ".json", ".node", ".ts", ".tsx"],
 		}],
 		"accessor-pairs": "error",
 		"array-bracket-newline": "off",
@@ -225,7 +241,6 @@ module.exports = {
 		"no-useless-call": "error",
 		"no-useless-computed-key": "error",
 		"no-useless-concat": "error",
-		"no-useless-constructor": "error",
 		"no-useless-rename": "error",
 		"no-useless-return": "error",
 		"no-var": "warn",
@@ -288,7 +303,7 @@ module.exports = {
 		"template-curly-spacing": ["error", "never"],
 		"template-tag-spacing": "error",
 		"unicode-bom": ["error", "never"],
-		"valid-jsdoc": ["error", { "requireReturn": false }],
+		"valid-jsdoc": ["warn", { "requireReturn": false }],
 		"vars-on-top": "warn",
 		"wrap-iife": "error",
 		"wrap-regex": "off",

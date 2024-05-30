@@ -1,4 +1,3 @@
-local util = require("modules/universal_edges/util")
 local edge_util = require("modules/universal_edges/edge/util")
 
 local function create_fluid_box(offset, edge, surface)

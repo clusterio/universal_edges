@@ -4,7 +4,10 @@ import { DefaultOptionType } from "antd/es/select";
 import { ReactNode, RefAttributes } from "react";
 import { JSX } from "react/jsx-runtime";
 
-export function InstanceSelector(props: JSX.IntrinsicAttributes & SelectProps<any, DefaultOptionType> & { children?: ReactNode; } & RefAttributes<RefSelectProps>) {
+export function InstanceSelector(props: JSX.IntrinsicAttributes
+	& SelectProps<any, DefaultOptionType>
+	& { children?: ReactNode; } & RefAttributes<RefSelectProps>
+) {
 	const [instances] = useInstances();
 	return <Select
 		{...props}
@@ -14,4 +17,4 @@ export function InstanceSelector(props: JSX.IntrinsicAttributes & SelectProps<an
 			{instance.name}
 		</Select.Option>)}
 	</Select>;
-};
+}

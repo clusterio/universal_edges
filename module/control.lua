@@ -332,7 +332,7 @@ function universal_edges.transfer(json)
 					- secondary-output - Acts as generator, use when good on power and EEI is full
 				]]
 				local fill_percent = (local_energy / buffer_size) * 100
-				local eei_entity_to_use = "ue_eei_output"
+				local eei_entity_to_use
 				if (link.charge_sensor.energy / link.charge_sensor.electric_buffer_size) < 0.1 and fill_percent > 10 then
 					-- Accumulators are empty, emergency charge accumulators if we can
 					eei_entity_to_use = "ue_eei_output"

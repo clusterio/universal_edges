@@ -14,5 +14,5 @@ Based on edge transports by @Hornwitser
 - [x] Web gui for configuration
 - [x] Belt transfers
 - [x] Fluids transfers
-- [ ] Electricity transfers
+- [x] Electricity transfers
 - [ ] Train transfers

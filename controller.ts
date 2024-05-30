@@ -34,15 +34,17 @@ export class ControllerPlugin extends BaseControllerPlugin {
 				},
 				length: 20,
 				active: false,
-			}]
+			}],
 		]); // If needed, replace with loading from database file
 	}
 
 	async onInstanceStatusChanged(instance: InstanceInfo, prev?: lib.InstanceStatus): Promise<void> {
 		// Send edge config updates for relevant edges
-		const edges = [...this.edgeDatastore.values()].filter(edge => edge.source.instanceId === instance.id || edge.target.instanceId === instance.id);
+		const edges = [...this.edgeDatastore.values()].filter(edge => edge.source.instanceId === instance.id
+			|| edge.target.instanceId === instance.id
+		);
 		// Set active status
-		edges.forEach(edge => edge.active = this.isEdgeActive(edge));
+		edges.forEach(edge => { edge.active = this.isEdgeActive(edge); });
 
 		// Update instances consuming the edges
 		const instanceEdgeMap: Map<number, Edge[]> = new Map();
@@ -82,7 +84,10 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		if (this.storageDirty) {
 			this.logger.info("Saving edgeDatastore to file");
 			this.storageDirty = false;
-			const file = path.resolve(this.controller.config.get("controller.database_directory"), "edgeDatastore.json");
+			const file = path.resolve(
+				this.controller.config.get("controller.database_directory"),
+				"edgeDatastore.json"
+			);
 			await lib.safeOutputFile(file, JSON.stringify(Array.from(this.edgeDatastore)));
 		}
 	}
@@ -119,15 +124,15 @@ export class ControllerPlugin extends BaseControllerPlugin {
 					await this.controller.sendTo({ instanceId }, new messages.EdgeUpdate([edge]));
 				}
 			}
-		};
+		}
 	}
 
 	isEdgeActive(edge: Edge) {
-		if (edge.source.instanceId === edge.target.instanceId) return false;
+		if (edge.source.instanceId === edge.target.instanceId) { return false; }
 		const source = this.controller.instances.get(edge.source.instanceId);
-		if (!source || source.status !== "running") return false;
+		if (!source || source.status !== "running") { return false; }
 		const target = this.controller.instances.get(edge.target.instanceId);
-		if (!target || target.status !== "running") return false;
+		if (!target || target.status !== "running") { return false; }
 		return true;
 	}
 }

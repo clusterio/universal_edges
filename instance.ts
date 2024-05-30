@@ -94,10 +94,8 @@ function mergeFluidTransfers(
 			pendingFluidTransfers.set(fluidTransfer.offset, pending);
 		}
 		// When sending amount we send the current amount in the tank, hence we want to overwrite instead of adding here
-		if (fluidTransfer.amount)
-			pending.amount = fluidTransfer.amount;
-		if (fluidTransfer.temperature)
-			pending.temperature = fluidTransfer.temperature;
+		if (fluidTransfer.amount) { pending.amount = fluidTransfer.amount; }
+		if (fluidTransfer.temperature) { pending.temperature = fluidTransfer.temperature; }
 		// Amount balanced is the amount of fluid we have added on the current instance. This one needs to be additive.
 		if (fluidTransfer.amount_balanced) {
 			if (pending.amount_balanced) {
@@ -114,7 +112,6 @@ function mergePowerTransfers(
 	powerTransfers: PowerTransfer[]
 ) {
 	for (let powerTransfer of powerTransfers) {
-		
 		let pending = pendingPowerTransfers.get(powerTransfer.offset);
 		if (!pending) {
 			pending = {
@@ -123,8 +120,7 @@ function mergePowerTransfers(
 			pendingPowerTransfers.set(powerTransfer.offset, pending);
 		}
 		// When sending amount we send the current amount in the tank, hence we want to overwrite instead of adding here
-		if (powerTransfer.energy !== undefined)
-			pending.energy = powerTransfer.energy;
+		if (powerTransfer.energy !== undefined) { pending.energy = powerTransfer.energy; }
 		// Amount balanced is the amount of fluid we have added on the current instance. This one needs to be additive.
 		if (powerTransfer.amount_balanced !== undefined) {
 			if (pending.amount_balanced !== undefined) {
@@ -160,7 +156,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 	async onStart() {
 		this.logger.info("instance::onStart");
-		this.sendRcon(`/sc universal_edges.set_config({instance_id = ${this.instance.config.get("instance.id")}})`)
+		this.sendRcon(`/sc universal_edges.set_config({instance_id = ${this.instance.config.get("instance.id")}})`);
 	}
 
 	async onStop() {
@@ -200,7 +196,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 	async handleEdgeTransferFromGame(data: EdgeTransfer) {
 		let edge = this.edges.get(data.edge_id);
 		if (!edge) {
-			console.log(data)
+			console.log(data);
 			console.log("edge not found");
 			return; // XXX LATER PROBLEM
 		}
@@ -240,7 +236,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 							`Error sending transfer command:\n${err.stack ?? err.message}`
 						)),
 					}),
-				})
+				});
 			} else {
 				edgeBuffer.edge = edge;
 			}

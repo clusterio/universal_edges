@@ -21,4 +21,4 @@ export function direction_to_string(direction: number | undefined) {
 		return "unknown";
 	}
 	return directions[direction % 8];
-};
+}

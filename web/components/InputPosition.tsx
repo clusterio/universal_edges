@@ -15,24 +15,24 @@ export default function InputPosition(props: InputPositionProps) {
 	const [x, setX] = useState(0);
 	const [y, setY] = useState(0);
 
-	const triggerChange = (changedValue: { x?: number; y?: number }) => {
+	function triggerChange(changedValue: { x?: number; y?: number }) {
 		onChange?.([changedValue.x || x, changedValue.y || y]);
 	};
 
-	const onXChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const newX = parseInt(e.target.value || '0', 10);
+	function onXChange(e: React.ChangeEvent<HTMLInputElement>) {
+		const newX = parseInt(e.target.value || "0", 10);
 		if (Number.isNaN(x)) {
 			return;
 		}
-			setX(newX);
+		setX(newX);
 		triggerChange({ x: newX });
 	};
-	const onYChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const newY = parseInt(e.target.value || '0', 10);
+	function onYChange(e: React.ChangeEvent<HTMLInputElement>) {
+		const newY = parseInt(e.target.value || "0", 10);
 		if (Number.isNaN(y)) {
 			return;
 		}
-			setY(newY);
+		setY(newY);
 		triggerChange({ y: newY });
 	};
 
@@ -52,4 +52,4 @@ export default function InputPosition(props: InputPositionProps) {
 			/>
 		</span>
 	);
-};
+}

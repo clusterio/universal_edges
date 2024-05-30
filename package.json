@@ -1,11 +1,14 @@
 {
 	"name": "universal_edges",
 	"version": "0.1.0",
-	"description": "Example Description. Package. Change me in package.json",
+	"description": "Plugin for seamless belts, fluids, electricity and trains between clusterio instances",
 	"main": "dist/node/index.js",
 	"scripts": {
-		"prepare": "tsc --build #&& webpack-cli --env production",
-		"watch": "tsc --build --watch"
+		"prepare": "tsc --build #&& webpack-cli --env production && husky install",
+		"watch": "tsc --build --watch",
+		"lint": "eslint \"*.ts\" './src/**/*' web/**/* --fix",
+		"luacheck": "luacheck module/",
+		"test": "spaces-to-tabs -s 4 module/**.lua module/**/**.lua && npm run lint && npm run luacheck"
 	},
 	"engines": {
 		"node": ">=18"
@@ -19,9 +22,12 @@
 		"@types/node": "^20.4.5",
 		"@types/react": "^18.2.21",
 		"antd": "^5.13.0",
+		"eslint": "^8.4.1",
+		"eslint-plugin-node": "^11.1.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"react-router-dom": "^6.23.1",
+		"spaces-to-tabs": "^0.0.3",
 		"webpack": "^5.88.2",
 		"webpack-cli": "^5.1.4",
 		"webpack-merge": "^5.9.0",

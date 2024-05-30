@@ -4,7 +4,7 @@ import { SaveOutlined } from "@ant-design/icons";
 
 import {
 	PageLayout, ControlContext,
-	useInstance
+	useInstance,
 } from "@clusterio/web_ui";
 
 import * as messages from "../../messages";
@@ -13,6 +13,17 @@ import { WebPlugin } from "..";
 import { InstanceSelector } from "../components/InstanceSelector";
 import { direction_to_string } from "../../src/util/direction_to_string";
 import InputPosition from "../components/InputPosition";
+
+function EdgeTarget({ target }: { target: EdgeTargetSpecification }) {
+	const [instance] = useInstance(target.instanceId);
+
+	return <Card size="small" title={instance?.name || target.instanceId}>
+		<p>Origin: {JSON.stringify(target.origin)}</p>
+		<p>Surface: {target.surface}</p>
+		<p>Direction: {target.direction}</p>
+		<p>Ready: {target.ready?.toString()}</p>
+	</Card>;
+}
 
 export default function EdgeListPage() {
 	const control = useContext(ControlContext);
@@ -52,12 +63,12 @@ export default function EdgeListPage() {
 				onClick: () => {
 					console.log("Clicked", edge.id);
 					setEditing(edge.id);
-				}
+				},
 			})}
 		/>
 		<Modal
 			title="Edit edge"
-			open={!!editing}
+			open={Boolean(editing)}
 			onCancel={() => setEditing("")}
 			destroyOnClose // Reset form when modal is closed
 			footer={null}
@@ -145,15 +156,4 @@ export default function EdgeListPage() {
 			</Form>
 		</Modal>
 	</PageLayout>;
-}
-
-function EdgeTarget({ target }: { target: EdgeTargetSpecification }) {
-	const [instance] = useInstance(target.instanceId);
-
-	return <Card size="small" title={instance?.name || target.instanceId}>
-		<p>Origin: {JSON.stringify(target.origin)}</p>
-		<p>Surface: {target.surface}</p>
-		<p>Direction: {target.direction}</p>
-		<p>Ready: {target.ready?.toString()}</p>
-	</Card>
 }

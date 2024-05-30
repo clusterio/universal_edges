@@ -10,7 +10,7 @@ end
 
 -- Check if a belt at world pos and direction is going to or from the given edge
 -- returns edge offset if it does, otherwise nil
-local function fluid_check(pos, direction, edge)
+local function fluid_check(pos, _direction, edge)
 	-- TODO: Check if the axis the belt in is pendicular to the edge, only relevant for pumps
 
 	local edge_pos = edge_util.world_to_edge_pos(pos, edge)

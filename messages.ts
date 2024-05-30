@@ -1,6 +1,6 @@
 import { plainJson } from "@clusterio/lib";
 import { Type, Static } from "@sinclair/typebox";
-import { Edge, EdgeConnector } from "./src/types";
+import { Edge } from "./src/types";
 
 /**
  * Edge configuration change event, subscribable
@@ -17,7 +17,7 @@ export class EdgeUpdate {
 	constructor(public updates: Static<typeof Edge>[]) { }
 
 	static jsonSchema = Type.Object({
-		updates: Type.Array(Edge)
+		updates: Type.Array(Edge),
 	});
 
 	static fromJSON(json: Static<typeof this.jsonSchema>) {
@@ -33,7 +33,7 @@ export class SetEdgeConfig {
 	static plugin = "universal_edges" as const;
 	static permission = "universal_edges.config.write";
 
-	constructor(public edge: Edge,) { }
+	constructor(public edge: Edge) { }
 
 	static jsonSchema = Type.Object({
 		edge: Edge,
