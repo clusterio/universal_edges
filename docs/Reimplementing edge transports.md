@@ -155,3 +155,39 @@ This is not working, we are going back to fluids with a sense loop
    2. If charge sensor > 10%
       1. If EEI < 50% `secondary-input`
       2. If EEI > 50% `tertiary`
+
+## Trains
+
+Due to their size the connector design for trains gets quite a bit more complicated. This plugin only allows unidirectional train connectors to reduce complexity.
+
+The rail needs to approach the edge at a 90 degree angle. We measure the length of the straight rail as it approaches the edge and use that to set the max train length limit. On the other side of the edge we make an equally long rail as the arrival rail.
+
+On the source side of the connection the rail extends past the border. There is an always red train signal on the border - this is where the train will be teleported from. Past that signal we create a row of train stops with destinations that are routable over the link. The first station will always be `edge xxx` where xxx is the ID of the link and offset is the offset of the connector.
+
+On the destination side of the link there is a single trainstop for the train to get spawned in at. It is named `edge xxx`, this allows the train to understand that it is to continue to the next station if sent direcly to the edge stop. If it was sent to any other routable stop it is expected to be able to continue towards that stop. There is a rail signal just after the trainstop and a chain signal just before the trainstop. The chain signal is used to send the `ready` status to the source side.
+
+### Connector lifecycle
+
+Unlike belts, fluids and power it is harder to tie the lifecycle of the connector to the placement event of one specific entity as we are very dependant on the rail length.
+
+A connector is created when:
+- Create rail adjacent to border
+- Includes all rails up to first bend, max 30 pieces
+- All except the first rail piece are made invincible until the first piece is removed
+
+Connectors cannot change length after creation.
+
+### Blocking
+
+Trains should only be sent if they are able to be placed on the destination. No limbo trains should ever be allowed. Duplication of trains is better than deletion.
+
+To achieve this, the flow is as follows:
+
+1. Train arrives at edge signal
+2. When connector receives `ready` from partner (destination signal unblocked) the train is serialized and sent, but still remains in the world
+3. In the partner world, the train is attempted to be deserialized. On successfull deserialization a message with edgeid, offset, complete = true is sent.
+4. On receiving complete=true, the source world deletes the train.
+
+### Serialization
+
+We use the `universal_serializer` developed for gridworld.
