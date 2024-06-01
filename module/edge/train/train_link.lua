@@ -1,5 +1,6 @@
 local clusterio_api = require("modules/clusterio/api")
 local itertools = require("modules/universal_edges/itertools")
+local util = require("modules/universal_edges/util")
 local edge_util = require("modules/universal_edges/edge/util")
 local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
 
@@ -33,16 +34,19 @@ local function poll_links(id, edge, ticks_left)
 
 				local surface = game.surfaces[edge_util.edge_get_local_target(edge).surface]
 				local edge_x = edge_util.offset_to_edge_x(offset, edge)
-				local area = {
-					left_top = edge_util.edge_pos_to_world({
+
+				-- Find area filtered requires left_top to actually be in the left top.
+				-- This means we have to handle rotations properly
+				local area = realign_area(
+					edge_util.edge_pos_to_world({
 						edge_x + 1,
 						0,
 					}, edge),
-					right_bottom = edge_util.edge_pos_to_world({
+					edge_util.edge_pos_to_world({
 						edge_x - 1,
 						1 - link.teleport_area_size * 2
-					}, edge),
-				}
+					}, edge)
+				)
 
 				local entities = surface.find_entities_filtered {
 					area = area,
@@ -63,13 +67,13 @@ local function poll_links(id, edge, ticks_left)
 
 						-- Translate carriage positions to be relative to edge
 						for _, carriage in ipairs(train.carriages) do
-							log("Carriage remote position "..serpent.line(carriage.position))
+							log("Carriage remote position " .. serpent.line(carriage.position))
 							-- Translate to edge position
 							local edge_position = edge_util.world_to_edge_pos(carriage.position, edge)
-							log("Position relative to edge "..serpent.line(edge_position))
+							log("Position relative to edge " .. serpent.line(edge_position))
 							carriage.position = edge_position
 						end
-					
+
 						train_transfers[#train_transfers + 1] = {
 							offset = offset,
 							train = train,
@@ -103,10 +107,10 @@ local function push_train_link(edge, offset, link, train)
 	log("Attempting to spawn train " .. serpent.block(train))
 
 	for _, carriage in ipairs(train.carriages) do
-		log("Carriage edge position "..serpent.line(carriage.position))
+		log("Carriage edge position " .. serpent.line(carriage.position))
 		-- Translate from edge position to work position
 		local world_pos = edge_util.edge_pos_to_world(carriage.position, edge)
-		log("Carriage world position "..serpent.line(world_pos))
+		log("Carriage world position " .. serpent.line(world_pos))
 		carriage.position = world_pos
 	end
 

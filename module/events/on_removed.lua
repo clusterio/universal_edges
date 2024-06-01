@@ -54,7 +54,12 @@ local function on_removed(entity)
 			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				-- We can reuse power_check since rail is the same size as substation
 				local offset = power_check(pos, edge)
-				if offset ~= nil and edge.linked_trains[offset].is_input then
+				if
+					offset ~= nil
+					and edge.linked_trains ~= nil
+					and edge.linked_trains[offset]
+					and edge.linked_trains[offset].is_input
+				then
 					remove_train_link(id, edge, offset, entity)
 				end
 			end
