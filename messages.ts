@@ -81,6 +81,11 @@ const powerTransfersType = Type.Array(Type.Object({
 	energy: Type.Optional(Type.Number()),
 	amount_balanced: Type.Optional(Type.Number()),
 }));
+const trainTransfersType = Type.Array(Type.Object({
+	offset: Type.Number(),
+	train: Type.Optional(Type.Object({})),
+	train_id: Type.Number(),
+}));
 export class EdgeTransfer {
 	declare ["constructor"]: typeof EdgeTransfer;
 	static type = "request" as const;
@@ -93,6 +98,7 @@ export class EdgeTransfer {
 		public beltTransfers: Static<typeof beltTransfersType>,
 		public fluidTransfers: Static<typeof fluidTransfersType>,
 		public powerTransfers: Static<typeof powerTransfersType>,
+		public trainTransfers: Static<typeof trainTransfersType>,
 	) { }
 
 	static jsonSchema = Type.Object({
@@ -100,10 +106,17 @@ export class EdgeTransfer {
 		beltTransfers: beltTransfersType,
 		fluidTransfers: fluidTransfersType,
 		powerTransfers: powerTransfersType,
+		trainTransfers: trainTransfersType,
 	});
 
 	static fromJSON(json: Static<typeof this.jsonSchema>) {
-		return new this(json.edgeId, json.beltTransfers, json.fluidTransfers, json.powerTransfers);
+		return new this(
+			json.edgeId,
+			json.beltTransfers,
+			json.fluidTransfers,
+			json.powerTransfers,
+			json.trainTransfers
+		);
 	}
 
 	static Response = plainJson(Type.Object({

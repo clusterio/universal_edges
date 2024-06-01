@@ -1,5 +1,6 @@
 local clusterio_api = require("modules/clusterio/api")
 local vectorutil = require("vectorutil")
+local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
 
 local edge_util = require("modules/universal_edges/edge/util")
 local belt_box = require("modules/universal_edges/edge/belt_box")
@@ -9,6 +10,7 @@ local fluid_link = require("modules/universal_edges/edge/fluid_link")
 local power_box = require("modules/universal_edges/edge/power_box")
 local power_link = require("modules/universal_edges/edge/power_link")
 local train_box = require("modules/universal_edges/edge/train/train_box")
+local train_link = require("modules/universal_edges/edge/train/train_link")
 
 local on_built = require("modules/universal_edges/events/on_built")
 local on_removed = require("modules/universal_edges/events/on_removed")
@@ -216,6 +218,7 @@ function universal_edges.transfer(json)
 	local belt_response_transfers = {}
 	local fluid_response_transfers = {}
 	local power_response_transfers = {}
+	local train_response_transfers = {}
 	if data.belt_transfers then
 		for _offset, belt_transfer in ipairs(data.belt_transfers) do
 			local link = (edge.linked_belts or {})[belt_transfer.offset]
@@ -374,6 +377,35 @@ function universal_edges.transfer(json)
 		end
 	end
 
+	if data.train_transfers then
+		for _, train_transfer in ipairs(data.train_transfers) do
+			local link = (edge.linked_trains or {})[train_transfer.offset]
+			if not link then
+				log("FATAL: Received train for non-existant link at offset " .. train_transfer.offset)
+				return
+			end
+
+			if train_transfer.train then
+				-- Attempt to spawn train in world
+				local success = train_link.push_train_link(edge, train_transfer.offset, link, train_transfer.train)
+
+				-- If successful, return train_id without a train
+				if success then
+					-- Sending a transfer with a `train_id` and no `train` will delete train on destination
+					train_response_transfers[#train_response_transfers + 1] = {
+						offset = train_transfer.offset,
+						train_id = train_transfer.train_id,
+					}
+				end
+			elseif train_transfer.train_id then
+				-- The train was successfully spawned in on partner - delete the local train
+				local msg = "Transfer successful, releting local train "..train_transfer.train_id
+				log(msg)
+				game.print(msg)
+			end
+		end
+	end
+
 	local transfer = {
 		edge_id = data.edge_id,
 	}
@@ -400,7 +432,8 @@ universal_edges.events = {
 		end
 	end,
 
-	[defines.events.on_tick] = function(_event)
+	[defines.events.on_tick] = function(event)
+		universal_serializer.events.on_tick(event)
 		local ticks_left = -game.tick % global.universal_edges.config.ticks_per_edge
 		local id = global.universal_edges.current_edge_id
 		if id == nil then
@@ -423,6 +456,7 @@ universal_edges.events = {
 			belt_link.poll_links(id, edge, ticks_left)
 			fluid_link.poll_links(id, edge, ticks_left)
 			power_link.poll_links(id, edge, ticks_left)
+			train_link.poll_links(id, edge, ticks_left)
 		end
 
 		if ticks_left == 0 then

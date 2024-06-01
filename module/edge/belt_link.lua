@@ -117,6 +117,9 @@ local function push_belt_link(offset, link, item_stacks)
 	end
 end
 
+--[[
+	Attempt sending items to partner
+]]
 local function poll_links(id, edge, ticks_left)
 	if not edge.linked_belts then
 		return

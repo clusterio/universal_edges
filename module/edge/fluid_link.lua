@@ -1,6 +1,9 @@
 local clusterio_api = require("modules/clusterio/api")
 local itertools = require("modules/universal_edges/itertools")
 
+--[[
+	Send fluid level to partner for balancing
+]]
 local function poll_links(id, edge, ticks_left)
 	if not edge.linked_fluids then
 		return

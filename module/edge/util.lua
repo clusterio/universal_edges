@@ -7,6 +7,13 @@ local function edge_get_local_target(edge)
 		return edge.target
 	end
 end
+local function edge_get_remote_target(edge)
+	if global.universal_edges.config.instance_id == edge.source.instanceId then
+		return edge.target
+	elseif global.universal_edges.config.instance_id == edge.target.instanceId then
+		return edge.source
+	end
+end
 local function world_to_edge_pos(pos, edge)
 	local local_edge_target = edge_get_local_target(edge)
 	return vectorutil.vec2_rot(vectorutil.vec2_sub(pos, local_edge_target.origin), -local_edge_target.direction % 8)
@@ -34,6 +41,7 @@ end
 
 return {
 	edge_get_local_target = edge_get_local_target,
+	edge_get_remote_target = edge_get_remote_target,
 	world_to_edge_pos = world_to_edge_pos,
 	edge_pos_to_world = edge_pos_to_world,
 	edge_pos_to_offset = edge_pos_to_offset,

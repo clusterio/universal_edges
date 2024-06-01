@@ -52,13 +52,9 @@ local function create_train_source_box(offset, edge, surface)
 	}
 	local signal = surface.create_entity {
 		name = "rail-signal",
-		position = edge_util.edge_pos_to_world({ edge_x + 1.5, -1.5 }, edge),
+		position = edge_util.edge_pos_to_world({ edge_x + 1.5, -0.5 }, edge),
 		direction = (edge_target.direction + 4) % 8,
 	}
-
-	-- How to force signal.signal_state to always be red?
-	-- Circuit wires?
-	-- Spawn a train in the station area?
 
 	if not edge.linked_trains then
 		edge.linked_trains = {}
@@ -70,6 +66,7 @@ local function create_train_source_box(offset, edge, surface)
 		stop = stop,
 		signal = signal,
 		parking_area_size = parking_area_size,
+		teleport_area_size = 3, -- Gets longer the more pathfinding stations we have to make space for
 	}
 
 	return {

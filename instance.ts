@@ -34,11 +34,18 @@ type PowerTransfer = {
 	amount_balanced?: number,
 }
 
+type TrainTransfer = {
+	offset: number,
+	train?: object,
+	train_id: number,
+}
+
 type EdgeTransfer = {
 	edge_id: string,
 	belt_transfers: BeltTransfer[],
 	fluid_transfers: FluidTransfer[],
 	power_transfers: PowerTransfer[],
+	train_transfers: TrainTransfer[],
 }
 
 type EdgeBuffer = {
@@ -47,12 +54,14 @@ type EdgeBuffer = {
 		beltTransfers: Map<number, BeltTransfer>,
 		fluidTransfers: Map<number, FluidTransfer>,
 		powerTransfers: Map<number, PowerTransfer>,
+		trainTransfers: Map<number, TrainTransfer>,
 	},
 	messageTransfer: lib.RateLimiter,
 	pendingCommand: {
 		beltTransfers: Map<number, BeltTransfer>
 		fluidTransfers: Map<number, FluidTransfer>
 		powerTransfers: Map<number, PowerTransfer>
+		trainTransfers: Map<number, TrainTransfer>
 	}
 	commandTransfer: lib.RateLimiter,
 }
@@ -133,6 +142,36 @@ function mergePowerTransfers(
 	}
 }
 
+function mergeTrainTransfers(
+	pendingTrainTransfers: Map<number, TrainTransfer>,
+	trainTransfers: TrainTransfer[]
+) {
+	for (let trainTransfer of trainTransfers) {
+		// Train transfers can't be merged, only one train can travel at a time. Use the latest request
+		let pending = pendingTrainTransfers.get(trainTransfer.offset);
+		if (pending !== undefined) {
+			if (pending.train_id === trainTransfer.train_id) {
+				console.log(`WARN: Train ${pending.train_id} is already being sent`);
+			} else {
+				// eslint-disable-next-line max-len
+				console.log(`FATAL: Sending 2 different trains from same connector: ${pending.train_id} and ${trainTransfer.train_id}`);
+			}
+		}
+		pendingTrainTransfers.set(trainTransfer.offset, trainTransfer);
+	}
+}
+
+function mapToArray(map: Map<any, any>) {
+	let arr = [];
+	for (let [_index, item] of map) {
+		arr.push({
+			...item,
+		});
+	}
+	map.clear();
+	return arr;
+}
+
 export class InstancePlugin extends BaseInstancePlugin {
 	edges: Map<string, EdgeBuffer> = new Map();
 
@@ -205,6 +244,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 		mergeBeltTransfers(edge.pendingMessage.beltTransfers, data.belt_transfers || []);
 		mergeFluidTransfers(edge.pendingMessage.fluidTransfers, data.fluid_transfers || []);
 		mergePowerTransfers(edge.pendingMessage.powerTransfers, data.power_transfers || []);
+		mergeTrainTransfers(edge.pendingMessage.trainTransfers, data.train_transfers || []);
 		edge.messageTransfer.activate();
 	}
 
@@ -219,6 +259,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 						beltTransfers: new Map(),
 						fluidTransfers: new Map(),
 						powerTransfers: new Map(),
+						trainTransfers: new Map(),
 					},
 					messageTransfer: new lib.RateLimiter({
 						maxRate: this.instance.config.get("universal_edges.transfer_message_rate"),
@@ -230,6 +271,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 						beltTransfers: new Map(),
 						fluidTransfers: new Map(),
 						powerTransfers: new Map(),
+						trainTransfers: new Map(),
 					},
 					commandTransfer: new lib.RateLimiter({
 						maxRate: this.instance.config.get("universal_edges.transfer_command_rate"),
@@ -254,29 +296,13 @@ export class InstancePlugin extends BaseInstancePlugin {
 		}
 
 		// Belts
-		let beltTransfers = [];
-		for (let [_offset, beltTransfer] of edge.pendingMessage.beltTransfers) {
-			beltTransfers.push({
-				...beltTransfer,
-			});
-		}
-		edge.pendingMessage.beltTransfers.clear();
+		let beltTransfers = mapToArray(edge.pendingMessage.beltTransfers);
 		// Fluids
-		let fluidTransfers = [];
-		for (let [_offset, fluidTransfer] of edge.pendingMessage.fluidTransfers) {
-			fluidTransfers.push({
-				...fluidTransfer,
-			});
-		}
-		edge.pendingMessage.fluidTransfers.clear();
+		let fluidTransfers = mapToArray(edge.pendingMessage.fluidTransfers);
 		// Power
-		let powerTransfers = [];
-		for (let [_offset, powerTransfer] of edge.pendingMessage.powerTransfers) {
-			powerTransfers.push({
-				...powerTransfer,
-			});
-		}
-		edge.pendingMessage.powerTransfers.clear();
+		let powerTransfers = mapToArray(edge.pendingMessage.powerTransfers);
+		// Trains
+		let trainTransfers = mapToArray(edge.pendingMessage.trainTransfers);
 
 		try {
 			// Find partner instance
@@ -288,7 +314,13 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 			await this.instance.sendTo(
 				{ instanceId: partnerInstance },
-				new messages.EdgeTransfer(edge.edge.id, beltTransfers, fluidTransfers, powerTransfers)
+				new messages.EdgeTransfer(
+					edge.edge.id,
+					beltTransfers,
+					fluidTransfers,
+					powerTransfers,
+					trainTransfers,
+				)
 			);
 			// We assume the transfer did not happen if an error occured.
 		} catch (err) {
@@ -298,7 +330,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 	}
 
 	async edgeTransferRequestHandler(message: messages.EdgeTransfer) {
-		let { edgeId, beltTransfers, fluidTransfers, powerTransfers } = message;
+		let { edgeId, beltTransfers, fluidTransfers, powerTransfers, trainTransfers } = message;
 		let edge = this.edges.get(edgeId);
 		if (!edge) {
 			console.log("impossible the edge was not found!");
@@ -308,6 +340,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 		mergeBeltTransfers(edge.pendingCommand.beltTransfers, beltTransfers);
 		mergeFluidTransfers(edge.pendingCommand.fluidTransfers, fluidTransfers);
 		mergePowerTransfers(edge.pendingCommand.powerTransfers, powerTransfers);
+		mergeTrainTransfers(edge.pendingCommand.trainTransfers, trainTransfers);
 		edge.commandTransfer.activate();
 		return { success: true };
 	}
@@ -320,35 +353,20 @@ export class InstancePlugin extends BaseInstancePlugin {
 		}
 
 		// Belts
-		let beltTransfers = [];
-		for (let [_offset, beltTransfer] of edge.pendingCommand.beltTransfers) {
-			beltTransfers.push({
-				...beltTransfer,
-			});
-		}
-		edge.pendingCommand.beltTransfers.clear();
+		let beltTransfers = mapToArray(edge.pendingCommand.beltTransfers);
 		// FLuids
-		let fluidTransfers = [];
-		for (let [_offset, fluidTransfer] of edge.pendingCommand.fluidTransfers) {
-			fluidTransfers.push({
-				...fluidTransfer,
-			});
-		}
-		edge.pendingCommand.fluidTransfers.clear();
+		let fluidTransfers = mapToArray(edge.pendingCommand.fluidTransfers);
 		// Power
-		let powerTransfers = [];
-		for (let [_offset, powerTransfer] of edge.pendingCommand.powerTransfers) {
-			powerTransfers.push({
-				...powerTransfer,
-			});
-		}
-		edge.pendingCommand.powerTransfers.clear();
+		let powerTransfers = mapToArray(edge.pendingCommand.powerTransfers);
+		// Trains
+		let trainTransfers = mapToArray(edge.pendingCommand.trainTransfers);
 
 		let json = lib.escapeString(JSON.stringify({
 			edge_id: edgeId,
 			belt_transfers: beltTransfers,
 			fluid_transfers: fluidTransfers,
 			power_transfers: powerTransfers,
+			train_transfers: trainTransfers,
 		}));
 		await this.sendRcon(`/sc universal_edges.transfer("${json}")`, true);
 	}
