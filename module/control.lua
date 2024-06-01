@@ -8,6 +8,7 @@ local fluid_box = require("modules/universal_edges/edge/fluid_box")
 local fluid_link = require("modules/universal_edges/edge/fluid_link")
 local power_box = require("modules/universal_edges/edge/power_box")
 local power_link = require("modules/universal_edges/edge/power_link")
+local train_box = require("modules/universal_edges/edge/train/train_box")
 
 local on_built = require("modules/universal_edges/events/on_built")
 local on_removed = require("modules/universal_edges/events/on_removed")
@@ -192,6 +193,10 @@ function universal_edges.edge_link_update(json)
 		power_box.create(data.offset, edge, surface)
 	elseif update.type == "remove_power_link" then
 		power_box.remove(data.offset, edge, surface)
+	elseif update.type == "create_train_link" then
+		train_box.create_destination(data.offset, edge, surface, update)
+	elseif update.type == "remove_train_link" then
+		train_box.remove_destination(data.offset, edge, surface)
 	else
 		log("Unknown link update: " .. serpent.line(update.type))
 	end

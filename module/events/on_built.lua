@@ -10,6 +10,8 @@ local create_fluid_link = require("modules/universal_edges/edge/create_fluid_lin
 local power_check = require("modules/universal_edges/edge/power_check")
 local create_power_link = require("modules/universal_edges/edge/create_power_link")
 
+local create_train_link = require("modules/universal_edges/edge/train/create_train_link")
+
 local function on_built(entity)
 	if entity.valid and util.is_transport_belt[entity.name] then
 		local pos = { entity.position.x, entity.position.y }
@@ -41,6 +43,18 @@ local function on_built(entity)
 				local offset = power_check(pos, edge)
 				if offset ~= nil then
 					create_power_link(id, edge, offset, entity)
+				end
+			end
+		end
+	end
+	if entity.valid and entity.name == "straight-rail" then
+		local pos = {entity.position.x, entity.position.y}
+		for id, edge in pairs(global.universal_edges.edges) do
+			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
+				-- We can reuse power_check since rail is the same size as substation
+				local offset = power_check(pos, edge)
+				if offset ~= nil then
+					create_train_link(id, edge, offset, entity)
 				end
 			end
 		end

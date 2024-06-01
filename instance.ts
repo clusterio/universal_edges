@@ -10,6 +10,7 @@ type EdgeLinkUpdate = {
 		offset: number,
 		is_input?: boolean,
 		belt_type?: string,
+		parking_area_size?: number, // For trains only
 	}
 };
 

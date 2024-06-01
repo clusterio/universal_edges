@@ -183,7 +183,7 @@ Trains should only be sent if they are able to be placed on the destination. No 
 
 To achieve this, the flow is as follows:
 
-1. Train arrives at edge signal
+1. Train passes edge signal on the way to park at one of the stations behind it
 2. When connector receives `ready` from partner (destination signal unblocked) the train is serialized and sent, but still remains in the world
 3. In the partner world, the train is attempted to be deserialized. On successfull deserialization a message with edgeid, offset, complete = true is sent.
 4. On receiving complete=true, the source world deletes the train.
@@ -191,3 +191,11 @@ To achieve this, the flow is as follows:
 ### Serialization
 
 We use the `universal_serializer` developed for gridworld.
+
+### Pathfinding
+
+The goal is for universal_edges to be used by gridworld, which aims to be fully vanilla compatible and reversible (a gridworld can be converted to a single vanilla map). To achieve this it needs to have train schedules that would work unchanged if it were running under vanilla without any edges. To do this, we need to use the vanilla pathfinder and only place/remove stations and other pathfinding penalties.
+
+When a connection is created, the destination recursively scans connected rails for signals and stations. This results of a map of station name to lowest pathfinding penalty to reach that station. On the out of world area of the source connector we extend the rail with the following:
+- A large (3000-ish) pathfinding penalty for traversing the edge
+- Stations from the map

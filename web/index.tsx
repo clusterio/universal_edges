@@ -1,4 +1,4 @@
-import React, { useContext, useCallback, useSyncExternalStore, } from "react";
+import React, { useContext, useCallback, useSyncExternalStore } from "react";
 
 import {
 	BaseWebPlugin, ControlContext,
@@ -17,8 +17,8 @@ export class WebPlugin extends BaseWebPlugin {
 			{
 				path: "/universal_edges",
 				sidebarName: "Universal edges",
-				// This permission is client side only, so it must match the permission string of a resource request to be secure
-				// An undefined value means that the page will always be visible
+				// This permission is client side only, so it must match the permission string of a resource
+				// request to be secure. An undefined value means that the page will always be visible
 				permission: "universal_edges.config.read",
 				content: <EdgeListPage />,
 			},
@@ -27,7 +27,10 @@ export class WebPlugin extends BaseWebPlugin {
 
 	useEdgeConfigs() {
 		const control = useContext(ControlContext);
-		const subscribe = useCallback((callback: () => void) => this.subscribableEdgeConfigs.subscribe(callback), [control]);
+		const subscribe = useCallback(
+			(callback: () => void) => this.subscribableEdgeConfigs.subscribe(callback),
+			[control]
+		);
 		return useSyncExternalStore(subscribe, () => this.subscribableEdgeConfigs.getSnapshot());
 	}
 }
