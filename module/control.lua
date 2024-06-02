@@ -11,7 +11,9 @@ local power_box = require("modules/universal_edges/edge/power_box")
 local power_link = require("modules/universal_edges/edge/power_link")
 local train_box = require("modules/universal_edges/edge/train/train_box")
 local train_link = require("modules/universal_edges/edge/train/train_link")
+local pathfinder_update = require("modules/universal_edges/edge/train/pathfinding/update")
 
+local pathfinder_events = require("modules/universal_edges/edge/train/pathfinding/events")
 local on_built = require("modules/universal_edges/events/on_built")
 local on_removed = require("modules/universal_edges/events/on_removed")
 
@@ -199,6 +201,8 @@ function universal_edges.edge_link_update(json)
 		train_box.create_destination(data.offset, edge, surface, update)
 	elseif update.type == "remove_train_link" then
 		train_box.remove_destination(data.offset, edge, surface)
+	elseif update.type== "update_train_penalty_map" then
+		pathfinder_update(data.offset, edge, data.penalty_map)
 	else
 		log("Unknown link update: " .. serpent.line(update.type))
 	end
@@ -457,6 +461,7 @@ universal_edges.events = {
 	[clusterio_api.events.on_server_startup] = function(_event)
 		log("Universal edges startup")
 		setupGlobalData()
+		pathfinder_events.on_server_startup()
 		if not global.universal_edges.config.ticks_per_edge then
 			global.universal_edges.config.ticks_per_edge = 15
 		end
@@ -487,6 +492,7 @@ universal_edges.events = {
 			fluid_link.poll_links(id, edge, ticks_left)
 			power_link.poll_links(id, edge, ticks_left)
 			train_link.poll_links(id, edge, ticks_left)
+			pathfinder_update.poll_connectors(id, edge, ticks_left)
 		end
 
 		if ticks_left == 0 then

@@ -19,8 +19,8 @@ Based on edge transports by @Hornwitser
   - [x] Delete source train
   - [ ] Correct landing location
   - [x] Train fuel and schedules go missing
-  - [ ] Retry sending when destination gets unblocked
-    - [ ] Check flow before sending
-    - [ ] Check signal status in push trains to reset flow
+  - [x] Retry sending when destination gets unblocked
   - [ ] Test all 4 in and out directions
   - [ ] Pathfinding
+    - [ ] Make it only check paths after a change event
+    - [ ] Test creating penalty map on source

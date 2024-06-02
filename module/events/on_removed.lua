@@ -11,6 +11,7 @@ local power_check = require("modules/universal_edges/edge/power_check")
 local remove_power_link = require("modules/universal_edges/edge/remove_power_link")
 
 local remove_train_link = require("modules/universal_edges/edge/train/remove_train_link")
+local pathfinder_events = require("modules/universal_edges/edge/train/pathfinding/events")
 
 local function on_removed(entity)
 	if entity.valid and util.is_transport_belt[entity.name] then
@@ -64,6 +65,9 @@ local function on_removed(entity)
 				end
 			end
 		end
+	end
+	if entity.valid then
+		pathfinder_events.on_removed(entity)
 	end
 end
 

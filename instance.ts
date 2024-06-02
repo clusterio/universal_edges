@@ -11,6 +11,7 @@ type EdgeLinkUpdate = {
 		is_input?: boolean,
 		belt_type?: string,
 		parking_area_size?: number, // For trains only
+		penalty_map?: object, // For train station pathfinding penalty
 	}
 };
 

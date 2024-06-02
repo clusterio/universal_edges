@@ -1,6 +1,5 @@
 local clusterio_api = require("modules/clusterio/api")
 local itertools = require("modules/universal_edges/itertools")
-local util = require("modules/universal_edges/util")
 local edge_util = require("modules/universal_edges/edge/util")
 local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
 
