@@ -1,3 +1,4 @@
+local constants = require("modules/universal_edges/constants")
 local edge_util = require("modules/universal_edges/edge/util")
 
 --[[
@@ -92,6 +93,13 @@ local function remove_train_source_box(offset, edge, _surface)
 				rail.destroy()
 			end
 		end
+		-- Rmove old visualizations
+		if link.debug_visu then
+			for index, visu in ipairs(link.debug_visu) do
+				rendering.destroy(visu)
+				link.debug_visu[index] = nil
+			end
+		end
 
 		edge.linked_trains[offset] = nil
 	end
@@ -104,14 +112,16 @@ end
 	- signal on rear end as occopancy detector
 ]]
 local function create_train_destination_box(offset, edge, surface, update)
-	log("update"..serpent.block(update))
+	log("update" .. serpent.block(update))
 	local edge_target = edge_util.edge_get_local_target(edge)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 
-	local pipe_pos = edge_util.edge_pos_to_world({ edge_x, -0.5 }, edge)
+	-- Parking length in number of rail tiles (each rail tile is 2x2)
+	-- local parking_length = update.data.parking_area_size + 2
+	local parking_length = constants.MAX_TRAIN_LENGTH * 4 + 2
 
 	local rails = {}
-	for i = 1, update.data.parking_area_size + 2 do
+	for i = 1, parking_length do
 		rails[#rails + 1] = surface.create_entity {
 			name = "straight-rail",
 			position = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge),
@@ -119,10 +129,10 @@ local function create_train_destination_box(offset, edge, surface, update)
 		}
 	end
 
-	local signal = surface.create_entity{
+	local signal = surface.create_entity {
 		name = "rail-signal",
-		position = edge_util.edge_pos_to_world({ edge_x + 1.5, 1.5 - (update.data.parking_area_size + 2) * 2 }, edge),
-		direction = (edge_target.direction + 4) % 8,
+		position = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge),
+		direction = edge_target.direction,
 	}
 
 	if not edge.linked_trains then
@@ -145,7 +155,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 end
 
 local function remove_train_destination_box(offset, edge, surface)
-	game.print("Removing destination box at "..offset)
+	game.print("Removing destination box at " .. offset)
 	if edge.linked_trains and edge.linked_trains[offset] then
 		local link = edge.linked_trains[offset]
 

@@ -84,7 +84,8 @@ const powerTransfersType = Type.Array(Type.Object({
 const trainTransfersType = Type.Array(Type.Object({
 	offset: Type.Number(),
 	train: Type.Optional(Type.Object({})),
-	train_id: Type.Number(),
+	train_id: Type.Optional(Type.Number()),
+	set_flow: Type.Optional(Type.Boolean()),
 }));
 export class EdgeTransfer {
 	declare ["constructor"]: typeof EdgeTransfer;

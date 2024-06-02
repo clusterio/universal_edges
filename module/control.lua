@@ -214,6 +214,9 @@ function universal_edges.transfer(json)
 		rcon.print("invalid edge")
 		return
 	end
+	if not edge.active then
+		return
+	end
 
 	local belt_response_transfers = {}
 	local fluid_response_transfers = {}
@@ -386,6 +389,10 @@ function universal_edges.transfer(json)
 				return
 			end
 
+			if train_transfer.set_flow ~= nil then
+				link.set_flow = train_transfer.set_flow
+			end
+
 			if train_transfer.train then
 				-- Attempt to spawn train in world
 				local success = train_link.push_train_link(edge, train_transfer.offset, link, train_transfer.train)
@@ -396,7 +403,16 @@ function universal_edges.transfer(json)
 					-- Sending a transfer with a `train_id` and no `train` will delete train on destination
 					train_response_transfers[#train_response_transfers + 1] = {
 						offset = train_transfer.offset,
+						-- Delete origin train (when provided without `train`)
 						train_id = train_transfer.train_id,
+						-- Prevent immediately sending another before this one has cleared the station
+						set_flow = link.signal.signal_state == defines.signal_state.open,
+					}
+				else
+					-- Station was blocked, disable flow
+					train_response_transfers[#train_response_transfers+1] = {
+						offset = train_transfer.offset,
+						set_flow = false,
 					}
 				end
 			elseif train_transfer.train_id ~= nil then

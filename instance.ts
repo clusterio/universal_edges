@@ -37,7 +37,8 @@ type PowerTransfer = {
 type TrainTransfer = {
 	offset: number,
 	train?: object,
-	train_id: number,
+	train_id?: number,
+	set_flow?: boolean,
 }
 
 type EdgeTransfer = {
@@ -156,6 +157,7 @@ function mergeTrainTransfers(
 				// eslint-disable-next-line max-len
 				console.log(`FATAL: Sending 2 different trains from same connector: ${pending.train_id} and ${trainTransfer.train_id}`);
 			}
+			pending.set_flow = trainTransfer.set_flow;
 		}
 		pendingTrainTransfers.set(trainTransfer.offset, trainTransfer);
 	}

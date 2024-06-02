@@ -24,11 +24,41 @@ local function poll_links(id, edge, ticks_left)
 	for offset, link in itertools.partial_pairs(
 		edge.linked_trains, edge.linked_trains_state, ticks_left
 	) do
+		local signal_state = link.signal.signal_state
 		if link.is_input and link.signal.valid then
-			local signal_state = link.signal.signal_state
-			if -- Signal has turned red
-				signal_state ~= link.previous_signal_state
-				and signal_state == defines.signal_state.closed
+			-- Update debug visualization of flow status
+			if link.debug_visu == nil then
+				link.debug_visu = {}
+			end
+
+			-- Rmove old visualizations
+			for index, visu in ipairs(link.debug_visu) do
+				rendering.destroy(visu)
+				link.debug_visu[index] = nil
+			end
+
+			-- Visualize set_flow
+			if link.set_flow == false then
+				local edge_x = edge_util.offset_to_edge_x(offset, edge)
+				local pos = edge_util.edge_pos_to_world({ edge_x, 0 }, edge)
+				link.debug_visu[#link.debug_visu + 1] = rendering.draw_text {
+					text = "Destination blocked",
+					surface = game.surfaces[edge_util.edge_get_local_target(edge).surface],
+					target = pos,
+					color = { r = 1, g = 1, b = 1 },
+					scale = 1.5,
+				}
+			end
+
+			if (-- Signal has turned red
+					link.set_flow
+					and signal_state ~= link.previous_signal_state
+					and signal_state == defines.signal_state.closed
+				) or ( -- Retry if flow just opened up
+					link.set_flow
+					and link.previous_flow_state == false
+					and signal_state == defines.signal_state.closed
+				) -- No need to check on active state change as poll_links is only called when active
 			then
 				game.print("Signal turned red, initializing teleport at " .. offset)
 
@@ -84,8 +114,17 @@ local function poll_links(id, edge, ticks_left)
 					game.print(serpent.block(area))
 				end
 			end
-			link.previous_signal_state = signal_state
+		elseif not link.is_input and link.signal.valid then
+			-- Update connector flow status
+			if link.previous_signal_state ~= signal_state then
+				train_transfers[#train_transfers + 1] = {
+					offset = offset,
+					set_flow = signal_state == defines.signal_state.open,
+				}
+			end
 		end
+		link.previous_signal_state = signal_state
+		link.previous_flow_state = link.set_flow
 	end
 
 	if #train_transfers > 0 then
@@ -105,6 +144,11 @@ end
 ---@returns boolean
 local function push_train_link(edge, offset, link, train)
 	log("Attempting to spawn train " .. serpent.block(train))
+
+	-- Check if the spawn location is free using link signal
+	if link.signal.signal_state ~= defines.signal_state.open then
+		return false
+	end
 
 	for _, carriage in ipairs(train.carriages) do
 		log("Carriage edge position " .. serpent.line(carriage.position))
