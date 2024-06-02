@@ -8,11 +8,11 @@ local function LuaTrainComplete_deserialize(train_data)
 	local entity = nil
 	for _, carriage in ipairs(train_data.carriages) do
 		entity = LuaEntity_deserialize(carriage)
+		log("Deserialized carriage " .. _)
 	end
-
+	log("Entity: "..entity.name)
 	if entity ~= nil then
-		LuaTrain_deserialize(entity, train_data.train)
-		return entity.train
+		return LuaTrain_deserialize(entity, train_data.train)
 	end
 end
 

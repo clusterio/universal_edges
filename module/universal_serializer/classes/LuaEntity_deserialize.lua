@@ -8,22 +8,6 @@ local function entity_deserialize(serialized_entity, is_already_delayed)
 	-- local entity_data = load("return " .. serialized_entity)()
 	local entity_data = serialized_entity
 
-	-- Some entities need to be delayed by a tick to allow the game to initialize stuff
-	-- This is a list of entities that need to be delayed
-	local delayed_entity_types = {
-		["locomotive"] = true,
-		["cargo-wagon"] = true,
-		["fluid-wagon"] = true,
-		["artillery-wagon"] = true,
-	}
-	if not is_already_delayed and delayed_entity_types[entity_data.type] then
-		-- Delay entity creation by a tick
-		global.universal_edges.delayed_entities_tick = game.tick + 1 -- Delay by 1 tick
-		global.universal_edges.delayed_entities = global.universal_edges.delayed_entities or {}
-		table.insert(global.universal_edges.delayed_entities, serialized_entity)
-		return nil
-	end
-
 	-- Check if player is valid before using it
 	local player = nil
 	if entity_data.player ~= nil then
@@ -194,6 +178,10 @@ local function entity_deserialize(serialized_entity, is_already_delayed)
 	for i = 1, 10 do
 		if entity_data.inventories[i] ~= nil then
 			clusterio_serialize.deserialize_inventory(entity.get_inventory(i), entity_data.inventories[i])
+		end
+		if entity_data.inventories[tostring(i)] ~= nil then
+			---@diagnostic disable-next-line: param-type-mismatch
+			clusterio_serialize.deserialize_inventory(entity.get_inventory(tonumber(i)), entity_data.inventories[tostring(i)])
 		end
 	end
 

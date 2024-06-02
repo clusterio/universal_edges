@@ -16,3 +16,8 @@ Based on edge transports by @Hornwitser
 - [x] Fluids transfers
 - [x] Electricity transfers
 - [ ] Train transfers
+  - [x] Delete source train
+  - [ ] Correct landing location
+  - [x] Train fuel and schedules go missing
+  - [ ] Test all 4 in and out directions
+  - [ ] Pathfinding

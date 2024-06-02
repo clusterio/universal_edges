@@ -379,6 +379,7 @@ function universal_edges.transfer(json)
 
 	if data.train_transfers then
 		for _, train_transfer in ipairs(data.train_transfers) do
+			log("TrainTransfer: "..serpent.line(train_transfer))
 			local link = (edge.linked_trains or {})[train_transfer.offset]
 			if not link then
 				log("FATAL: Received train for non-existant link at offset " .. train_transfer.offset)
@@ -391,17 +392,27 @@ function universal_edges.transfer(json)
 
 				-- If successful, return train_id without a train
 				if success then
+					log("Success! Telling source to go away")
 					-- Sending a transfer with a `train_id` and no `train` will delete train on destination
 					train_response_transfers[#train_response_transfers + 1] = {
 						offset = train_transfer.offset,
 						train_id = train_transfer.train_id,
 					}
 				end
-			elseif train_transfer.train_id then
+			elseif train_transfer.train_id ~= nil then
 				-- The train was successfully spawned in on partner - delete the local train
-				local msg = "Transfer successful, releting local train "..train_transfer.train_id
+				local msg = "Transfer successful, deleting local train " .. train_transfer.train_id
 				log(msg)
 				game.print(msg)
+				local train = game.get_train_by_id(train_transfer.train_id)
+				if train then
+					log("Got train, deleting")
+					for _, carriage in ipairs(train.carriages) do
+						carriage.destroy()
+					end
+				else
+					log("FATAL: Train teleported successfully but origin train dissappeared")
+				end
 			end
 		end
 	end
@@ -418,7 +429,10 @@ function universal_edges.transfer(json)
 	if #power_response_transfers > 0 then
 		transfer.power_transfers = power_response_transfers
 	end
-	if #belt_response_transfers + #fluid_response_transfers + #power_response_transfers > 0 then
+	if #train_response_transfers > 0 then
+		transfer.train_transfers = train_response_transfers
+	end
+	if #belt_response_transfers + #fluid_response_transfers + #power_response_transfers + #train_response_transfers > 0 then
 		clusterio_api.send_json("universal_edges:transfer", transfer)
 	end
 end
