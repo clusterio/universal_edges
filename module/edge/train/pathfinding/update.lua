@@ -2,6 +2,11 @@ local clusterio_api = require("modules/clusterio/api")
 local itertools = require("modules/universal_edges/itertools")
 local edge_util = require("modules/universal_edges/edge/util")
 
+--[[
+	Ran for destination connectors. Figure out pathfinding penalty to reach all stations on the instance
+	from this destination. Unreachable destinations are excluded from the result. We only care about
+	the closest station of each name.
+]]
 local function update_connector_paths(edge, offset, link)
 	local edge_target = edge_util.edge_get_local_target(edge)
 	local train_stops = game.surfaces[1].find_entities_filtered {
@@ -9,9 +14,12 @@ local function update_connector_paths(edge, offset, link)
 	}
 	local goals = {}
 	for _, stop in pairs(train_stops) do
-		goals[#goals + 1] = {
-			train_stop = stop
-		}
+		-- It is possible to create trainstops and deconstructing the rail, this causes the pathfinder to throw
+		if stop.connected_rail ~= nil then
+			goals[#goals + 1] = {
+				train_stop = stop
+			}
+		end
 	end
 
 	--[[
@@ -71,7 +79,7 @@ local function update_connector_paths(edge, offset, link)
 			end
 		end
 	end
-	log("Penalty map " .. serpent.block(penalty_map))
+	log("Penalty map for offset " .. offset .. " " .. serpent.block(penalty_map))
 
 	-- Check if new penalty map is significantly different from old penalty map
 	-- If it is, update the penalty map on the source side of the connector
@@ -80,31 +88,46 @@ local function update_connector_paths(edge, offset, link)
 	if old_penalty_map ~= nil then
 		local penalty_diff = 0
 		for backer_name, penalty in pairs(penalty_map) do
+			-- A new stop was added, we need to send the update
+			if old_penalty_map[backer_name] == nil then
+				send_update = true
+			end
 			local old_penalty = old_penalty_map[backer_name] or 0
 			penalty_diff = penalty_diff + math.abs(penalty - old_penalty)
 		end
+		for backer_name, _ in pairs(old_penalty_map) do
+			-- A stop was removed, we need to send the update
+			if penalty_map[backer_name] == nil then
+				send_update = true
+			end
+		end
 		if penalty_diff > 50000 then
-			link.penalty_map = penalty_map
 			send_update = true
 		end
 	else
-		link.penalty_map = penalty_map
 		send_update = true
 	end
 
+	-- Set scan as completed
+	link.penalty_map = penalty_map
+	link.rescan_penalties = false
+
 	if send_update then
 		log("Significant change detected, sending penalty map")
-		return {
+		clusterio_api.send_json("universal_edges:edge_link_update", {
 			type = "update_train_penalty_map",
 			edge_id = edge.id,
 			data = {
 				offset = offset,
 				penalty_map = link.penalty_map,
 			},
-		}
+		})
 	end
 end
 
+--[[
+	Check if any connectors have updated pathfinding penalties
+]]
 local function poll_connectors(id, edge, ticks_left)
 	if not edge.poll_connectors_state then
 		edge.poll_connectors_state = {}
@@ -114,28 +137,19 @@ local function poll_connectors(id, edge, ticks_left)
 		edge.pending_train_transfers = {}
 	end
 
-	local penalty_updates = {}
 	for offset, link in itertools.partial_pairs(
 		edge.linked_trains, edge.poll_connectors_state, ticks_left
 	) do
 		-- Only check penalties for outputs
-		if not link.is_input then
-			local update = update_connector_paths(edge, offset, link)
-			penalty_updates[#penalty_updates + 1] = update
+		if link.is_input == false and link.rescan_penalties then
+			update_connector_paths(edge, offset, link)
 		end
-	end
-
-	if #penalty_updates > 0 then
-		clusterio_api.send_json("universal_edges:transfer", {
-			edge_id = id,
-			penalty_updates = penalty_updates,
-		})
 	end
 end
 
 --[[
 	This function almost belongs more in train_box
-	Basically, it creates stations and circuit locked signals to emulate the pathfinding graph
+	Basically, it creates stations and circuit locked signals to emulate the pathfinding graph on the source side of the connector
 ]]
 local function update_train_penalty_map(offset, edge, penalty_map)
 	if not edge.linked_trains then
@@ -148,10 +162,14 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 
 	local link = edge.linked_trains[offset]
 
+	log("Got penalty update for " .. offset .. " " .. serpent.block(penalty_map))
+
 	-- Remove old penalty entities
-	for _index, rail in pairs(link.penalty_rails) do
-		if rail and rail.valid then
-			rail.destroy()
+	if link.penalty_rails ~= nil then
+		for _index, rail in pairs(link.penalty_rails) do
+			if rail and rail.valid then
+				rail.destroy()
+			end
 		end
 	end
 
@@ -162,6 +180,7 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 	end
 	local penalty_plan = {}
 	local processed_stations = 0
+	local penalty_bucket = 0
 	local plan_length = 0 -- Number of server_dividers in the plan, ~1 per server manhattan distance to furthest stop
 	while processed_stations < station_count do
 		-- Add new padding to plan
@@ -171,25 +190,26 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 			penalty = 100000,
 		}
 		-- Check if any stops belong in this bucket
-		local current_penalty = penalty_plan[#penalty_plan].penalty
 		for name, penalty in pairs(penalty_map) do
-			if penalty >= current_penalty and penalty < current_penalty + 100000 then
+			if penalty >= penalty_bucket and penalty < penalty_bucket + 100000 then
 				penalty_plan[#penalty_plan + 1] = {
 					name = name,
-					penalty = penalty,
+					penalty = penalty + 100000,
 				}
 				processed_stations = processed_stations + 1
 			end
 		end
+		penalty_bucket = penalty_bucket + 100000
 	end
 
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 	local edge_target = edge_util.edge_get_local_target(edge)
+	local surface = game.surfaces[edge_target.surface]
 	local rails = {}
-	for i = 3, #plan_length + 2 do
-		rails[#rails + 1] = edge_target.surface.create_entity {
+	for i = 2, plan_length + 2 do
+		rails[#rails + 1] = surface.create_entity {
 			name = "straight-rail",
-			position = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge),
+			position = edge_util.edge_pos_to_world({ edge_x, -1 - i * 2 }, edge),
 			direction = edge_target.direction,
 		}
 	end
@@ -197,45 +217,48 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 	for _, item in ipairs(penalty_plan) do
 		if item.type == "server_divider" then
 			-- Add huge pathfinding penalty
-			local signal = edge_target.surface.create_entity {
+			local signal = surface.create_entity {
 				name = "rail-signal",
-				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -4.5 + processed_dividers * 4 }, edge),
+				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -4.5 - processed_dividers * 4 }, edge),
 				direction = (edge_target.direction + 4) % 8,
 			}
-			rails[#rails + 1] = signal
-			local combinator = edge_target.surface.create_entity {
+			local combinator = surface.create_entity {
 				name = "constant-combinator",
-				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -5.5 + processed_dividers * 4 }, edge),
+				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -5.5 - processed_dividers * 4 }, edge),
 				direction = (edge_target.direction + 4) % 8,
 			}
-			rails[#rails + 1] = combinator
 
-			signal.connect_neighbour({
-				target_entity = combinator,
-				wire = defines.wire_type.red,
-			})
+			if signal ~= nil and combinator ~= nil then
+				rails[#rails + 1] = signal
+				rails[#rails + 1] = combinator
 
-			-- Set condition to make signal red
-			-- The pathfinding penalty does not apply unless the signal has been made red by a circuit condition
-			local control_behaviour = signal.get_or_create_control_behavior()
-			control_behaviour.close_signal = true
-			control_behaviour.circuit_condition = {
-				condition = {
-					first_signal = {
-						type = "item",
-						name = "rail-signal",
-					},
-					comparator = "<",
-					constant = 1,
+				signal.connect_neighbour({
+					target_entity = combinator,
+					wire = defines.wire_type.red,
+				})
+
+				-- Set condition to make signal red
+				-- The pathfinding penalty does not apply unless the signal has been made red by a circuit condition
+				local control_behaviour = signal.get_or_create_control_behavior()
+				control_behaviour.close_signal = true
+				control_behaviour.circuit_condition = {
+					condition = {
+						first_signal = {
+							type = "item",
+							name = "rail-signal",
+						},
+						comparator = "<",
+						constant = 1,
+					}
 				}
-			}
+			end
 
 			processed_dividers = processed_dividers + 1
 		else
 			-- Add stacked trainstops
-			local stop = edge_target.surface.create_entity {
+			local stop = surface.create_entity {
 				name = "train-stop",
-				position = edge_util.edge_pos_to_world({ edge_x + 2, -3 + processed_dividers * 4 }, edge),
+				position = edge_util.edge_pos_to_world({ edge_x + 2, -3 - processed_dividers * 4 }, edge),
 				direction = edge_target.direction,
 				force = "player", -- Neutral/Enemy can be used to hide trainstop name from schedule GUI/map view respectively
 			}

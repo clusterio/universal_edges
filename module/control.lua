@@ -202,7 +202,7 @@ function universal_edges.edge_link_update(json)
 	elseif update.type == "remove_train_link" then
 		train_box.remove_destination(data.offset, edge, surface)
 	elseif update.type== "update_train_penalty_map" then
-		pathfinder_update(data.offset, edge, data.penalty_map)
+		pathfinder_update.update_train_penalty_map(data.offset, edge, data.penalty_map)
 	else
 		log("Unknown link update: " .. serpent.line(update.type))
 	end
@@ -469,6 +469,7 @@ universal_edges.events = {
 
 	[defines.events.on_tick] = function(event)
 		universal_serializer.events.on_tick(event)
+		pathfinder_events.on_tick()
 		local ticks_left = -game.tick % global.universal_edges.config.ticks_per_edge
 		local id = global.universal_edges.current_edge_id
 		if id == nil then

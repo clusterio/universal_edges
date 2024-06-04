@@ -93,9 +93,11 @@ local function remove_train_source_box(offset, edge, _surface)
 				rail.destroy()
 			end
 		end
-		for _index, rail in pairs(link.penalty_rails) do
-			if rail and rail.valid then
-				rail.destroy()
+		if link.penalty_rails ~= nil then
+			for _index, rail in pairs(link.penalty_rails) do
+				if rail and rail.valid then
+					rail.destroy()
+				end
 			end
 		end
 		-- Rmove old visualizations
