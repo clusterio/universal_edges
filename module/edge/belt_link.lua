@@ -91,20 +91,19 @@ local function push_belt_link(offset, link, item_stacks)
 	local inventory = link.chest.get_inventory(defines.inventory.chest)
 	local item_stacks_count = #item_stacks
 	local space, top_index = shift_inventory(inventory, item_stacks_count)
-	for index=1, space do
+	for index = 1, space do
 		local slot = inventory[space - index + 1]
 		serialize.deserialize_item_stack(slot, item_stacks[index])
 		item_stacks[index] = nil
 	end
 
 	if item_stacks_count > space then
-		for index=1, space - item_stacks_count do
+		for index = 1, space - item_stacks_count do
 			item_stacks[index] = item_stacks[index + space]
 		end
 
 		link.start_index = math.floor(#inventory / 2 + 1)
 		log("FATAL: item stacks left over!")
-
 	elseif not link.start_index and top_index > item_stacks_count * 2 + 2 then
 		link.start_index = math.min(item_stacks_count + 2, #inventory)
 	end
@@ -153,7 +152,38 @@ local function poll_links(id, edge, ticks_left)
 	end
 end
 
+local function receive_transfers(edge, belt_transfers)
+	if belt_transfers == nil then
+		return {}
+	end
+	local belt_response_transfers = {}
+	for _offset, belt_transfer in ipairs(belt_transfers) do
+		local link = (edge.linked_belts or {})[belt_transfer.offset]
+		if not link then
+			log("FATAL: recevied items for non-existant link at offset " .. belt_transfer.offset)
+			return
+		end
+
+		if link.is_input and belt_transfer.set_flow ~= nil then
+			local inventory = link.chest.get_inventory(defines.inventory.chest)
+			if belt_transfer.set_flow then
+				inventory.set_bar()
+			else
+				inventory.set_bar(1)
+			end
+		end
+
+		if belt_transfer.item_stacks then
+			local update = push_belt_link(belt_transfer.offset, link, belt_transfer.item_stacks)
+			if update then
+				belt_response_transfers[#belt_response_transfers + 1] = update
+			end
+		end
+	end
+end
+
 return {
 	push_belt_link = push_belt_link,
 	poll_links = poll_links,
+	receive_transfers = receive_transfers,
 }

@@ -162,7 +162,66 @@ local function push_train_link(edge, offset, link, train)
 	return luaTrain ~= nil
 end
 
+local function receive_transfers(edge, train_transfers)
+	if train_transfers == nil then
+		return {}
+	end
+	local train_response_transfers = {}
+	for _, train_transfer in ipairs(train_transfers) do
+		log("TrainTransfer: " .. serpent.line(train_transfer))
+		local link = (edge.linked_trains or {})[train_transfer.offset]
+		if not link then
+			log("FATAL: Received train for non-existant link at offset " .. train_transfer.offset)
+			return
+		end
+
+		if train_transfer.set_flow ~= nil then
+			link.set_flow = train_transfer.set_flow
+		end
+
+		if train_transfer.train then
+			-- Attempt to spawn train in world
+			local success = push_train_link(edge, train_transfer.offset, link, train_transfer.train)
+
+			-- If successful, return train_id without a train
+			if success then
+				log("Success! Telling source to go away")
+				-- Sending a transfer with a `train_id` and no `train` will delete train on destination
+				train_response_transfers[#train_response_transfers + 1] = {
+					offset = train_transfer.offset,
+					-- Delete origin train (when provided without `train`)
+					train_id = train_transfer.train_id,
+					-- Prevent immediately sending another before this one has cleared the station
+					set_flow = link.signal.signal_state == defines.signal_state.open,
+				}
+			else
+				-- Station was blocked, disable flow
+				train_response_transfers[#train_response_transfers + 1] = {
+					offset = train_transfer.offset,
+					set_flow = false,
+				}
+			end
+		elseif train_transfer.train_id ~= nil then
+			-- The train was successfully spawned in on partner - delete the local train
+			local msg = "Transfer successful, deleting local train " .. train_transfer.train_id
+			log(msg)
+			game.print(msg)
+			local train = game.get_train_by_id(train_transfer.train_id)
+			if train then
+				log("Got train, deleting")
+				for _, carriage in ipairs(train.carriages) do
+					carriage.destroy()
+				end
+			else
+				log("FATAL: Train teleported successfully but origin train dissappeared")
+			end
+		end
+	end
+	return train_response_transfers
+end
+
 return {
 	poll_links = poll_links,
 	push_train_link = push_train_link,
+	receive_transfers = receive_transfers,
 }

@@ -12,6 +12,7 @@ Based on edge transports by @Hornwitser
 ## Features
 
 - [x] Web gui for configuration
+  - [ ] Handle connectors when edges are moved
 - [x] Belt transfers
 - [x] Fluids transfers
 - [x] Electricity transfers
