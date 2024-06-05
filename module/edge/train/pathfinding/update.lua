@@ -267,6 +267,20 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 		end
 	end
 	link.penalty_rails = rails
+
+	--[[
+		Tell other destination links on this server to update their paths.
+		This enables propagaiton over multiple instances in a cluster.
+		This could be optimized by looking at the changes performed in this sync and only updating
+		paths with modificaitons.
+	]]
+	if (
+			global.universal_edges.pathfinder.rescan_connector_paths_after == nil
+			or global.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
+		)
+	then
+		global.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
+	end
 end
 
 return {
