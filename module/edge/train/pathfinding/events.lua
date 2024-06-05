@@ -13,6 +13,21 @@ local function on_server_startup()
 	if not global.universal_edges.pathfinder then
 		global.universal_edges.pathfinder = {}
 	end
+	for _, edge in pairs(global.universal_edges.edges) do
+		if edge.linked_trains then
+			for _, link in pairs(edge.linked_trains) do
+				if link.is_input == false then
+					--[[
+						Force rescan and retransmit, even if there were no changes on this instance
+						This is required because the partner instance might have reverted to an older version of the map,
+						or maybe this instance reverted to an older version.
+					]]
+					link.rescan_penalties = true
+					link.penalty_map = nil
+				end
+			end
+		end
+	end
 end
 
 local types_to_cause_update = {

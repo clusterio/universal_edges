@@ -142,6 +142,7 @@ function universal_edges.edge_update(edge_id, edge_json)
 			active_status_has_changed = true
 		end
 		old_edge.active = edge.active
+		edge = old_edge
 	end
 
 	if active_status_has_changed then
@@ -154,11 +155,32 @@ function universal_edges.edge_update(edge_id, edge_json)
 					end
 				end
 			end
-		else
+			-- Disable train pathfinding over this edge
+			if edge.linked_trains then
+				for offset, link in pairs(edge.linked_trains) do
+					if link.is_input then
+						pathfinder_update.update_train_penalty_map(offset, edge, {})
+					end
+				end
+			end
+		else -- Edge was activated
 			if edge.linked_belts then
 				for _offset, link in pairs(edge.linked_belts) do
 					if not link.is_input then
 						link.start_index = 1
+					end
+				end
+			end
+			if edge.linked_trains then
+				for _, link in pairs(edge.linked_trains) do
+					if link.is_input == false then
+						--[[
+							Force rescan and retransmit, even if there were no changes on this instance
+							This is required because the partner instance might have reverted to an older version of the map,
+							or maybe this instance reverted to an older version.
+						]]
+						link.rescan_penalties = true
+						link.penalty_map = nil
 					end
 				end
 			end
@@ -201,7 +223,7 @@ function universal_edges.edge_link_update(json)
 		train_box.create_destination(data.offset, edge, surface, update)
 	elseif update.type == "remove_train_link" then
 		train_box.remove_destination(data.offset, edge, surface)
-	elseif update.type== "update_train_penalty_map" then
+	elseif update.type == "update_train_penalty_map" then
 		pathfinder_update.update_train_penalty_map(data.offset, edge, data.penalty_map)
 	else
 		log("Unknown link update: " .. serpent.line(update.type))
@@ -386,7 +408,7 @@ function universal_edges.transfer(json)
 
 	if data.train_transfers then
 		for _, train_transfer in ipairs(data.train_transfers) do
-			log("TrainTransfer: "..serpent.line(train_transfer))
+			log("TrainTransfer: " .. serpent.line(train_transfer))
 			local link = (edge.linked_trains or {})[train_transfer.offset]
 			if not link then
 				log("FATAL: Received train for non-existant link at offset " .. train_transfer.offset)
@@ -414,7 +436,7 @@ function universal_edges.transfer(json)
 					}
 				else
 					-- Station was blocked, disable flow
-					train_response_transfers[#train_response_transfers+1] = {
+					train_response_transfers[#train_response_transfers + 1] = {
 						offset = train_transfer.offset,
 						set_flow = false,
 					}

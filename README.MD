@@ -22,8 +22,9 @@ Based on edge transports by @Hornwitser
   - [x] Train fuel and schedules go missing
   - [x] Retry sending when destination gets unblocked
   - [ ] Test all 4 in and out directions
-  - [ ] Pathfinding
+  - [x] Pathfinding
     - [x] Make it only check paths after a change event
     - [x] Test creating penalty map on source
     - [x] Update local destinations when a source updates
-    - [ ] Update on edge activation/deactivation
+    - [x] Update on edge activation/deactivation
+    - [ ] Global option to not repath on edge deactivated
