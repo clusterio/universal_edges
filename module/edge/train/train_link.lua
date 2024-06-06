@@ -1,5 +1,6 @@
 local clusterio_api = require("modules/clusterio/api")
 local itertools = require("modules/universal_edges/itertools")
+local util = require("modules/universal_edges/util")
 local edge_util = require("modules/universal_edges/edge/util")
 local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
 
@@ -49,7 +50,7 @@ local function poll_links(id, edge, ticks_left)
 				}
 			end
 
-			if (-- Signal has turned red
+			if ( -- Signal has turned red
 					link.set_flow
 					and signal_state ~= link.previous_signal_state
 					and signal_state == defines.signal_state.closed
@@ -66,7 +67,7 @@ local function poll_links(id, edge, ticks_left)
 
 				-- Find area filtered requires left_top to actually be in the left top.
 				-- This means we have to handle rotations properly
-				local area = realign_area(
+				local area = util.realign_area(
 					edge_util.edge_pos_to_world({
 						edge_x + 1,
 						0,
@@ -137,11 +138,11 @@ end
 --[[
 	Spawn received train and return success status
 ]]
----@param offset number
+---@param _offset number
 ---@param link table
 ---@param train table
 ---@returns boolean
-local function push_train_link(edge, offset, link, train)
+local function push_train_link(edge, _offset, link, train)
 	log("Attempting to spawn train " .. serpent.block(train))
 
 	-- Check if the spawn location is free using link signal
@@ -222,6 +223,5 @@ end
 
 return {
 	poll_links = poll_links,
-	push_train_link = push_train_link,
 	receive_transfers = receive_transfers,
 }

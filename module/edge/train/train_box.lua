@@ -161,7 +161,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 	return true
 end
 
-local function remove_train_destination_box(offset, edge, surface)
+local function remove_train_destination_box(offset, edge, _surface)
 	game.print("Removing destination box at " .. offset)
 	if edge.linked_trains and edge.linked_trains[offset] then
 		local link = edge.linked_trains[offset]

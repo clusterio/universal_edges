@@ -4,7 +4,7 @@ local LuaTrain_deserialize = require("modules/universal_edges/universal_serializ
 --[[
 	Function to deserialize an entity from a string.
 ]]
-local function entity_deserialize(serialized_entity, is_already_delayed)
+local function entity_deserialize(serialized_entity, _is_already_delayed)
 	-- local entity_data = load("return " .. serialized_entity)()
 	local entity_data = serialized_entity
 

@@ -15,7 +15,7 @@ local belt_type_to_loader_type = {
 	["express-transport-belt"] = "express-loader",
 }
 
-function realign_area(posa, posb)
+local function realign_area(posa, posb)
 	-- Create box between 2 points where left_top is in the left top and right_bottom is in the right bottom
 	-- Smaller number = higher
 	-- Smaller number = further left

@@ -180,6 +180,7 @@ local function receive_transfers(edge, belt_transfers)
 			end
 		end
 	end
+	return belt_response_transfers
 end
 
 return {

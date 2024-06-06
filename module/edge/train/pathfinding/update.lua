@@ -128,7 +128,7 @@ end
 --[[
 	Check if any connectors have updated pathfinding penalties
 ]]
-local function poll_connectors(id, edge, ticks_left)
+local function poll_connectors(_id, edge, ticks_left)
 	if not edge.poll_connectors_state then
 		edge.poll_connectors_state = {}
 	end

@@ -95,6 +95,7 @@ local function receive_transfers(edge, fluid_transfers)
 			}
 		end
 	end
+	return fluid_response_transfers
 end
 
 return {
