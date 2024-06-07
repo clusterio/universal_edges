@@ -158,6 +158,34 @@ local function push_train_link(edge, _offset, link, train)
 		return false
 	end
 
+	-- Normalize edge position of carriages to fit outside of the edge (y is negative)
+	local train_start_position = -4
+	-- Find position of first wagon (lowest y position)
+	local first_wagon = train.carriages[1].position[2]
+	for _, carriage in ipairs(train.carriages) do
+		local y = carriage.position[2]
+		if y < first_wagon then
+			first_wagon = y
+		end
+	end
+
+	-- Sort carriages by y position
+	table.sort(train.carriages, function(a, b)
+		return a.position[2] < b.position[2]
+	end)
+
+	-- Update position
+	for _, carriage in ipairs(train.carriages) do
+		local y = carriage.position[2]
+		-- Invert y because it was on the outside of the border and is now going to be on the inside of the border (on the partner side)
+		-- This effectively inverts the train
+		y = y * -1 + first_wagon + train_start_position
+		carriage.position[2] = y
+
+		-- Invert orientation of carriages since we are effectively inverting the direction of the train
+		carriage.orientation = (carriage.orientation + 0.5) % 1
+	end
+
 	for _, carriage in ipairs(train.carriages) do
 		log("Carriage edge position " .. serpent.line(carriage.position))
 		-- Translate from edge position to work position

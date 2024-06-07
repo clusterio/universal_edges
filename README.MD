@@ -18,8 +18,8 @@ Based on edge transports by @Hornwitser
 - [x] Electricity transfers
 - [ ] Train transfers
   - [x] Delete source train
-  - [ ] Correct landing location
-  - [ ] Rotate trains when landing 
+  - [x] Correct landing location
+  - [x] Rotate trains when landing 
   - [x] Train fuel and schedules go missing
   - [x] Retry sending when destination gets unblocked
   - [ ] Test all 4 in and out directions
