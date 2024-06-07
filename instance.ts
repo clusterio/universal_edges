@@ -177,6 +177,7 @@ function mapToArray(map: Map<any, any>) {
 
 export class InstancePlugin extends BaseInstancePlugin {
 	edges: Map<string, EdgeBuffer> = new Map();
+	edgeCallbacks: Map<string, ((data: EdgeBuffer) => void)[]> = new Map();
 
 	async init() {
 
@@ -206,8 +207,34 @@ export class InstancePlugin extends BaseInstancePlugin {
 		this.logger.info("instance::onStop");
 	}
 
+	// Get an edge from cache, if it is not yet in cahce then wait for it to become available. This fixes inconsistent state on server startup
+	async getEdge(id: string) {
+		let edge = this.edges.get(id);
+		if (edge) {
+			return edge;
+		}
+
+		return new Promise<EdgeBuffer>((resolve, reject) => {
+			let timeout = setTimeout(() => {
+				this.edgeCallbacks.delete(id);
+				reject(new Error(`Timeout waiting for edge ${id}`));
+			}, 10000);
+			let callback = (data: EdgeBuffer) => {
+				this.edgeCallbacks.delete(id);
+				clearTimeout(timeout);
+				resolve(data);
+			}
+			let cb = this.edgeCallbacks.get(id);
+			if (cb) {
+				cb.push(callback);
+			} else {
+				this.edgeCallbacks.set(id, [callback]);
+			}
+		});
+	}
+
 	async handleEdgeLinkUpdate(update: EdgeLinkUpdate) {
-		let edge = this.edges.get(update.edge_id);
+		let edge = await this.getEdge(update.edge_id);
 		if (!edge) {
 			this.logger.warn(`Got update for unknown edge ${update.edge_id}`);
 			return;
@@ -237,7 +264,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 	}
 
 	async handleEdgeTransferFromGame(data: EdgeTransfer) {
-		let edge = this.edges.get(data.edge_id);
+		let edge = await this.getEdge(data.edge_id);
 		if (!edge) {
 			console.log(data);
 			console.log("edge not found");
@@ -287,12 +314,20 @@ export class InstancePlugin extends BaseInstancePlugin {
 				edgeBuffer.edge = edge;
 			}
 			// Update ingame config
-			this.sendRcon(`/sc universal_edges.edge_update("${edge.id}", '${lib.escapeString(JSON.stringify(edge))}')`);
+
+			// Update edge callbacks
+			let callbacks = this.edgeCallbacks.get(edge.id);
+			if (callbacks) {
+				for (let callback of callbacks) {
+					callback(this.edges.get(edge.id)!);
+				}
+				this.edgeCallbacks.delete(edge.id);
+			}
 		}
 	}
 
 	async edgeTransferSendMessage(edgeId: string) {
-		let edge = this.edges.get(edgeId);
+		let edge = await this.getEdge(edgeId);
 		if (!edge) {
 			console.log("impossible edge not found!");
 			return; // XXX LATER PROBLEM
@@ -334,7 +369,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 	async edgeTransferRequestHandler(message: messages.EdgeTransfer) {
 		let { edgeId, beltTransfers, fluidTransfers, powerTransfers, trainTransfers } = message;
-		let edge = this.edges.get(edgeId);
+		let edge = await this.getEdge(edgeId);
 		if (!edge) {
 			console.log("impossible the edge was not found!");
 			return { success: false }; // XXX later problem
@@ -349,7 +384,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 	}
 
 	async edgeTransferSendCommand(edgeId: string) {
-		let edge = this.edges.get(edgeId);
+		let edge = await this.getEdge(edgeId);
 		if (!edge) {
 			console.log("how can this happen");
 			return; // XXX later problem,
