@@ -159,8 +159,9 @@ function mergeTrainTransfers(
 				console.log(`FATAL: Sending 2 different trains from same connector: ${pending.train_id} and ${trainTransfer.train_id}`);
 			}
 			pending.set_flow = trainTransfer.set_flow;
+		} else {
+			pendingTrainTransfers.set(trainTransfer.offset, trainTransfer);
 		}
-		pendingTrainTransfers.set(trainTransfer.offset, trainTransfer);
 	}
 }
 
@@ -314,6 +315,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 				edgeBuffer.edge = edge;
 			}
 			// Update ingame config
+			this.sendRcon(`/sc universal_edges.edge_update("${edge.id}", '${lib.escapeString(JSON.stringify(edge))}')`);
 
 			// Update edge callbacks
 			let callbacks = this.edgeCallbacks.get(edge.id);

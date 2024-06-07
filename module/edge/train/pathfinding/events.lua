@@ -1,3 +1,5 @@
+local clusterio_api = require("modules/clusterio/api")
+
 --[[
 	Rescan available paths for edges on:
 	- Station added
@@ -14,8 +16,9 @@ local function on_server_startup()
 		global.universal_edges.pathfinder = {}
 	end
 	for _, edge in pairs(global.universal_edges.edges) do
+		local train_transfers = {}
 		if edge.linked_trains then
-			for _, link in pairs(edge.linked_trains) do
+			for offset, link in pairs(edge.linked_trains) do
 				if link.is_input == false then
 					--[[
 						Force rescan and retransmit, even if there were no changes on this instance
@@ -24,8 +27,22 @@ local function on_server_startup()
 					]]
 					link.rescan_penalties = true
 					link.penalty_map = nil
+
+					-- Update flow (Is destination station blocked by a train?)
+					link.set_flow = link.signal and link.signal.signal_state == defines.signal_state.open
+					train_transfers[#train_transfers + 1] = {
+						offset = offset,
+						set_flow = link.set_flow,
+					}
 				end
 			end
+		end
+		if #train_transfers > 0 then
+			log("Updating train flow status " .. serpent.block(train_transfers))
+			clusterio_api.send_json("universal_edges:transfer", {
+				edge_id = edge.id,
+				train_transfers = train_transfers,
+			})
 		end
 	end
 end

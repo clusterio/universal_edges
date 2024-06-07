@@ -37,12 +37,21 @@ local function poll_links(id, edge, ticks_left)
 				link.debug_visu[index] = nil
 			end
 
+			local edge_x = edge_util.offset_to_edge_x(offset, edge)
 			-- Visualize set_flow
 			if link.set_flow == false then
-				local edge_x = edge_util.offset_to_edge_x(offset, edge)
 				local pos = edge_util.edge_pos_to_world({ edge_x, 0 }, edge)
 				link.debug_visu[#link.debug_visu + 1] = rendering.draw_text {
 					text = "Destination blocked",
+					surface = game.surfaces[edge_util.edge_get_local_target(edge).surface],
+					target = pos,
+					color = { r = 1, g = 1, b = 1 },
+					scale = 1.5,
+				}
+			elseif link.set_flow == nil then
+				local pos = edge_util.edge_pos_to_world({ edge_x, 0 }, edge)
+				link.debug_visu[#link.debug_visu + 1] = rendering.draw_text {
+					text = "offset: " .. offset .. "signal: " .. signal_state .. " flow: " .. tostring(link.set_flow),
 					surface = game.surfaces[edge_util.edge_get_local_target(edge).surface],
 					target = pos,
 					color = { r = 1, g = 1, b = 1 },
@@ -63,7 +72,6 @@ local function poll_links(id, edge, ticks_left)
 				game.print("Signal turned red, initializing teleport at " .. offset)
 
 				local surface = game.surfaces[edge_util.edge_get_local_target(edge).surface]
-				local edge_x = edge_util.offset_to_edge_x(offset, edge)
 
 				-- Find area filtered requires left_top to actually be in the left top.
 				-- This means we have to handle rotations properly
@@ -178,6 +186,7 @@ local function receive_transfers(edge, train_transfers)
 
 		if train_transfer.set_flow ~= nil then
 			link.set_flow = train_transfer.set_flow
+			link.previous_flow_state = not train_transfer.set_flow
 		end
 
 		if train_transfer.train then
