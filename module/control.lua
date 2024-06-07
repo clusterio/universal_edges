@@ -244,10 +244,10 @@ function universal_edges.transfer(json)
 		return
 	end
 
-	local belt_response_transfers = belt_link.receive_transfers()
-	local fluid_response_transfers = fluid_link.receive_transfers()
-	local power_response_transfers = power_link.receive_transfers()
-	local train_response_transfers = train_link.receive_transfers()
+	local belt_response_transfers = belt_link.receive_transfers(edge, data.belt_transfers)
+	local fluid_response_transfers = fluid_link.receive_transfers(edge, data.fluid_transfers)
+	local power_response_transfers = power_link.receive_transfers(edge, data.power_transfers)
+	local train_response_transfers = train_link.receive_transfers(edge, data.train_transfers)
 
 	local transfer = {
 		edge_id = data.edge_id,
