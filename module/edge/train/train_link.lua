@@ -69,8 +69,6 @@ local function poll_links(id, edge, ticks_left)
 					and signal_state == defines.signal_state.closed
 				) -- No need to check on active state change as poll_links is only called when active
 			then
-				game.print("Signal turned red, initializing teleport at " .. offset)
-
 				local surface = game.surfaces[edge_util.edge_get_local_target(edge).surface]
 
 				-- Find area filtered requires left_top to actually be in the left top.
@@ -96,33 +94,46 @@ local function poll_links(id, edge, ticks_left)
 					},
 				}
 
-				game.print("Found " .. #entities .. " entities to use for train base")
 				if #entities > 0 then
 					local luaTrain = entities[1].train
 					if luaTrain then
-						game.print("Sending train #" .. luaTrain.id .. " at offset " .. offset)
-						local train = universal_serializer.LuaTrainComplete.serialize(luaTrain)
-
-						-- Translate carriage positions to be relative to edge
-						for _, carriage in ipairs(train.carriages) do
-							log("Carriage remote position " .. serpent.line(carriage.position))
-							-- Translate to edge position
-							local edge_position = edge_util.world_to_edge_pos(carriage.position, edge)
-							log("Position relative to edge " .. serpent.line(edge_position))
-							carriage.position = edge_position
+						-- Check that none of the wagons are rotated. Rotated wagons cause issues when spawning
+						local rotated_wagons = false
+						for _, carriage in ipairs(luaTrain.carriages) do
+							if carriage.orientation % 0.5 ~= 0 then
+								rotated_wagons = true
+								break
+							end
 						end
 
-						train_transfers[#train_transfers + 1] = {
-							offset = offset,
-							train = train,
-							train_id = luaTrain.id, -- Used to delete train after successfull spawning
-						}
+						if rotated_wagons then
+							game.print(
+								"Train at "
+								.. serpent.line(luaTrain.carriages[1].position)
+								.. " is attempting to teleport with wagons on a curve, this is not supported yet."
+							)
+						else
+							-- Serialize train
+							local train = universal_serializer.LuaTrainComplete.serialize(luaTrain)
+
+							-- Translate carriage positions to be relative to edge
+							for _, carriage in ipairs(train.carriages) do
+								-- Translate to edge position
+								local edge_position = edge_util.world_to_edge_pos(carriage.position, edge)
+								carriage.position = edge_position
+							end
+
+							train_transfers[#train_transfers + 1] = {
+								offset = offset,
+								train = train,
+								train_id = luaTrain.id, -- Used to delete train after successfull spawning
+							}
+						end
 					end
-				else
-					game.print(serpent.block(area))
 				end
 			end
-		elseif not link.is_input and link.signal.valid then
+		end
+		if not link.is_input and link.signal.valid then
 			-- Update connector flow status
 			if link.previous_signal_state ~= signal_state then
 				train_transfers[#train_transfers + 1] = {
