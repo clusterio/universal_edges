@@ -1,9 +1,36 @@
 import path from "path";
 import * as lib from "@clusterio/lib";
 import { BaseControllerPlugin, InstanceInfo } from "@clusterio/controller";
+import fs from "fs/promises";
 
 import * as messages from "./messages";
 import { Edge } from "./src/types";
+
+async function loadDatabase(config: lib.ControllerConfig, filename: string, logger: lib.Logger): Promise<Map<string, Edge>>{
+	let itemsPath = path.resolve(config.get("controller.database_directory"), filename);
+	logger.verbose(`Loading ${itemsPath}`);
+	try {
+		let content = await fs.readFile(itemsPath, "utf-8");
+		if (content.length === 0) {
+			return new Map();
+		}
+		return new Map(JSON.parse(content));
+	} catch (err: any) {
+		if (err.code === "ENOENT") {
+			logger.verbose("Creating new universal_edges database");
+			return new Map();
+		}
+		throw err;
+	}
+}
+
+async function saveDatabase(config: lib.ControllerConfig, datastore: Map<any, any>, filename: string, logger: lib.Logger) {
+	if (datastore) {
+		let file = path.resolve(config.get("controller.database_directory"), filename);
+		logger.verbose(`writing ${file}`);
+		await lib.safeOutputFile(file, JSON.stringify(Array.from(datastore)));
+	}
+}
 
 export class ControllerPlugin extends BaseControllerPlugin {
 	edgeDatastore!: Map<string, Edge>;
@@ -13,29 +40,11 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		// this.controller.handle(PluginExampleEvent, this.handlePluginExampleEvent.bind(this));
 		this.controller.handle(messages.SetEdgeConfig, this.handleSetEdgeConfigRequest.bind(this));
 		this.controller.subscriptions.handle(messages.EdgeUpdate, this.handleEdgeConfigSubscription.bind(this));
-		this.edgeDatastore = new Map([
-			["999", {
-				id: "999",
-				updatedAtMs: Date.now(),
-				isDeleted: false,
-				source: {
-					instanceId: 928502558,
-					origin: [0, 0],
-					surface: 1,
-					direction: 0,
-					ready: false,
-				},
-				target: {
-					instanceId: 1446149399,
-					origin: [0, 0],
-					surface: 1,
-					direction: 4,
-					ready: false,
-				},
-				length: 20,
-				active: false,
-			}],
-		]); // If needed, replace with loading from database file
+		this.edgeDatastore = await loadDatabase(this.controller.config, "edgeDatastore.json", this.logger);
+		// Set active status
+		this.edgeDatastore.forEach(edge => {
+			edge.active = this.isEdgeActive(edge);
+		});
 	}
 
 	async onInstanceStatusChanged(instance: InstanceInfo, prev?: lib.InstanceStatus): Promise<void> {
@@ -45,12 +54,12 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		);
 		// Set active status
 		edges.forEach(edge => {
-			let newStatus =  this.isEdgeActive(edge); 
+			let newStatus = this.isEdgeActive(edge);
 			if (edge.active !== newStatus) {
 				edge.updatedAtMs = Date.now();
 			}
 			edge.active = newStatus;
-		 });
+		});
 
 		// Update instances consuming the edges
 		const instanceEdgeMap: Map<number, Edge[]> = new Map();
@@ -93,11 +102,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		if (this.storageDirty) {
 			this.logger.info("Saving edgeDatastore to file");
 			this.storageDirty = false;
-			const file = path.resolve(
-				this.controller.config.get("controller.database_directory"),
-				"edgeDatastore.json"
-			);
-			await lib.safeOutputFile(file, JSON.stringify(Array.from(this.edgeDatastore)));
+			await saveDatabase(this.controller.config, this.edgeDatastore, "edgeDatastore.json", this.logger);
 		}
 	}
 
@@ -113,6 +118,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	}
 
 	async handleSetEdgeConfigRequest({ edge }: messages.SetEdgeConfig) {
+		this.storageDirty = true;
 		const oldEdge = this.edgeDatastore.get(edge.id);
 		this.edgeDatastore.set(edge.id, edge);
 

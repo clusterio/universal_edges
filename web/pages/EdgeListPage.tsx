@@ -11,7 +11,7 @@ import {
 } from "@clusterio/web_ui";
 
 import * as messages from "../../messages";
-import { Edge, EdgeTargetSpecification } from "../../src/types";
+import { EdgeTargetSpecification } from "../../src/types";
 import { WebPlugin } from "..";
 import { InstanceSelector } from "../components/InstanceSelector";
 import { direction_to_string } from "../../src/util/direction_to_string";
@@ -130,6 +130,7 @@ export default function EdgeListPage() {
 				wrapperCol={{ span: 16 }}
 				onFinish={(values) => {
 					values.id = editing;
+					values.updatedAtMs = Date.now();
 					values.source.ready = false;
 					values.target.ready = false;
 					values.active = false;
