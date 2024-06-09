@@ -44,7 +44,13 @@ export class ControllerPlugin extends BaseControllerPlugin {
 			|| edge.target.instanceId === instance.id
 		);
 		// Set active status
-		edges.forEach(edge => { edge.active = this.isEdgeActive(edge); });
+		edges.forEach(edge => {
+			let newStatus =  this.isEdgeActive(edge); 
+			if (edge.active !== newStatus) {
+				edge.updatedAtMs = Date.now();
+			}
+			edge.active = newStatus;
+		 });
 
 		// Update instances consuming the edges
 		const instanceEdgeMap: Map<number, Edge[]> = new Map();
@@ -73,6 +79,9 @@ export class ControllerPlugin extends BaseControllerPlugin {
 				this.controller.sendTo({ instanceId }, new messages.EdgeUpdate(edgesToSend));
 			}
 		}
+
+		// Broadcast changes to control subscriptions
+		this.controller.subscriptions.broadcast(new messages.EdgeUpdate(edges));
 	}
 
 	async onControllerConfigFieldChanged(field: string, curr: unknown, prev: unknown) {
@@ -109,6 +118,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 
 		// Set active status
 		edge.active = this.isEdgeActive(edge);
+		edge.updatedAtMs = Date.now();
 
 		// Broadcast changes to affected instances
 		const instancesToUpdate = [
@@ -125,9 +135,13 @@ export class ControllerPlugin extends BaseControllerPlugin {
 				}
 			}
 		}
+
+		// Broadcast changes to control subscriptions
+		this.controller.subscriptions.broadcast(new messages.EdgeUpdate([edge]));
 	}
 
 	isEdgeActive(edge: Edge) {
+		if (edge.isDeleted) { return false; }
 		if (edge.source.instanceId === edge.target.instanceId) { return false; }
 		const source = this.controller.instances.get(edge.source.instanceId);
 		if (!source || source.status !== "running") { return false; }

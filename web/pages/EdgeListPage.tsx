@@ -1,10 +1,13 @@
 import React, { useContext, useState } from "react";
-import { Button, Card, Divider, Form, Input, Modal, Select, Table } from "antd";
-import { SaveOutlined } from "@ant-design/icons";
+import { Button, Card, Divider, Form, Input, Modal, Select, Table, Popconfirm, Space } from "antd";
+import { SaveOutlined, GithubOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 
 import {
-	PageLayout, ControlContext,
+	ControlContext,
+	PageLayout,
+	PageHeader,
 	useInstance,
+	useAccount,
 } from "@clusterio/web_ui";
 
 import * as messages from "../../messages";
@@ -27,9 +30,11 @@ function EdgeTarget({ target }: { target: EdgeTargetSpecification }) {
 
 export default function EdgeListPage() {
 	const control = useContext(ControlContext);
+	const account = useAccount();
 	const plugin = control.plugins.get("universal_edges") as WebPlugin;
 	const [edgeConfigs, synced] = plugin.useEdgeConfigs();
 	const [editing, setEditing] = useState("");
+	const [deleting, setDeleting] = useState(false);
 
 	const fIStyle = {
 		style: {
@@ -38,8 +43,53 @@ export default function EdgeListPage() {
 	};
 
 	return <PageLayout nav={[{ name: "Universal edges" }]}>
-		<h2>Universal edges</h2>
-		Synced: {String(synced)} Data: {JSON.stringify([...edgeConfigs.values()])}
+		<PageHeader
+			title="Universal edges"
+			subTitle={<Button href="https://github.com/danielv123/universal_edges"><GithubOutlined /></Button>}
+			extra={
+				<Space>{[
+					<Button
+						key="1"
+						type="primary"
+						onClick={() => {
+							const id = Math.random().toString(36).substring(2);
+							setEditing(id);
+						}}
+					>
+						Add
+						<PlusOutlined />
+					</Button>,
+					account.hasPermission("core.instance.delete")
+					&& <Popconfirm
+						key="delete"
+						title="Permanently delete ALL edges?"
+						okText="Delete"
+						placement="bottomRight"
+						okButtonProps={{ danger: true, loading: deleting }}
+						onConfirm={async () => {
+							setDeleting(true);
+							// Set isDeleted on all edges
+							const updates = [...edgeConfigs.values()].map(edge => {
+								return {
+									...edge,
+									isDeleted: true,
+								}
+							});
+							const results = updates.map(update => control.send(new messages.SetEdgeConfig(update)));
+							await Promise.all(results);
+							setDeleting(false);
+						}}
+					>
+						<Button
+							danger
+							loading={deleting}
+						>
+							<DeleteOutlined />
+						</Button>
+					</Popconfirm>
+				]}</Space>
+			}
+		/>
 		<Table
 			size="small"
 			dataSource={[...edgeConfigs.values()]}
@@ -80,7 +130,6 @@ export default function EdgeListPage() {
 				wrapperCol={{ span: 16 }}
 				onFinish={(values) => {
 					values.id = editing;
-					values.updatedAtMs = Date.now();
 					values.source.ready = false;
 					values.target.ready = false;
 					values.active = false;
