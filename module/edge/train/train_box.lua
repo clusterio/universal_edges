@@ -158,6 +158,18 @@ local function create_train_destination_box(offset, edge, surface, update)
 		}
 	end
 
+	--[[
+		Tell other destination links on this server to update their paths.
+		This enables propagaiton over multiple instances in a cluster.
+	]]
+	if (
+			global.universal_edges.pathfinder.rescan_connector_paths_after == nil
+			or global.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
+		)
+	then
+		global.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
+	end
+
 	return true
 end
 
