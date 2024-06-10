@@ -1,6 +1,9 @@
 /**
  * If edge direction is 4 (West), that means the belts enter going north to south.
  * The right hand side of the edge is always the entrance/exit
+ * 
+ * WARNING: Not same indexes as factorio defines direction!
+ * These are turned 90 degrees counter clockwise, that is North here = West in factorio
  */
 export const directions = [
 	"East",

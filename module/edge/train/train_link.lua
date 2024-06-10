@@ -100,7 +100,7 @@ local function poll_links(id, edge, ticks_left)
 						-- Check that none of the wagons are rotated. Rotated wagons cause issues when spawning
 						local rotated_wagons = false
 						for _, carriage in ipairs(luaTrain.carriages) do
-							if carriage.orientation % 0.5 ~= 0 then
+							if carriage.orientation % 0.25 ~= 0 then
 								rotated_wagons = true
 								break
 							end
@@ -120,6 +120,8 @@ local function poll_links(id, edge, ticks_left)
 							for _, carriage in ipairs(train.carriages) do
 								-- Translate to edge position
 								local edge_position = edge_util.world_to_edge_pos(carriage.position, edge)
+								-- Compensate for edge direction
+								edge_position[1] = edge_util.offset_to_edge_x(edge_position[1], edge)
 								carriage.position = edge_position
 							end
 
@@ -190,15 +192,14 @@ local function push_train_link(edge, _offset, link, train)
 		-- This effectively inverts the train
 		y = y * -1 + first_wagon + train_start_position
 		carriage.position[2] = y
-
-		-- Invert orientation of carriages since we are effectively inverting the direction of the train
-		carriage.orientation = (carriage.orientation + 0.5) % 1
 	end
 
 	for _, carriage in ipairs(train.carriages) do
 		-- Translate from edge position to world position
+		log("Edge position "..serpent.line(carriage.position))
 		local world_pos = edge_util.edge_pos_to_world(carriage.position, edge)
 		carriage.position = world_pos
+		log("World position "..serpent.line(carriage.position))
 	end
 
 	local luaTrain = universal_serializer.LuaTrainComplete.deserialize(train)
