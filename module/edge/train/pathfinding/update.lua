@@ -35,7 +35,7 @@ local function update_connector_paths(edge, offset, link)
 	}
 	if
 		edge_target.direction == defines.direction.north -- Trains exit from the north
-		or edge_target.direction == defines.direction.west -- Trains exit from the west
+		or edge_target.direction == defines.direction.east -- Trains exit from the west
 	then
 		request.from_back = {
 			rail = link.rails[1],
@@ -44,7 +44,7 @@ local function update_connector_paths(edge, offset, link)
 	end
 	if
 		edge_target.direction == defines.direction.south -- Trains exit from the south
-		or edge_target.direction == defines.direction.east -- Trains exit from the east
+		or edge_target.direction == defines.direction.west -- Trains exit from the east
 	then
 		request.from_front = {
 			rail = link.rails[1],
@@ -171,6 +171,7 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 				rail.destroy()
 			end
 		end
+		link.penalty_rails = nil
 	end
 
 	-- Plan layout of stations and seperator signals
