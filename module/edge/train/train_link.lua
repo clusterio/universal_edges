@@ -162,8 +162,6 @@ end
 ---@param train table
 ---@returns boolean
 local function push_train_link(edge, _offset, link, train)
-	log("Attempting to spawn train " .. serpent.block(train))
-
 	-- Check if the spawn location is free using link signal
 	if link.signal.signal_state ~= defines.signal_state.open then
 		return false
@@ -198,10 +196,8 @@ local function push_train_link(edge, _offset, link, train)
 	end
 
 	for _, carriage in ipairs(train.carriages) do
-		log("Carriage edge position " .. serpent.line(carriage.position))
-		-- Translate from edge position to work position
+		-- Translate from edge position to world position
 		local world_pos = edge_util.edge_pos_to_world(carriage.position, edge)
-		log("Carriage world position " .. serpent.line(world_pos))
 		carriage.position = world_pos
 	end
 
@@ -216,7 +212,7 @@ local function receive_transfers(edge, train_transfers)
 	end
 	local train_response_transfers = {}
 	for _, train_transfer in ipairs(train_transfers) do
-		log("TrainTransfer: " .. serpent.line(train_transfer))
+		-- log("TrainTransfer: " .. serpent.line(train_transfer))
 		local link = (edge.linked_trains or {})[train_transfer.offset]
 		if not link then
 			log("FATAL: Received train for non-existant link at offset " .. train_transfer.offset)
@@ -252,12 +248,9 @@ local function receive_transfers(edge, train_transfers)
 			end
 		elseif train_transfer.train_id ~= nil then
 			-- The train was successfully spawned in on partner - delete the local train
-			local msg = "Transfer successful, deleting local train " .. train_transfer.train_id
-			log(msg)
-			game.print(msg)
 			local train = game.get_train_by_id(train_transfer.train_id)
 			if train then
-				log("Got train, deleting")
+				log("Transfer successful, deleting local train " .. train_transfer.train_id)
 				for _, carriage in ipairs(train.carriages) do
 					carriage.destroy()
 				end

@@ -104,23 +104,15 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 		entity.trains_limit = entity_data.trains_limit
 	end
 	if entity_data.control_behavior ~= nil then
-		log(entity_data.name)
-		log(serpent.block(entity_data.control_behavior))
 		---@param cb LuaGenericOnOffControlBehavior
 		local function LuaGenericOnOffControlBehavior_deserialize(cb)
 			cb.connect_to_logistic_network = entity_data.control_behavior.connect_to_logistic_network
-			log("1")
 			if entity_data.control_behavior.circuit_condition ~= nil then
-				log("2")
 				cb.circuit_condition = entity_data.control_behavior.circuit_condition
 			end
-			log("3")
 			if entity_data.control_behavior.logistic_condition ~= nil then
-				log("Setting logistic_condition")
-				log(serpent.block(entity_data.control_behavior.logistic_condition))
 				cb.logistic_condition = entity_data.control_behavior.logistic_condition
 			end
-			log("5")
 		end
 		if entity_data.control_behavior.object_name == "LuaTrainStopControlBehavior" then
 			---@class LuaTrainStopControlBehavior
