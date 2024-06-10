@@ -127,6 +127,30 @@ local function create_train_destination_box(offset, edge, surface, update)
 	-- local parking_length = update.data.parking_area_size + 2
 	local parking_length = constants.MAX_TRAIN_LENGTH * 4 + 2
 
+	-- Prepare the area with concrete. For some reason we can create rails on water but not trains
+	local tiles = {}
+	for i = 1, parking_length * 2 do
+		-- Make space for signal
+		tiles[#tiles + 1] = {
+			name = "refined-concrete",
+			position = edge_util.edge_pos_to_world({ edge_x - 2, i * -1 }, edge)
+		}
+		-- Make space for rails
+		tiles[#tiles + 1] = {
+			name = "refined-concrete",
+			position = edge_util.edge_pos_to_world({ edge_x - 1, i * -1 }, edge)
+		}
+		tiles[#tiles + 1] = {
+			name = "refined-concrete",
+			position = edge_util.edge_pos_to_world({ edge_x, i * -1 }, edge)
+		}
+		tiles[#tiles + 1] = {
+			name = "refined-concrete",
+			position = edge_util.edge_pos_to_world({ edge_x + 1, i * -1 }, edge)
+		}
+	end
+	surface.set_tiles(tiles)
+
 	local rails = {}
 	for i = 1, parking_length do
 		rails[#rails + 1] = surface.create_entity {
