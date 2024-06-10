@@ -31,3 +31,9 @@ Based on edge transports by @Hornwitser
     - [ ] Global option to not repath on edge deactivated
 - [ ] Vehicle support (cars, tanks)
 - [ ] Spidertron support (like vehicles, but with paths saved)
+
+## Development
+
+### Publishing releases
+
+Releases are built and published with github actions. To publish a new version, run `npm version <major|minor|patch>` and push the commit and tag using `git push --tags`
