@@ -9,7 +9,9 @@ Based on edge transports by @Hornwitser
 	npm install universal_edges
 	npx clusteriocontroller plugin add universal_edges
 
-Edges are configured through the web interface.
+Download and install https://mods.factorio.com/mod/universal_edges - required for power, fluid transfers and train pathfinding to work.
+
+Edges are configured through the web interface. When they are ready and working you will find them as green lines in game.
 
 ## Differences from edge transports
 - Uses global config system instead of instance config
@@ -43,4 +45,4 @@ Edges are configured through the web interface.
 
 ### Publishing releases
 
-Releases are built and published with github actions. To publish a new version, run `npm version <major|minor|patch>` and push the commit and tag using `git push --tags`
+Releases are built and published with github actions. To publish a new version, run `npm version <major|minor|patch>` and push the commit and tag using `git push` followed by `git push --tags` - it is important to do a normal push first.

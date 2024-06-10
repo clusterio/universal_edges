@@ -1,6 +1,6 @@
 {
 	"name": "universal_edges",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Plugin for seamless belts, fluids, electricity and trains between clusterio instances",
 	"main": "dist/node/index.js",
 	"scripts": {
