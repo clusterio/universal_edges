@@ -29,3 +29,5 @@ Based on edge transports by @Hornwitser
     - [x] Update local destinations when a source updates
     - [x] Update on edge activation/deactivation
     - [ ] Global option to not repath on edge deactivated
+- [ ] Vehicle support (cars, tanks)
+- [ ] Spidertron support (like vehicles, but with paths saved)

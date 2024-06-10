@@ -8,7 +8,6 @@ export interface Edge {
 	target: EdgeTargetSpecification;
 	length: number;
 	active: boolean;
-	connectors?: EdgeConnector[]; // Maybe not needed, can do p2p
 }
 
 export interface EdgeTargetSpecification {

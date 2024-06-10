@@ -4,9 +4,9 @@ import { BaseControllerPlugin, InstanceInfo } from "@clusterio/controller";
 import fs from "fs/promises";
 
 import * as messages from "./messages";
-import { Edge } from "./src/types";
+import { Edge, EdgeTargetSpecification } from "./src/types";
 
-async function loadDatabase(config: lib.ControllerConfig, filename: string, logger: lib.Logger): Promise<Map<string, Edge>>{
+async function loadDatabase(config: lib.ControllerConfig, filename: string, logger: lib.Logger): Promise<Map<string, Edge>> {
 	let itemsPath = path.resolve(config.get("controller.database_directory"), filename);
 	logger.verbose(`Loading ${itemsPath}`);
 	try {
@@ -125,6 +125,25 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		// Set active status
 		edge.active = this.isEdgeActive(edge);
 		edge.updatedAtMs = Date.now();
+
+		// Check if any properties other than updatedAtMs changed
+		if (oldEdge) {
+			const keys = Object.keys(edge) as (keyof Edge)[];
+			if (keys.every(key => {
+				if(["updatedAtMs"].includes(key)) {
+					return true;
+				}
+				if (["source", "target"].includes(key)){
+					return (Object.keys(edge[key]) as (keyof EdgeTargetSpecification)[]).every(subKey => {
+						return (edge[key] as EdgeTargetSpecification)[subKey] === (oldEdge[key] as EdgeTargetSpecification)[subKey];
+					});
+				}
+				return edge[key] === oldEdge[key]
+			})) {
+				// No changes
+				return;
+			}
+		}
 
 		// Broadcast changes to affected instances
 		const instancesToUpdate = [

@@ -129,12 +129,12 @@ end
 	Check if any connectors have updated pathfinding penalties
 ]]
 local function poll_connectors(_id, edge, ticks_left)
-	if not edge.poll_connectors_state then
-		edge.poll_connectors_state = {}
+	if not edge.linked_trains then
+		return
 	end
 
-	if not edge.pending_train_transfers then
-		edge.pending_train_transfers = {}
+	if not edge.poll_connectors_state then
+		edge.poll_connectors_state = {}
 	end
 
 	for offset, link in itertools.partial_pairs(

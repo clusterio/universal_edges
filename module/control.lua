@@ -79,7 +79,7 @@ local function debug_draw()
 
 		debug_shapes[#debug_shapes + 1] = rendering.draw_text {
 			color = { r = 1, g = 1, b = 1 },
-			text = id .. " " .. (edge.ready and "ready" or "not ready") .. (edge.active and ", active" or ", inactive"),
+			text = id .. " " .. (edge.active and "active" or "inactive"),
 			target = vectorutil.vec2_add(edge_target.origin, { 0.4, -0.8 }),
 			surface = edge_target.surface,
 		}
