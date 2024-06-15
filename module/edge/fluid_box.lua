@@ -55,7 +55,7 @@ local function remove_fluid_box(offset, edge, surface)
 		end
 
 		edge.linked_fluids[offset] = nil
-	else
+	elseif surface ~= nil then
 		local pipe_pos = edge_util.edge_pos_to_world({ edge_x, -0.5 }, edge)
 		local pipe_vertical = surface.find_entity("edge_pipe_vertical", pipe_pos)
 		if pipe_vertical then

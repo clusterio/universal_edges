@@ -1,6 +1,8 @@
 local clusterio_api = require("modules/clusterio/api")
 local itertools = require("modules/universal_edges/itertools")
 
+local fluid_box = require("modules/universal_edges/edge/fluid_box")
+
 --[[
 	Send fluid level to partner for balancing
 ]]
@@ -17,8 +19,12 @@ local function poll_links(id, edge, ticks_left)
 	for offset, link in itertools.partial_pairs(
 		edge.linked_fluids, edge.linked_fluids_state, ticks_left
 	) do
+		if link.pipe == nil or link.pipe.valid == false then
+			-- Pipe was destroyed, remove it from the list
+			fluid_box.remove(offset, edge)
+			goto continue
+		end
 		local fluidbox = link.pipe.fluidbox
-
 		if link.pipe.get_fluid_count() > 10 then
 			fluid_transfers[#fluid_transfers + 1] = {
 				offset = offset,
@@ -27,6 +33,7 @@ local function poll_links(id, edge, ticks_left)
 				temperature = fluidbox[1].temperature,
 			}
 		end
+		::continue::
 	end
 
 	if #fluid_transfers > 0 then
