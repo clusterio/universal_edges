@@ -277,6 +277,17 @@ universal_edges.events = {
 		if not global.universal_edges.config.ticks_per_edge then
 			global.universal_edges.config.ticks_per_edge = 15
 		end
+		-- Refresh belt edge flow status in cases where the belt is not packed
+		for _, edge in pairs(global.universal_edges.edges) do
+			-- Active status is remembered from last shutdown, if its wrong this gets overwritten later
+			if edge.active and edge.linked_belts then
+				for _offset, link in pairs(edge.linked_belts) do
+					if not link.is_input then
+						link.start_index = 1
+					end
+				end
+			end
+		end
 	end,
 
 	[defines.events.on_tick] = function(event)
