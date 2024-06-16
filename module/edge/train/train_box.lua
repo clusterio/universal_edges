@@ -119,7 +119,7 @@ end
 	- signal on rear end as occopancy detector
 ]]
 local function create_train_destination_box(offset, edge, surface, update)
-	log("update" .. serpent.block(update))
+	log("Creating train destination box" .. serpent.block(update))
 	local edge_target = edge_util.edge_get_local_target(edge)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 
@@ -156,7 +156,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 		-- Check if rail already exists - might happen if station was removed while train was on output
 		local rail = surface.find_entity(
 			"straight-rail",
-			edge_util.edge_pos_to_world({ edge_x, 1 - i * -2 }, edge)
+			edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge)
 		)
 		if rail.direction == edge_target.direction then
 			rails[#rails + 1] = rail
