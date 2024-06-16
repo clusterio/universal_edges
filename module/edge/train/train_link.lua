@@ -3,6 +3,7 @@ local itertools = require("modules/universal_edges/itertools")
 local util = require("modules/universal_edges/util")
 local edge_util = require("modules/universal_edges/edge/util")
 local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
+local train_box = require("modules/universal_edges/edge/train/train_box")
 
 --[[
 	Attempt sending trains to partner
@@ -24,6 +25,17 @@ local function poll_links(id, edge, ticks_left)
 	for offset, link in itertools.partial_pairs(
 		edge.linked_trains, edge.linked_trains_state, ticks_left
 	) do
+		-- If link has no signal, remove and cleanup
+		if not link.signal or not link.signal.valid then
+			edge.linked_trains[offset] = nil
+			if edge.is_input then
+				train_box.remove_source(offset, edge)
+			else
+				train_box.remove_destination(offset, edge)
+			end
+			goto continue
+		end
+
 		local signal_state
 		if link.is_input and link.signal.valid then
 			signal_state = link.signal.signal_state
@@ -122,7 +134,7 @@ local function poll_links(id, edge, ticks_left)
 								-- Translate to edge position
 								local edge_position = edge_util.world_to_edge_pos(carriage.position, edge)
 								-- Compensate for edge direction
-								edge_position[1] = edge_util.offset_to_edge_x(edge_position[1], edge)
+								edge_position[1] = edge.length - edge_position[1]
 								carriage.position = edge_position
 							end
 
@@ -148,6 +160,7 @@ local function poll_links(id, edge, ticks_left)
 		end
 		link.previous_signal_state = signal_state
 		link.previous_flow_state = link.set_flow
+		::continue::
 	end
 
 	if #train_transfers > 0 then

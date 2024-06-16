@@ -8,6 +8,11 @@ local edge_util = require("modules/universal_edges/edge/util")
 	the closest station of each name.
 ]]
 local function update_connector_paths(edge, offset, link)
+	if not link.rails[1] or not link.rails[1].valid then
+		log("FATAL: Rail does not exist at " .. offset)
+		return
+	end
+
 	local edge_target = edge_util.edge_get_local_target(edge)
 	local train_stops = game.surfaces[1].find_entities_filtered {
 		type = "train-stop"
@@ -15,7 +20,7 @@ local function update_connector_paths(edge, offset, link)
 	local goals = {}
 	for _, stop in pairs(train_stops) do
 		-- It is possible to create trainstops and deconstructing the rail, this causes the pathfinder to throw
-		if stop.connected_rail ~= nil then
+		if stop.valid and stop.connected_rail ~= nil then
 			goals[#goals + 1] = {
 				train_stop = stop
 			}
