@@ -53,12 +53,12 @@ local function receive_transfers(edge, fluid_transfers)
 		local link = (edge.linked_fluids or {})[fluid_transfer.offset]
 		if not link then
 			log("FATAL: received fluids for non-existant link at offset " .. fluid_transfer.offset)
-			return
+			goto continue
 		end
 
 		if not link.pipe then
 			log("FATAL: received fluids for a link that does not have a pipe " .. fluid_transfer.offset)
-			return
+			goto continue
 		end
 
 		if fluid_transfer.amount ~= nil
@@ -101,6 +101,7 @@ local function receive_transfers(edge, fluid_transfers)
 				amount = fluid_transfer.amount_balanced,
 			}
 		end
+		::continue::
 	end
 	return fluid_response_transfers
 end

@@ -217,7 +217,7 @@ local function receive_transfers(edge, train_transfers)
 		local link = (edge.linked_trains or {})[train_transfer.offset]
 		if not link then
 			log("FATAL: Received train for non-existant link at offset " .. train_transfer.offset)
-			return
+			goto continue
 		end
 
 		if train_transfer.set_flow ~= nil then
@@ -259,6 +259,7 @@ local function receive_transfers(edge, train_transfers)
 				log("FATAL: Train teleported successfully but origin train dissappeared")
 			end
 		end
+		::continue::
 	end
 	return train_response_transfers
 end

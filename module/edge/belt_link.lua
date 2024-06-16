@@ -161,7 +161,7 @@ local function receive_transfers(edge, belt_transfers)
 		local link = (edge.linked_belts or {})[belt_transfer.offset]
 		if not link then
 			log("FATAL: recevied items for non-existant link at offset " .. belt_transfer.offset)
-			return
+			goto continue
 		end
 
 		if link.is_input and belt_transfer.set_flow ~= nil then
@@ -179,6 +179,7 @@ local function receive_transfers(edge, belt_transfers)
 				belt_response_transfers[#belt_response_transfers + 1] = update
 			end
 		end
+		::continue::
 	end
 	return belt_response_transfers
 end

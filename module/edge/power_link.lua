@@ -42,11 +42,11 @@ local function receive_transfers(edge, power_transfers)
 		local link = (edge.linked_power or {})[power_transfer.offset]
 		if not link then
 			log("FATAL: Received power for non-existant link at offset " .. power_transfer.offset)
-			return
+			goto continue
 		end
 		if not link.eei then
 			log("FATAL: received power for a link that does not have an eei " .. power_transfer.offset)
-			return
+			goto continue
 		end
 
 		if power_transfer.energy then
@@ -110,6 +110,7 @@ local function receive_transfers(edge, power_transfers)
 			-- Partner balanced power, we need to remove to compensate
 			link.eei.energy = math.max(0, link.eei.energy - power_transfer.amount_balanced)
 		end
+		::continue::
 	end
 	return power_response_transfers
 end
