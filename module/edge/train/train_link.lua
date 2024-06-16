@@ -24,8 +24,9 @@ local function poll_links(id, edge, ticks_left)
 	for offset, link in itertools.partial_pairs(
 		edge.linked_trains, edge.linked_trains_state, ticks_left
 	) do
-		local signal_state = link.signal.signal_state
+		local signal_state
 		if link.is_input and link.signal.valid then
+			signal_state = link.signal.signal_state
 			-- Update debug visualization of flow status
 			if link.debug_visu == nil then
 				link.debug_visu = {}
@@ -137,6 +138,7 @@ local function poll_links(id, edge, ticks_left)
 		end
 		if not link.is_input and link.signal.valid then
 			-- Update connector flow status
+			signal_state = link.signal.signal_state
 			if link.previous_signal_state ~= signal_state then
 				train_transfers[#train_transfers + 1] = {
 					offset = offset,
