@@ -39,6 +39,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	async init() {
 		// this.controller.handle(PluginExampleEvent, this.handlePluginExampleEvent.bind(this));
 		this.controller.handle(messages.SetEdgeConfig, this.handleSetEdgeConfigRequest.bind(this));
+		this.controller.handle(messages.TrainLayoutUpdate, this.handleTrainLayoutUpdateEvent.bind(this));
 		this.controller.subscriptions.handle(messages.EdgeUpdate, this.handleEdgeConfigSubscription.bind(this));
 		this.edgeDatastore = await loadDatabase(this.controller.config, "edgeDatastore.json", this.logger);
 		// Set active status
@@ -130,10 +131,10 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		if (oldEdge) {
 			const keys = Object.keys(edge) as (keyof Edge)[];
 			if (keys.every(key => {
-				if(["updatedAtMs"].includes(key)) {
+				if (["updatedAtMs"].includes(key)) {
 					return true;
 				}
-				if (["source", "target"].includes(key)){
+				if (["source", "target"].includes(key)) {
 					return (Object.keys(edge[key]) as (keyof EdgeTargetSpecification)[]).every(subKey => {
 						return (edge[key] as EdgeTargetSpecification)[subKey] === (oldEdge[key] as EdgeTargetSpecification)[subKey];
 					});
@@ -163,6 +164,102 @@ export class ControllerPlugin extends BaseControllerPlugin {
 
 		// Broadcast changes to control subscriptions
 		this.controller.subscriptions.broadcast(new messages.EdgeUpdate([edge]));
+	}
+
+	async handleTrainLayoutUpdateEvent({ edgeId, data }: messages.TrainLayoutUpdate) {
+		const edge = this.edgeDatastore.get(edgeId);
+		if (!edge) {
+			this.logger.warn(`Received TrainLayoutUpdate for non-existing edge ${edgeId}`);
+			return;
+		}
+
+		// Add to cache
+		if (!edge.link_destinations[data.offset]) {
+			edge.link_destinations[data.offset] = {
+				reachable_targets: [],
+				reachable_sources: [],
+				source_instance_id: data.source_instance_id,
+			};
+		}
+		edge.link_destinations[data.offset].reachable_targets = data.reachable_targets;
+		edge.link_destinations[data.offset].reachable_sources = data.reachable_sources;
+		edge.link_destinations[data.offset].source_instance_id = data.source_instance_id;
+
+		this.pathfinderUpdate();
+	}
+
+	pathfinderUpdate() {
+		// Build destinations
+		type destination = {
+			id: string; // edge.id .. " " .. offset
+			targets: string[]; // backer_name for internal stations
+			sources: string[]; // edge.id .. " " .. offset
+			source_instance_id: number;
+			reachable_targets: Map<string, number>; // output, number is the distance in links
+		};
+		const destinations = new Map<string, destination>();
+
+		// Populate destinations
+		this.edgeDatastore.forEach((edge) => {
+			Object.keys(edge.link_destinations).forEach((offset) => {
+				const link = edge.link_destinations[offset];
+				const id = `${edge.id} ${offset}`;
+				destinations.set(id, {
+					id,
+					targets: link.reachable_targets,
+					sources: link.reachable_sources,
+					source_instance_id: link.source_instance_id,
+					reachable_targets: new Map(),
+				});
+			});
+		});
+
+		// Ugly hack to make it propagate paths
+		for (let i = 0; i < 10; i++) {
+			// Find reachable_sources
+			[...destinations.values()].forEach((dest) => {
+				// Add targets from adjacent node
+				dest.targets.forEach((target) => dest.reachable_targets.set(target, 1));
+			});
+
+			[...destinations.values()].forEach((dest) => {
+				for (const source of dest.sources) {
+					const target = destinations.get(source)!;
+					// Add targets alraedy processed by the patfhinder (distance > 1)
+					target.reachable_targets.forEach((value, key) => {
+						dest.reachable_targets.set(key, Math.min(value + 1, dest.reachable_targets.get(key) || Infinity));
+					});
+				}
+			});
+		}
+
+		// Multiply all distances by 100k because that is what the Lua code and mod assumes
+		destinations.forEach((dest) => {
+			dest.reachable_targets.forEach((value, key) => {
+				dest.reachable_targets.set(key, value * 100_000);
+			});
+		});
+
+		console.log(destinations);
+
+		// Send updates to instances
+		destinations.forEach((dest) => {
+			const split = dest.id.split(" ");
+			const offset = split[split.length - 1];
+			const edgeId = dest.id.slice(0, dest.id.length - offset.length - 1);
+			const edge = this.edgeDatastore.get(edgeId);
+			if (!edge) {
+				this.logger.warn(`Edge ${edgeId} not found for pathfinder update`);
+				return;
+			}
+			const link = edge.link_destinations[offset];
+			link.reachable_targets = Array.from(dest.reachable_targets.keys());
+
+			this.controller.sendTo({ instanceId: dest.source_instance_id }, new messages.EdgeLinkUpdate(edgeId, "update_train_penalty_map", {
+				offset: Number(offset),
+				penalty_map: Object.fromEntries(dest.reachable_targets.entries()),
+			}));
+		});
 	}
 
 	isEdgeActive(edge: Edge) {

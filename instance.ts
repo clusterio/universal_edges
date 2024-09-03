@@ -15,6 +15,16 @@ type EdgeLinkUpdate = {
 	}
 };
 
+type TrainLayoutUpdate = {
+	edge_id: string,
+	data: {
+		offset: number,
+		reachable_targets: string[], // backer_name for internal stations
+		reachable_sources: string[], // edge_id + offset for exits (sources)
+		source_instance_id: number,
+	},
+};
+
 type BeltTransfer = {
 	offset: number,
 	set_flow?: boolean,
@@ -194,6 +204,12 @@ export class InstancePlugin extends BaseInstancePlugin {
 			));
 		});
 
+		this.instance.server.on("ipc-universal_edges:train_layout_update", data => {
+			this.handleTrainLayoutUpdate(data).catch(err => this.logger.error(
+				`Error handling train_layout_update:\n${err.stack}`
+			));
+		});
+
 		this.instance.handle(messages.EdgeUpdate, this.handleEdgeUpdate.bind(this));
 		this.instance.handle(messages.EdgeLinkUpdate, this.edgeLinkUpdateEventHandler.bind(this));
 		this.instance.handle(messages.EdgeTransfer, this.edgeTransferRequestHandler.bind(this));
@@ -277,6 +293,30 @@ export class InstancePlugin extends BaseInstancePlugin {
 		mergePowerTransfers(edge.pendingMessage.powerTransfers, data.power_transfers || []);
 		mergeTrainTransfers(edge.pendingMessage.trainTransfers, data.train_transfers || []);
 		edge.messageTransfer.activate();
+	}
+
+	// Important - assumed to only be sent from the destination side of train connectors
+	async handleTrainLayoutUpdate(data: TrainLayoutUpdate) {
+		let edge = await this.getEdge(data.edge_id);
+		if (!edge) {
+			console.log("impossible edge not found!");
+			return; // XXX LATER PROBLEM
+		}
+
+		// Handle no stations in the world causing empty table to serialize as object
+		if (!Array.isArray(data.data.reachable_targets)) data.data.reachable_targets = [];
+		if (!Array.isArray(data.data.reachable_sources)) data.data.reachable_sources = [];
+
+		// Send the source connector ID to the controller so it is able to return the proxy station layout correctly
+		const destination_instance_id = this.instance.config.get("instance.id");
+		if (destination_instance_id === edge.edge.source.instanceId) {
+			data.data.source_instance_id = edge.edge.target.instanceId;
+		} else {
+			data.data.source_instance_id = edge.edge.source.instanceId;
+		}
+
+		// Send to controller
+		await this.instance.sendTo("controller", new messages.TrainLayoutUpdate(data.edge_id, data.data));
 	}
 
 	async handleEdgeUpdate(event: messages.EdgeUpdate) {

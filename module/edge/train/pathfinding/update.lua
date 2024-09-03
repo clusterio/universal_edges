@@ -18,17 +18,19 @@ local function has_string_array_changed(new, old)
 	if old ~= nil then
 		if #new ~= #old then
 			-- Number of stations has changed
+			print("Number of stations has changed from " .. #old .. " to " .. #new)
 			return true
 		else
 			-- Perform more detailed string comparison
-			for index, station in ipairs(new) do
+			for index, station in pairs(new) do
 				if station ~= old[index] then
+					print("Station " .. station .. " has changed from" .. old[index])
 					return true
 				end
 			end
 		end
 	end
-	return true
+	return false
 end
 
 --[[
@@ -59,7 +61,7 @@ local function update_connector_paths(edge, offset, link)
 				}
 			end
 			-- If this is a source stop
-			if global.universal_edges.edge_source_stops[stop.unit_number] ~= nil then
+			if global.universal_edges.edge_source_trainstops[stop.unit_number] ~= nil then
 				sources[#sources + 1] = {
 					train_stop = stop,
 				}
@@ -110,7 +112,14 @@ local function update_connector_paths(edge, offset, link)
 	local reachable_targets = get_reachable_stations(result_targets, targets)
 	log("Reachable stations for offset " .. offset .. " " .. serpent.block(reachable_targets))
 	local result_sources = game.request_train_path(source_request)
-	local reachable_sources = get_reachable_stations(result_sources, sources)
+	local reachable_sources = {}
+	for index, penalty in pairs(result_sources.penalties) do
+		--[[ Stacked stations show as not accessible even though they are, but penalty is correct ]]
+		if result_sources.accessible[index] or penalty > 0 then
+			-- source id is edge id + offset
+			reachable_sources[#reachable_sources + 1] = source_ids[index]
+		end
+	end
 	log("Reachable exits for offset " .. offset .. " " .. serpent.block(reachable_sources))
 
 	-- Check if reachability has changed - if so, send an update to the controller
@@ -221,7 +230,7 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 	local edge_target = edge_util.edge_get_local_target(edge)
 	local surface = game.surfaces[edge_target.surface]
 	local rails = {}
-	for i = 2, plan_length + 2 do
+	for i = 2, plan_length + 4 do
 		rails[#rails + 1] = surface.create_entity {
 			name = "straight-rail",
 			position = edge_util.edge_pos_to_world({ edge_x, -1 - i * 2 }, edge),

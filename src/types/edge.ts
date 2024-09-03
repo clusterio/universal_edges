@@ -8,6 +8,11 @@ export interface Edge {
 	target: EdgeTargetSpecification;
 	length: number;
 	active: boolean;
+	link_destinations: Record<string, { // keys is offset as a string
+		reachable_targets: string[];
+		reachable_sources: string[];
+		source_instance_id: number;
+	}>;
 }
 
 export interface EdgeTargetSpecification {
@@ -16,18 +21,6 @@ export interface EdgeTargetSpecification {
 	surface: number;
 	direction: number;
 	ready: boolean;
-}
-
-
-export interface EdgeConnector {
-	position: number; // Distance along edge from origin
-	type: "InBelt" | "OutBelt" | "InTrain" | "OutTrain" | "Fluid" | "Power";
-	sourcePlaced: boolean,
-	targetPlaced: boolean,
-	blocked: number; // 0 means blocked, numerical value is the amount of items that can pass
-	// Buffers for fluids and power
-	sourceBuffer?: TwoWayBuffer;
-	targetBuffer?: TwoWayBuffer;
 }
 
 export interface TwoWayBuffer {
@@ -80,5 +73,9 @@ export const Edge = Type.Object({
 	target: EdgeTarget,
 	length: Type.Number(),
 	active: Type.Boolean(),
-	connectors: Type.Optional(Type.Array(EdgeConnector)),
+	link_destinations: Type.Record(Type.String(), Type.Object({
+		reachable_targets: Type.Array(Type.String()),
+		reachable_sources: Type.Array(Type.String()),
+		source_instance_id: Type.Number(),
+	})),
 });

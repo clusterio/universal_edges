@@ -172,7 +172,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 			"straight-rail",
 			edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge)
 		)
-		if rail.direction == edge_target.direction then
+		if rail ~= nil and rail.direction == edge_target.direction then
 			rails[#rails + 1] = rail
 			-- Skip creating new rail
 		else

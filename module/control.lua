@@ -24,7 +24,7 @@ local universal_edges = {
 }
 
 local function setupGlobalData()
-	local GLOBAL_VERSION = 2
+	local GLOBAL_VERSION = 3
 	if global.universal_edges == nil
 		or global.universal_edges.GLOBAL_VERSION == nil
 		or global.universal_edges.GLOBAL_VERSION < GLOBAL_VERSION
@@ -43,7 +43,7 @@ local function setupGlobalData()
 			debug_shapes = {},
 			config = {},
 			edge_trainstops = {}, -- Track edge trainstops for faster pathfinder lookups
-			edge_source_stops = {}, -- Track edge source stops for faster pathfinder lookups
+			edge_source_trainstops = {}, -- Track edge source stops for faster pathfinder lookups
 			GLOBAL_VERSION = GLOBAL_VERSION,
 		}
 	end
