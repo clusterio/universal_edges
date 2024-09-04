@@ -15,7 +15,7 @@ jobs:
       with:
         node-version: 22.x
     - run: npm i -g pnpm
-    - run: pnpm i --no-optional
+    - run: pnpm i
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     - run: pnpm i eslint eslint-plugin-node
@@ -42,7 +42,7 @@ jobs:
       with:
         node-version: 22.x
     - run: npm i -g pnpm
-    - run: pnpm i --no-optional
+    - run: pnpm i
     - run: pnpm run prepare
     - run: pnpm publish --access public --no-git-checks
       env:
