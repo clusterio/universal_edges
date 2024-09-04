@@ -45,7 +45,7 @@ local function update_connector_paths(edge, offset, link)
 	end
 
 	local edge_target = edge_util.edge_get_local_target(edge)
-	local train_stops = game.surfaces[1].find_entities_filtered {
+	local train_stops = game.surfaces[edge_util.edge_get_local_target(edge).surface].find_entities_filtered {
 		type = "train-stop"
 	}
 	local targets = {}
@@ -59,13 +59,15 @@ local function update_connector_paths(edge, offset, link)
 				targets[#targets + 1] = {
 					train_stop = stop
 				}
+				-- Log position and backer_name
+				log("Found trainstop at " .. serpent.block(stop.position) .. " with name " .. stop.backer_name)
 			end
 			-- If this is a source stop
-			if global.universal_edges.edge_source_trainstops[stop.unit_number] ~= nil then
+		if global.universal_edges.edge_source_trainstops[stop.unit_number] ~= nil then
 				sources[#sources + 1] = {
 					train_stop = stop,
 				}
-				source_ids[#source_ids + 1] = edge.id .. " " .. offset
+				source_ids[#source_ids + 1] = global.universal_edges.edge_source_trainstops[stop.unit_number].edge.id .. " " .. global.universal_edges.edge_source_trainstops[stop.unit_number].offset
 			end
 		end
 	end
@@ -289,7 +291,7 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 			}
 			if stop ~= nil then
 				-- Track for easier pathfinding lookups
-				global.universal_edges.edge_source_trainstops[stop.unit_number] = {
+				global.universal_edges.edge_trainstops[stop.unit_number] = {
 					stop = stop,
 					edge = edge,
 					offset = offset,
