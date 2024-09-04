@@ -4,7 +4,8 @@
 	"description": "Plugin for seamless belts, fluids, electricity and trains between clusterio instances",
 	"main": "dist/node/index.js",
 	"scripts": {
-		"prepare": "tsc --build ./tsconfig.node.json && webpack-cli --env production",
+		"prepare": "tsc --build ./tsconfig.node.json && webpack-cli --env production && node ./build.js",
+		"buildmod": "node ./build.js",
 		"watch": "tsc --build --watch",
 		"cloc": "cloc --exclude-dir=node_modules,dist .",
 		"lint": "eslint \"*.ts\" './src/**/*' web/**/* --fix",
@@ -15,33 +16,30 @@
 		"node": ">=18"
 	},
 	"peerDependencies": {
-		"@clusterio/web_ui": "^2.0.0-alpha.17",
-		"@clusterio/lib": "^2.0.0-alpha.17",
-		"@clusterio/controller": "^2.0.0-alpha.17",
-		"@clusterio/host": "^2.0.0-alpha.17"
+		"@clusterio/controller": "^2.0.0-alpha.0",
+		"@clusterio/host": "^2.0.0-alpha.0",
+		"@clusterio/lib": "^2.0.0-alpha.0",
+		"@clusterio/web_ui": "^2.0.0-alpha.0"
 	},
 	"devDependencies": {
 		"@ant-design/icons": "^5.3.7",
 		"@swc/wasm": "^1.5.24",
-		"@typescript-eslint/eslint-plugin": "^7.11.0",
-		"@typescript-eslint/parser": "^7.11.0",
-		"typescript": "^5.1.6",
 		"@types/node": "^20.4.5",
 		"@types/react": "^18.2.21",
+		"@typescript-eslint/eslint-plugin": "^7.11.0",
+		"@typescript-eslint/parser": "^7.11.0",
 		"antd": "^5.13.0",
 		"eslint": "^8.4.1",
 		"eslint-plugin-node": "^11.1.0",
+		"klaw": "^4.1.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"react-router-dom": "^6.23.1",
 		"spaces-to-tabs": "^0.0.3",
+		"typescript": "^5.1.6",
 		"webpack": "^5.88.2",
 		"webpack-cli": "^5.1.4",
-		"webpack-merge": "^5.9.0",
-		"@clusterio/web_ui": "^2.0.0-alpha.17",
-		"@clusterio/lib": "^2.0.0-alpha.17",
-		"@clusterio/controller": "^2.0.0-alpha.17",
-		"@clusterio/host": "^2.0.0-alpha.17"
+		"webpack-merge": "^5.9.0"
 	},
 	"dependencies": {
 		"@sinclair/typebox": "^0.30.4"
