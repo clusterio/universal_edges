@@ -135,6 +135,7 @@ export default function EdgeListPage() {
 					values.target.ready = false;
 					values.active = false;
 					values.length = Number(values.length);
+					values.link_destinations = edgeConfigs.get(editing)?.link_destinations || {};
 					console.log(values);
 					control.send(new messages.SetEdgeConfig(values));
 				}}
