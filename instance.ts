@@ -258,7 +258,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 				this.edgeCallbacks.delete(id);
 				clearTimeout(timeout);
 				resolve(data);
-			}
+			};
 			let cb = this.edgeCallbacks.get(id);
 			if (cb) {
 				cb.push(callback);
@@ -322,8 +322,8 @@ export class InstancePlugin extends BaseInstancePlugin {
 		}
 
 		// Handle no stations in the world causing empty table to serialize as object
-		if (!Array.isArray(data.data.reachable_targets)) data.data.reachable_targets = [];
-		if (!Array.isArray(data.data.reachable_sources)) data.data.reachable_sources = [];
+		if (!Array.isArray(data.data.reachable_targets)) { data.data.reachable_targets = []; }
+		if (!Array.isArray(data.data.reachable_sources)) { data.data.reachable_sources = []; }
 
 		// Send the source connector ID to the controller so it is able to return the proxy station layout correctly
 		const destination_instance_id = this.instance.config.get("instance.id");

@@ -69,12 +69,12 @@ export default function EdgeListPage() {
 						onConfirm={async () => {
 							setDeleting(true);
 							// Set isDeleted on all edges
-							const updates = [...edgeConfigs.values()].map(edge => {
-								return {
+							const updates = [...edgeConfigs.values()].map(edge => (
+								{
 									...edge,
 									isDeleted: true,
 								}
-							});
+							));
 							const results = updates.map(update => control.send(new messages.SetEdgeConfig(update)));
 							await Promise.all(results);
 							setDeleting(false);
@@ -86,7 +86,7 @@ export default function EdgeListPage() {
 						>
 							<DeleteOutlined />
 						</Button>
-					</Popconfirm>
+					</Popconfirm>,
 				]}</Space>
 			}
 		/>

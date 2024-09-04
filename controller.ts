@@ -150,11 +150,11 @@ export class ControllerPlugin extends BaseControllerPlugin {
 					return true;
 				}
 				if (["source", "target"].includes(key)) {
-					return (Object.keys(edge[key]) as (keyof EdgeTargetSpecification)[]).every(subKey => {
-						return (edge[key] as EdgeTargetSpecification)[subKey] === (oldEdge[key] as EdgeTargetSpecification)[subKey];
-					});
+					return (Object.keys(edge[key]) as (keyof EdgeTargetSpecification)[]).every(subKey => (
+						(edge[key] as EdgeTargetSpecification)[subKey] === (oldEdge[key] as EdgeTargetSpecification)[subKey]
+					));
 				}
-				return edge[key] === oldEdge[key]
+				return edge[key] === oldEdge[key];
 			})) {
 				// No changes
 				return;
@@ -259,7 +259,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		let iterations = 0;
 		while (prev_solution !== new_solution && iterations < 100) {
 			prev_solution = new_solution;
-			iterations++;
+			iterations += 1;
 			// Find reachable_sources
 			[...destinations.values()].forEach((dest) => {
 				// Add targets from adjacent nodes

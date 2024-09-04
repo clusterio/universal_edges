@@ -8,7 +8,7 @@
 		"buildmod": "node ./build.js",
 		"watch": "tsc --build --watch",
 		"cloc": "cloc --exclude-dir=node_modules,dist .",
-		"lint": "eslint \"*.ts\" './src/**/*' web/**/* --fix",
+		"lint": "eslint \"*.ts\" \"src/**/*\" \"web/**/*\" --fix",
 		"luacheck": "luacheck module/",
 		"test": "spaces-to-tabs -s 4 module/**.lua module/**/**.lua && npm run lint && npm run luacheck"
 	},
