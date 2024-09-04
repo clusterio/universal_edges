@@ -242,10 +242,9 @@ export class ControllerPlugin extends BaseControllerPlugin {
 			});
 			new_solution = [...destinations.values()].map(dest => [...dest.reachable_targets.entries()].map(([key, value]) => `${key}:${value}`).join(",")).join(";");
 		}
-		console.log(new_solution);
 
 		// Log if we hit the iteration limit
-		this.logger.info(`Pathfinder iterations: ${iterations}`);
+		// this.logger.info(`Pathfinder iterations: ${iterations}`); // Add prometheus metric for this
 		if (iterations >= 100) {
 			this.logger.warn("Pathfinder hit iteration limit");
 		}
@@ -257,8 +256,6 @@ export class ControllerPlugin extends BaseControllerPlugin {
 			});
 		});
 
-		console.log(destinations);
-
 		// Send updates to instances
 		destinations.forEach((dest) => {
 			const split = dest.id.split(" ");
@@ -269,8 +266,6 @@ export class ControllerPlugin extends BaseControllerPlugin {
 				this.logger.warn(`Edge ${edgeId} not found for pathfinder update`);
 				return;
 			}
-			const link = edge.link_destinations[offset];
-			link.reachable_targets = Array.from(dest.reachable_targets.keys());
 
 			this.controller.sendTo({ instanceId: dest.source_instance_id }, new messages.EdgeLinkUpdate(edgeId, "update_train_penalty_map", {
 				offset: Number(offset),
