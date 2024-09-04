@@ -6,6 +6,20 @@ import fs from "fs/promises";
 import * as messages from "./messages";
 import { Edge, EdgeTargetSpecification } from "./src/types";
 
+const prometheus_train_pathfinder_iterations = new lib.Gauge(
+	"clusterio_plugin_universal_edges_train_pathfinder_iterations",
+	"Number of iterations the pathfinder ran for before terminating"
+);
+const prometheus_train_pathfinder_runs = new lib.Counter(
+	"clusterio_plugin_universal_edges_train_pathfinder_runs",
+	"Number of times the pathfinder has run"
+);
+const prometheus_train_layout_update_events = new lib.Counter(
+	"clusterio_plugin_universal_edges_train_layout_update_events",
+	"Number of train layout update events received",
+	{ labels: ["edge_id"] }
+);
+
 async function loadDatabase(config: lib.ControllerConfig, filename: string, logger: lib.Logger): Promise<Map<string, Edge>> {
 	let itemsPath = path.resolve(config.get("controller.database_directory"), filename);
 	logger.verbose(`Loading ${itemsPath}`);
@@ -167,6 +181,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	}
 
 	async handleTrainLayoutUpdateEvent({ edgeId, data }: messages.TrainLayoutUpdate) {
+		prometheus_train_layout_update_events.labels(edgeId).inc();
 		const edge = this.edgeDatastore.get(edgeId);
 		if (!edge) {
 			this.logger.warn(`Received TrainLayoutUpdate for non-existing edge ${edgeId}`);
@@ -189,6 +204,8 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	}
 
 	pathfinderUpdate() {
+		prometheus_train_pathfinder_runs.inc();
+
 		// Build destinations
 		type destination = {
 			id: string; // edge.id .. " " .. offset
@@ -244,7 +261,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		}
 
 		// Log if we hit the iteration limit
-		// this.logger.info(`Pathfinder iterations: ${iterations}`); // Add prometheus metric for this
+		prometheus_train_pathfinder_iterations.set(iterations);
 		if (iterations >= 100) {
 			this.logger.warn("Pathfinder hit iteration limit");
 		}
@@ -257,6 +274,11 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		});
 
 		// Send updates to instances
+		/*
+			This currently sends updates to all instances, even if they haven't changed - this is then deduplicated on the Lua side.
+			This is because in cases of a crash, the Lua side penalty map might not match what the server remembers.
+			The fix for this is to make the instance send its current penalty map on startup and request an udpate.
+		*/
 		destinations.forEach((dest) => {
 			const split = dest.id.split(" ");
 			const offset = split[split.length - 1];

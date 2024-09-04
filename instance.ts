@@ -78,6 +78,18 @@ type EdgeBuffer = {
 	commandTransfer: lib.RateLimiter,
 }
 
+const prom_belt_transfers = new lib.Counter(
+	"clusterio_plugin_universal_edges_belt_transfers_total",
+	"Items received by belt",
+	// We could also track the offset but that is a lot of extra data
+	{ labels: ["instance_id", "edge_id", "name"] }
+);
+const prom_train_transfers = new lib.Counter(
+	"clusterio_plugin_universal_edges_train_transfer_count",
+	"Trains received by instance",
+	{ labels: ["instance_id", "edge_id", "offset"] }
+);
+
 function mergeBeltTransfers(
 	pendingBeltTransfers: Map<number, BeltTransfer>,
 	beltTransfers: BeltTransfer[]
@@ -434,12 +446,38 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 		// Belts
 		let beltTransfers = mapToArray(edge.pendingCommand.beltTransfers);
-		// FLuids
+		let transfered_items = beltTransfers
+			// Filter out flow updates
+			.filter(transfer => transfer.item_stacks)
+			.reduce((acc: Record<string, number>, transfer: { item_stacks: { n: string, c: number }[] }) => {
+				transfer.item_stacks.forEach(stack => {
+					acc[stack.n] = (acc[stack.n] || 0) + stack.c;
+				});
+				return acc;
+			}, {});
+		Object.keys(transfered_items).forEach(item_name => {
+			prom_belt_transfers.labels(
+				this.instance.config.get("instance.id").toString(),
+				edgeId,
+				item_name
+			).inc(transfered_items[item_name]);
+		});
+		// Fluids
 		let fluidTransfers = mapToArray(edge.pendingCommand.fluidTransfers);
 		// Power
 		let powerTransfers = mapToArray(edge.pendingCommand.powerTransfers);
 		// Trains
-		let trainTransfers = mapToArray(edge.pendingCommand.trainTransfers);
+		let trainTransfers: TrainTransfer[] = mapToArray(edge.pendingCommand.trainTransfers);
+		trainTransfers
+			// Filter out flow updates
+			.filter(transfer => transfer.train_id !== undefined)
+			.forEach(transfer => {
+			prom_train_transfers.labels(
+				this.instance.config.get("instance.id").toString(),
+				edgeId,
+				transfer.offset.toString()
+			).inc();
+		});
 
 		let json = lib.escapeString(JSON.stringify({
 			edge_id: edgeId,
