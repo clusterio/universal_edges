@@ -208,24 +208,21 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		// Figure out the IP of the target instance
 		const instance = this.controller.instances.get(instanceId);
 		if (!instance) {
-			this.logger.warn(`Instance ${instanceId} not found for TeleportPlayerToServer`);
-			return;
+			throw new lib.ResponseError(`Instance ${instanceId} not found for TeleportPlayerToServer`);
 		}
 		const hostId = instance.config.get("instance.assigned_host");
 		if (!hostId) {
-			this.logger.warn(`Instance ${instanceId} has no assigned host`);
-			return;
+			throw new lib.ResponseError(`Instance ${instanceId} has no assigned host`);
 		}
 		const host = this.controller.hosts.get(hostId);
 		if (!host) {
-			this.logger.warn(`Host ${hostId} not found for instance ${instanceId}`);
-			return;
+			throw new lib.ResponseError(`Host ${hostId} not found for instance ${instanceId}`);
 		}
 		const address = `${host.publicAddress}:${instance.gamePort || instance.config.get("factorio.game_port")}`;
 
 		// Send the teleport request
 		this.logger.info(`Teleporting ${playerName} to ${address} on edge ${edgeId} offset ${offset}`);
-		return { address }
+		return { address };
 	}
 
 	pathfinderUpdate() {
