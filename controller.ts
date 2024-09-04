@@ -215,22 +215,39 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		});
 
 		// Ugly hack to make it propagate paths
-		for (let i = 0; i < 10; i++) {
+		let prev_solution = "";
+		let new_solution = "new";
+		let iterations = 0;
+		while (prev_solution !== new_solution && iterations < 100) {
+			prev_solution = new_solution;
+			iterations++;
 			// Find reachable_sources
 			[...destinations.values()].forEach((dest) => {
-				// Add targets from adjacent node
+				// Add targets from adjacent nodes
 				dest.targets.forEach((target) => dest.reachable_targets.set(target, 1));
 			});
 
 			[...destinations.values()].forEach((dest) => {
 				for (const source of dest.sources) {
 					const target = destinations.get(source)!;
+					if (!target) {
+						this.logger.warn(`Failed to find source ${source} for destination ${dest.id}`);
+						continue;
+					}
 					// Add targets alraedy processed by the patfhinder (distance > 1)
 					target.reachable_targets.forEach((value, key) => {
 						dest.reachable_targets.set(key, Math.min(value + 1, dest.reachable_targets.get(key) || Infinity));
 					});
 				}
 			});
+			new_solution = [...destinations.values()].map(dest => [...dest.reachable_targets.entries()].map(([key, value]) => `${key}:${value}`).join(",")).join(";");
+		}
+		console.log(new_solution);
+
+		// Log if we hit the iteration limit
+		this.logger.info(`Pathfinder iterations: ${iterations}`);
+		if (iterations >= 100) {
+			this.logger.warn("Pathfinder hit iteration limit");
 		}
 
 		// Multiply all distances by 100k because that is what the Lua code and mod assumes
