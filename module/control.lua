@@ -365,7 +365,19 @@ universal_edges.events = {
 			global.universal_edges.carriage_drivers[player.name] = nil
 		end
 	end,
-}
 
+	[defines.events.on_entity_renamed] = function(event)
+		local entity = event.entity
+		if entity.name == "train-stop"
+			and entity.backer_name
+			and (
+				global.universal_edges.pathfinder.rescan_connector_paths_after == nil
+				or global.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
+			)
+		then
+			global.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
+		end
+	end,
+}
 
 return universal_edges
