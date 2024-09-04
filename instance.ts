@@ -217,7 +217,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 	async onStart() {
 		this.logger.info("instance::onStart");
-		this.sendRcon(`/sc universal_edges.set_config({instance_id = ${this.instance.config.get("instance.id")}})`);
+		await this.sendRcon(`/sc universal_edges.set_config({instance_id = ${this.instance.config.get("instance.id")}})`);
 	}
 
 	async onStop() {
@@ -355,7 +355,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 				edgeBuffer.edge = edge;
 			}
 			// Update ingame config
-			this.sendRcon(`/sc universal_edges.edge_update("${edge.id}", '${lib.escapeString(JSON.stringify(edge))}')`);
+			await this.sendRcon(`/sc universal_edges.edge_update("${edge.id}", '${lib.escapeString(JSON.stringify(edge))}')`);
 
 			// Update edge callbacks
 			let callbacks = this.edgeCallbacks.get(edge.id);
