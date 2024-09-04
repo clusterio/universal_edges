@@ -58,6 +58,7 @@ export const plugin: lib.PluginDeclaration = {
 		messages.EdgeTransfer,
 		messages.EdgeUpdate,
 		messages.SetEdgeConfig,
+		messages.TrainLayoutUpdate,
 	],
 
 	webEntrypoint: "./web",

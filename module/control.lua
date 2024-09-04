@@ -24,7 +24,7 @@ local universal_edges = {
 }
 
 local function setupGlobalData()
-	local GLOBAL_VERSION = 1
+	local GLOBAL_VERSION = 3
 	if global.universal_edges == nil
 		or global.universal_edges.GLOBAL_VERSION == nil
 		or global.universal_edges.GLOBAL_VERSION < GLOBAL_VERSION

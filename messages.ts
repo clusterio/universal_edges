@@ -47,7 +47,7 @@ export class SetEdgeConfig {
 export class EdgeLinkUpdate {
 	declare ["constructor"]: typeof EdgeLinkUpdate;
 	static type = "event" as const;
-	static src = "instance" as const;
+	static src = ["controller", "instance"] as const;
 	static dst = "instance" as const;
 	static plugin = "universal_edges" as const;
 
@@ -61,6 +61,40 @@ export class EdgeLinkUpdate {
 
 	static fromJSON(json: Static<typeof this.jsonSchema>) {
 		return new this(json.edgeId, json.type, json.data);
+	}
+}
+
+export class TrainLayoutUpdate {
+	declare ["constructor"]: typeof TrainLayoutUpdate;
+	static type = "event" as const;
+	static src = "instance" as const;
+	static dst = "controller" as const;
+	static plugin = "universal_edges" as const;
+
+	constructor(public edgeId: string, public data: {
+		offset: number,
+		reachable_targets: string[], // backer_name for internal stations
+		reachable_sources: string[] // edge_id + offset for exits (sources)
+		source_instance_id: number,
+	}) { }
+
+	static jsonSchema = Type.Object({
+		edgeId: Type.String(),
+		data: Type.Object({
+			offset: Type.Number(),
+			reachable_targets: Type.Array(Type.String()),
+			reachable_sources: Type.Array(Type.String()),
+			source_instance_id: Type.Number(),
+		}),
+	});
+
+	static fromJSON(json: Static<typeof this.jsonSchema>) {
+		return new this(json.edgeId, {
+			offset: json.data.offset,
+			reachable_targets: json.data.reachable_targets,
+			reachable_sources: json.data.reachable_sources,
+			source_instance_id: json.data.source_instance_id,
+		});
 	}
 }
 

@@ -15,6 +15,16 @@ type EdgeLinkUpdate = {
 	}
 };
 
+type TrainLayoutUpdate = {
+	edge_id: string,
+	data: {
+		offset: number,
+		reachable_targets: string[], // backer_name for internal stations
+		reachable_sources: string[], // edge_id + offset for exits (sources)
+		source_instance_id: number,
+	},
+};
+
 type BeltTransfer = {
 	offset: number,
 	set_flow?: boolean,
@@ -67,6 +77,18 @@ type EdgeBuffer = {
 	}
 	commandTransfer: lib.RateLimiter,
 }
+
+const prom_belt_transfers = new lib.Counter(
+	"clusterio_plugin_universal_edges_belt_transfers_total",
+	"Items received by belt",
+	// We could also track the offset but that is a lot of extra data
+	{ labels: ["instance_id", "edge_id", "name"] }
+);
+const prom_train_transfers = new lib.Counter(
+	"clusterio_plugin_universal_edges_train_transfer_count",
+	"Trains received by instance",
+	{ labels: ["instance_id", "edge_id", "offset"] }
+);
 
 function mergeBeltTransfers(
 	pendingBeltTransfers: Map<number, BeltTransfer>,
@@ -194,6 +216,12 @@ export class InstancePlugin extends BaseInstancePlugin {
 			));
 		});
 
+		this.instance.server.on("ipc-universal_edges:train_layout_update", data => {
+			this.handleTrainLayoutUpdate(data).catch(err => this.logger.error(
+				`Error handling train_layout_update:\n${err.stack}`
+			));
+		});
+
 		this.instance.handle(messages.EdgeUpdate, this.handleEdgeUpdate.bind(this));
 		this.instance.handle(messages.EdgeLinkUpdate, this.edgeLinkUpdateEventHandler.bind(this));
 		this.instance.handle(messages.EdgeTransfer, this.edgeTransferRequestHandler.bind(this));
@@ -201,7 +229,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 	async onStart() {
 		this.logger.info("instance::onStart");
-		this.sendRcon(`/sc universal_edges.set_config({instance_id = ${this.instance.config.get("instance.id")}})`);
+		await this.sendRcon(`/sc universal_edges.set_config({instance_id = ${this.instance.config.get("instance.id")}})`);
 	}
 
 	async onStop() {
@@ -279,6 +307,30 @@ export class InstancePlugin extends BaseInstancePlugin {
 		edge.messageTransfer.activate();
 	}
 
+	// Important - assumed to only be sent from the destination side of train connectors
+	async handleTrainLayoutUpdate(data: TrainLayoutUpdate) {
+		let edge = await this.getEdge(data.edge_id);
+		if (!edge) {
+			console.log("impossible edge not found!");
+			return; // XXX LATER PROBLEM
+		}
+
+		// Handle no stations in the world causing empty table to serialize as object
+		if (!Array.isArray(data.data.reachable_targets)) data.data.reachable_targets = [];
+		if (!Array.isArray(data.data.reachable_sources)) data.data.reachable_sources = [];
+
+		// Send the source connector ID to the controller so it is able to return the proxy station layout correctly
+		const destination_instance_id = this.instance.config.get("instance.id");
+		if (destination_instance_id === edge.edge.source.instanceId) {
+			data.data.source_instance_id = edge.edge.target.instanceId;
+		} else {
+			data.data.source_instance_id = edge.edge.source.instanceId;
+		}
+
+		// Send to controller
+		await this.instance.sendTo("controller", new messages.TrainLayoutUpdate(data.edge_id, data.data));
+	}
+
 	async handleEdgeUpdate(event: messages.EdgeUpdate) {
 		for (const edge of event.updates) {
 			// Cache locally to avoid passing extra data from game
@@ -315,7 +367,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 				edgeBuffer.edge = edge;
 			}
 			// Update ingame config
-			this.sendRcon(`/sc universal_edges.edge_update("${edge.id}", '${lib.escapeString(JSON.stringify(edge))}')`);
+			await this.sendRcon(`/sc universal_edges.edge_update("${edge.id}", '${lib.escapeString(JSON.stringify(edge))}')`);
 
 			// Update edge callbacks
 			let callbacks = this.edgeCallbacks.get(edge.id);
@@ -394,12 +446,38 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 		// Belts
 		let beltTransfers = mapToArray(edge.pendingCommand.beltTransfers);
-		// FLuids
+		let transfered_items = beltTransfers
+			// Filter out flow updates
+			.filter(transfer => transfer.item_stacks)
+			.reduce((acc: Record<string, number>, transfer: { item_stacks: { n: string, c: number }[] }) => {
+				transfer.item_stacks.forEach(stack => {
+					acc[stack.n] = (acc[stack.n] || 0) + stack.c;
+				});
+				return acc;
+			}, {});
+		Object.keys(transfered_items).forEach(item_name => {
+			prom_belt_transfers.labels(
+				this.instance.config.get("instance.id").toString(),
+				edgeId,
+				item_name
+			).inc(transfered_items[item_name]);
+		});
+		// Fluids
 		let fluidTransfers = mapToArray(edge.pendingCommand.fluidTransfers);
 		// Power
 		let powerTransfers = mapToArray(edge.pendingCommand.powerTransfers);
 		// Trains
-		let trainTransfers = mapToArray(edge.pendingCommand.trainTransfers);
+		let trainTransfers: TrainTransfer[] = mapToArray(edge.pendingCommand.trainTransfers);
+		trainTransfers
+			// Filter out flow updates
+			.filter(transfer => transfer.train_id !== undefined)
+			.forEach(transfer => {
+			prom_train_transfers.labels(
+				this.instance.config.get("instance.id").toString(),
+				edgeId,
+				transfer.offset.toString()
+			).inc();
+		});
 
 		let json = lib.escapeString(JSON.stringify({
 			edge_id: edgeId,

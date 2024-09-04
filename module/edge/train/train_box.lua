@@ -47,10 +47,11 @@ local function create_train_source_box(offset, edge, surface)
 	end
 
 	local stop = surface.create_entity {
-		name = "train-stop",
+		name = "ue_source_trainstop",
 		position = edge_util.edge_pos_to_world({ edge_x + 2, -3 }, edge),
 		direction = edge_target.direction,
 	}
+	stop.backer_name = edge.id .. " " .. offset
 	local signal = surface.create_entity {
 		name = "rail-signal",
 		position = edge_util.edge_pos_to_world({ edge_x + 1.5, -0.5 }, edge),
@@ -158,7 +159,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 			"straight-rail",
 			edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge)
 		)
-		if rail.direction == edge_target.direction then
+		if rail ~= nil and rail.direction == edge_target.direction then
 			rails[#rails + 1] = rail
 			-- Skip creating new rail
 		else
