@@ -1,6 +1,7 @@
 local clusterio_serialize = require("modules/clusterio/serialize")
 local LuaTrain_deserialize = require("modules/universal_edges/universal_serializer/classes/LuaTrain_deserialize")
 local LuaBurner_deserialize = require("modules/universal_edges/universal_serializer/classes/LuaBurner_deserialize")
+local LuaFluidBox_deserialize = require("modules/universal_edges/universal_serializer/classes/LuaFluidBox_deserialize")
 
 --[[
 	Function to deserialize an entity from a string.
@@ -165,6 +166,11 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 	-- Burner
 	if entity_data.burner ~= nil and entity.burner then
 		LuaBurner_deserialize(entity.burner, entity_data.burner)
+	end
+
+	-- Fluidbox
+	if entity_data.fluidbox ~= nil then
+		LuaFluidBox_deserialize(entity.fluidbox, entity_data.fluidbox)
 	end
 
 	-- Entity ghost again

@@ -1,4 +1,4 @@
--- Deserializes a LuaTrain object.
+-- Deserializes a LuaBurner object.
 ---@param burner LuaBurner
 ---@param burner_data table
 ---@return LuaBurner

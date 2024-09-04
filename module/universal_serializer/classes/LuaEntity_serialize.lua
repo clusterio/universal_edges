@@ -1,6 +1,7 @@
 local clusterio_serialize = require("modules/clusterio/serialize")
 local LuaTrain_serialize = require("modules/universal_edges/universal_serializer/classes/LuaTrain_serialize")
 local LuaBurner_serialize = require("modules/universal_edges/universal_serializer/classes/LuaBurner_serialize")
+local LuaFluidBox_serialize = require("modules/universal_edges/universal_serializer/classes/LuaFluidBox_serialize")
 --[[
 	Function to serialize an entity to a string.
 ]]
@@ -125,6 +126,11 @@ local function entity_serialize(entity)
 	-- Burner
 	if entity.burner ~= nil then
 		entity_data.burner = LuaBurner_serialize(entity.burner)
+	end
+
+	-- Fluidbox
+	if #entity.fluidbox then
+		entity_data.fluidbox = LuaFluidBox_serialize(entity.fluidbox)
 	end
 
 	entity_data.inventories = {}

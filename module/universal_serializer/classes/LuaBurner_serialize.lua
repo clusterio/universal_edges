@@ -1,4 +1,3 @@
-
 -- Serializes a LuaBurner object.
 ---@param burner LuaBurner
 ---@return table
