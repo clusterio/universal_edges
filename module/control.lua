@@ -42,8 +42,6 @@ local function setupGlobalData()
 			edges = {},
 			debug_shapes = {},
 			config = {},
-			edge_trainstops = {}, -- Track edge trainstops for faster pathfinder lookups
-			edge_source_trainstops = {}, -- Track edge source stops for faster pathfinder lookups
 			GLOBAL_VERSION = GLOBAL_VERSION,
 		}
 	end

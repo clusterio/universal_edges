@@ -47,17 +47,11 @@ local function create_train_source_box(offset, edge, surface)
 	end
 
 	local stop = surface.create_entity {
-		name = "train-stop",
+		name = "ue_source_trainstop",
 		position = edge_util.edge_pos_to_world({ edge_x + 2, -3 }, edge),
 		direction = edge_target.direction,
 	}
-	-- Track for easier pathfinding lookups
-	global.universal_edges.edge_source_trainstops[stop.unit_number] = {
-		stop = stop,
-		edge = edge,
-		offset = offset,
-	}
-	global.universal_edges.edge_trainstops[stop.unit_number] = global.universal_edges.edge_source_trainstops[stop.unit_number]
+	stop.backer_name = edge.id .. " " .. offset
 	local signal = surface.create_entity {
 		name = "rail-signal",
 		position = edge_util.edge_pos_to_world({ edge_x + 1.5, -0.5 }, edge),
@@ -103,13 +97,6 @@ local function remove_train_source_box(offset, edge, _surface)
 		if link.penalty_rails ~= nil then
 			for _index, rail in pairs(link.penalty_rails) do
 				if rail and rail.valid then
-					-- dereference
-					if global.universal_edges.edge_source_trainstops[rail.unit_number] then
-						global.universal_edges.edge_source_trainstops[rail.unit_number] = nil
-					end
-					if global.universal_edges.edge_trainstops[rail.unit_number] then
-						global.universal_edges.edge_trainstops[rail.unit_number] = nil
-					end
 					rail.destroy()
 				end
 			end

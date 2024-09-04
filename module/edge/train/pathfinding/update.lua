@@ -46,7 +46,10 @@ local function update_connector_paths(edge, offset, link)
 
 	local edge_target = edge_util.edge_get_local_target(edge)
 	local train_stops = game.surfaces[edge_util.edge_get_local_target(edge).surface].find_entities_filtered {
-		type = "train-stop"
+		name = "train-stop"
+	}
+	local source_train_stops = game.surfaces[edge_util.edge_get_local_target(edge).surface].find_entities_filtered {
+		name = "ue_source_trainstop"
 	}
 	local targets = {}
 	local sources = {}
@@ -55,20 +58,19 @@ local function update_connector_paths(edge, offset, link)
 		-- It is possible to create trainstops and deconstructing the rail, this causes the pathfinder to throw
 		if stop.valid and stop.connected_rail ~= nil then
 			-- Check if stop is not part of an edge
-			if global.universal_edges.edge_trainstops[stop.unit_number] == nil then
-				targets[#targets + 1] = {
-					train_stop = stop
-				}
-				-- Log position and backer_name
-				log("Found trainstop at " .. serpent.block(stop.position) .. " with name " .. stop.backer_name)
-			end
-			-- If this is a source stop
-		if global.universal_edges.edge_source_trainstops[stop.unit_number] ~= nil then
-				sources[#sources + 1] = {
-					train_stop = stop,
-				}
-				source_ids[#source_ids + 1] = global.universal_edges.edge_source_trainstops[stop.unit_number].edge.id .. " " .. global.universal_edges.edge_source_trainstops[stop.unit_number].offset
-			end
+			targets[#targets + 1] = {
+				train_stop = stop
+			}
+			-- Log position and backer_name
+			log("Found trainstop at " .. serpent.block(stop.position) .. " with name " .. stop.backer_name)
+		end
+	end
+	for _, stop in pairs(source_train_stops) do
+		if stop.valid and stop.connected_rail ~= nil then
+			sources[#sources + 1] = {
+				train_stop = stop
+			}
+			source_ids[#source_ids + 1] = stop.backer_name -- edge.id .. " " .. offset
 		end
 	end
 
@@ -125,8 +127,8 @@ local function update_connector_paths(edge, offset, link)
 	log("Reachable exits for offset " .. offset .. " " .. serpent.block(reachable_sources))
 
 	-- Check if reachability has changed - if so, send an update to the controller
-	if has_string_array_changed(reachable_targets, link.reachable_targets) or has_string_array_changed(reachable_sources, link.reachable_sources) then
-		log("Significant change detected, sending new stations and links")
+	if true or has_string_array_changed(reachable_targets, link.reachable_targets) or has_string_array_changed(reachable_sources, link.reachable_sources) then
+		-- log("Significant change detected, sending new stations and links")
 		clusterio_api.send_json("universal_edges:train_layout_update", {
 			edge_id = edge.id,
 			data = {
@@ -180,19 +182,34 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 
 	local link = edge.linked_trains[offset]
 
+	-- Check if penalty map has changed
+	local has_changed = false
+	if link.last_penalty_map_update == nil then
+		has_changed = true
+	else
+		for name, penalty in pairs(penalty_map) do
+			if link.last_penalty_map_update[name] ~= penalty then
+				has_changed = true
+				break
+			end
+		end
+		for name, penalty in pairs(link.last_penalty_map_update) do
+			if penalty_map[name] ~= penalty then
+				has_changed = true
+				break
+			end
+		end
+	end
+	if not has_changed then
+		return
+	end
 	log("Got penalty update for " .. offset .. " " .. serpent.block(penalty_map))
+	link.last_penalty_map_update = penalty_map
 
 	-- Remove old penalty entities
 	if link.penalty_rails ~= nil then
 		for _index, rail in pairs(link.penalty_rails) do
 			if rail and rail.valid then
-				-- dereference
-				if global.universal_edges.edge_source_trainstops[rail.unit_number] then
-					global.universal_edges.edge_source_trainstops[rail.unit_number] = nil
-				end
-				if global.universal_edges.edge_trainstops[rail.unit_number] then
-					global.universal_edges.edge_trainstops[rail.unit_number] = nil
-				end
 				rail.destroy()
 			end
 		end
@@ -232,7 +249,8 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 	local edge_target = edge_util.edge_get_local_target(edge)
 	local surface = game.surfaces[edge_target.surface]
 	local rails = {}
-	for i = 2, plan_length + 4 do
+	-- Each jump is 1 server devider + 1 spot for stations for a total of 4 tiles or 2 rails. Add another 4 tiles to make sure we have enough
+	for i = 2, plan_length * 2 + 4 do
 		rails[#rails + 1] = surface.create_entity {
 			name = "straight-rail",
 			position = edge_util.edge_pos_to_world({ edge_x, -1 - i * 2 }, edge),
@@ -284,18 +302,12 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 		else
 			-- Add stacked trainstops
 			local stop = surface.create_entity {
-				name = "train-stop",
+				name = "ue_proxy_trainstop",
 				position = edge_util.edge_pos_to_world({ edge_x + 2, -3 - processed_dividers * 4 }, edge),
 				direction = edge_target.direction,
 				force = "player", -- Neutral/Enemy can be used to hide trainstop name from schedule GUI/map view respectively
 			}
 			if stop ~= nil then
-				-- Track for easier pathfinding lookups
-				global.universal_edges.edge_trainstops[stop.unit_number] = {
-					stop = stop,
-					edge = edge,
-					offset = offset,
-				}
 				stop.backer_name = item.name -- Set station name
 				rails[#rails + 1] = stop
 			else
