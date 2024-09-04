@@ -98,6 +98,31 @@ export class TrainLayoutUpdate {
 	}
 }
 
+export class TeleportPlayerToServer {
+	declare ["constructor"]: typeof TeleportPlayerToServer;
+	static type = "request" as const;
+	static src = "instance" as const;
+	static dst = "controller" as const;
+	static plugin = "universal_edges" as const;
+
+	constructor(public playerName: string, public edgeId: string, public instanceId: number, public offset: number) { }
+
+	static jsonSchema = Type.Object({
+		playerName: Type.String(),
+		edgeId: Type.String(),
+		instanceId: Type.Number(),
+		offset: Type.Number(),
+	});
+
+	static fromJSON(json: Static<typeof this.jsonSchema>) {
+		return new this(json.playerName, json.edgeId, json.instanceId, json.offset);
+	}
+
+	static Response = plainJson(Type.Object({
+		"address": Type.String(),
+	}));
+}
+
 const beltTransfersType = Type.Array(Type.Object({
 	offset: Type.Number(),
 	item_stacks: Type.Optional(Type.Array(Type.Object({}))),

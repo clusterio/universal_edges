@@ -222,6 +222,12 @@ export class InstancePlugin extends BaseInstancePlugin {
 			));
 		});
 
+		this.instance.server.on("ipc-universal_edges:teleport_player_to_server", data => {
+			this.handleTeleportPlayerToServer(data).catch(err => this.logger.error(
+				`Error handling teleport_player_to_server:\n${err.stack}`
+			));
+		});
+
 		this.instance.handle(messages.EdgeUpdate, this.handleEdgeUpdate.bind(this));
 		this.instance.handle(messages.EdgeLinkUpdate, this.edgeLinkUpdateEventHandler.bind(this));
 		this.instance.handle(messages.EdgeTransfer, this.edgeTransferRequestHandler.bind(this));
@@ -329,6 +335,28 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 		// Send to controller
 		await this.instance.sendTo("controller", new messages.TrainLayoutUpdate(data.edge_id, data.data));
+	}
+
+	async handleTeleportPlayerToServer(data: { player_name: string, edge_id: string, offset: number }) {
+		// Get edge
+		let edge = await this.getEdge(data.edge_id);
+		if (!edge) {
+			console.log("impossible edge not found!");
+			return; // XXX LATER PROBLEM
+		}
+		// Get other side of edge
+		let target_instance_id = 0;
+		const current_instance_id = this.instance.config.get("instance.id");
+		if (current_instance_id === edge.edge.source.instanceId) {
+			target_instance_id = edge.edge.target.instanceId;
+		} else {
+			target_instance_id = edge.edge.source.instanceId;
+		}
+
+		// Forward request to controller
+		const { address } = await this.instance.sendTo("controller", new messages.TeleportPlayerToServer(data.player_name, data.edge_id, target_instance_id, data.offset));
+		// Send response back to game
+		await this.sendRcon(`/sc universal_edges.teleport_player_to_server_response("${data.player_name}", "${address}")`);
 	}
 
 	async handleEdgeUpdate(event: messages.EdgeUpdate) {
@@ -472,12 +500,12 @@ export class InstancePlugin extends BaseInstancePlugin {
 			// Filter out flow updates
 			.filter(transfer => transfer.train_id !== undefined)
 			.forEach(transfer => {
-			prom_train_transfers.labels(
-				this.instance.config.get("instance.id").toString(),
-				edgeId,
-				transfer.offset.toString()
-			).inc();
-		});
+				prom_train_transfers.labels(
+					this.instance.config.get("instance.id").toString(),
+					edgeId,
+					transfer.offset.toString()
+				).inc();
+			});
 
 		let json = lib.escapeString(JSON.stringify({
 			edge_id: edgeId,

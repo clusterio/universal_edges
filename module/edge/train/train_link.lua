@@ -211,10 +211,10 @@ local function push_train_link(edge, _offset, link, train)
 
 	for _, carriage in ipairs(train.carriages) do
 		-- Translate from edge position to world position
-		log("Edge position "..serpent.line(carriage.position))
+		log("Edge position " .. serpent.line(carriage.position))
 		local world_pos = edge_util.edge_pos_to_world(carriage.position, edge)
 		carriage.position = world_pos
-		log("World position "..serpent.line(carriage.position))
+		log("World position " .. serpent.line(carriage.position))
 	end
 
 	local luaTrain = universal_serializer.LuaTrainComplete.deserialize(train)
@@ -268,6 +268,30 @@ local function receive_transfers(edge, train_transfers)
 			if train then
 				log("Transfer successful, deleting local train " .. train_transfer.train_id)
 				for _, carriage in ipairs(train.carriages) do
+					-- Remove driver from carriage and ask them to teleport
+					if carriage.get_driver() then
+						-- Teleport player to the other side of the edge
+						local player = carriage.get_driver().player
+						if player ~= nil then
+							-- Check if both sides of the edge are on the same instanceId
+							if edge.source.instanceId == edge.target.instanceId then
+								local new_carriage = global.universal_edges.carriage_drivers[player.name]
+								if new_carriage ~= nil and new_carriage.valid then
+									new_carriage.set_driver(player)
+								else
+									player.print("Carriage not found, did you miss your train?")
+								end
+								global.universal_edges.carriage_drivers[player.name] = nil
+							else
+								-- Cross server train rides need talking to the controller to figure out where to go
+								clusterio_api.send_json("universal_edges:teleport_player_to_server", {
+									player_name = player.name,
+									edge_id = edge.id,
+									offset = train_transfer.offset, -- Might want to use player position instead
+								})
+							end
+						end
+					end
 					carriage.destroy()
 				end
 			else

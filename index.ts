@@ -50,7 +50,6 @@ export const plugin: lib.PluginDeclaration = {
 			type: "number",
 			initialValue: 1000 / 34, // Factorio protocol update rate
 		},
-
 	},
 
 	messages: [
@@ -59,6 +58,7 @@ export const plugin: lib.PluginDeclaration = {
 		messages.EdgeUpdate,
 		messages.SetEdgeConfig,
 		messages.TrainLayoutUpdate,
+		messages.TeleportPlayerToServer,
 	],
 
 	webEntrypoint: "./web",

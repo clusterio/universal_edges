@@ -42,8 +42,12 @@ local function setupGlobalData()
 			edges = {},
 			debug_shapes = {},
 			config = {},
+			carriage_drivers = {},
 			GLOBAL_VERSION = GLOBAL_VERSION,
 		}
+	end
+	if not global.universal_edges.carriage_drivers then
+		global.universal_edges.carriage_drivers = {}
 	end
 	global.universal_edges = global.universal_edges
 end
@@ -269,6 +273,22 @@ function universal_edges.transfer(json)
 	end
 end
 
+function universal_edges.teleport_player_to_server_response(player_name, address)
+	if player_name == nil or address == nil then return end
+	local player = game.players[player_name]
+	if player == nil then
+		log("Teleport failed: Player " .. player_name .. " not found")
+		return
+	end
+
+	player.connect_to_server({
+		address = address,
+		name = "Follow train",
+		description = "Connect to same server as the train went to",
+		-- password should be handled in the future
+	})
+end
+
 universal_edges.events = {
 	[clusterio_api.events.on_server_startup] = function(_event)
 		log("Universal edges startup")
@@ -333,6 +353,18 @@ universal_edges.events = {
 	[defines.events.on_robot_mined_entity] = function(event) on_removed(event.entity) end,
 	[defines.events.on_entity_died] = function(event) on_removed(event.entity) end,
 	[defines.events.script_raised_destroy] = function(event) on_removed(event.entity) end,
+
+	[defines.events.on_player_joined_game] = function(event)
+		local player = game.players[event.player_index]
+		-- Check if we have a pending request to enter a vehicle
+		if global.universal_edges.carriage_drivers[player.name] ~= nil then
+			local entity = global.universal_edges.carriage_drivers[player.name]
+			if entity.valid then
+				entity.set_driver(player)
+			end
+			global.universal_edges.carriage_drivers[player.name] = nil
+		end
+	end,
 }
 
 

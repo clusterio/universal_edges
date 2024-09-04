@@ -14,6 +14,10 @@ local function LuaTrainComplete_serialize(train)
 		local serialized_carriage = LuaEntity_serialize(carriage)
 		---@diagnostic disable-next-line: inject-field
 		serialized_carriage.train = nil -- Don't serialize redundant LuaTrain metadata
+		-- Add passenger data
+		if carriage.get_driver() and carriage.get_driver().player then
+			serialized_carriage.driver_name = carriage.get_driver().player.name
+		end
 		train_data.carriages[#train_data.carriages + 1] = serialized_carriage
 	end
 	return train_data

@@ -54,6 +54,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		// this.controller.handle(PluginExampleEvent, this.handlePluginExampleEvent.bind(this));
 		this.controller.handle(messages.SetEdgeConfig, this.handleSetEdgeConfigRequest.bind(this));
 		this.controller.handle(messages.TrainLayoutUpdate, this.handleTrainLayoutUpdateEvent.bind(this));
+		this.controller.handle(messages.TeleportPlayerToServer, this.handleTeleportPlayerToServer.bind(this));
 		this.controller.subscriptions.handle(messages.EdgeUpdate, this.handleEdgeConfigSubscription.bind(this));
 		this.edgeDatastore = await loadDatabase(this.controller.config, "edgeDatastore.json", this.logger);
 		// Set active status
@@ -201,6 +202,30 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		edge.link_destinations[data.offset].source_instance_id = data.source_instance_id;
 
 		this.pathfinderUpdate();
+	}
+
+	async handleTeleportPlayerToServer({ playerName, edgeId, instanceId, offset }: messages.TeleportPlayerToServer) {
+		// Figure out the IP of the target instance
+		const instance = this.controller.instances.get(instanceId);
+		if (!instance) {
+			this.logger.warn(`Instance ${instanceId} not found for TeleportPlayerToServer`);
+			return;
+		}
+		const hostId = instance.config.get("instance.assigned_host");
+		if (!hostId) {
+			this.logger.warn(`Instance ${instanceId} has no assigned host`);
+			return;
+		}
+		const host = this.controller.hosts.get(hostId);
+		if (!host) {
+			this.logger.warn(`Host ${hostId} not found for instance ${instanceId}`);
+			return;
+		}
+		const address = `${host.publicAddress}:${instance.gamePort || instance.config.get("factorio.game_port")}`;
+
+		// Send the teleport request
+		this.logger.info(`Teleporting ${playerName} to ${address} on edge ${edgeId} offset ${offset}`);
+		return { address }
 	}
 
 	pathfinderUpdate() {
