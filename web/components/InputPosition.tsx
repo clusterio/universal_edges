@@ -39,13 +39,11 @@ export default function InputPosition(props: InputPositionProps) {
 	return (
 		<span id={id}>
 			<Input
-				type="number"
 				value={value[0] || x}
 				onChange={onXChange}
 				style={{ width: 100 }}
 			/>
 			<Input
-				type="number"
 				value={value[1] || y}
 				onChange={onYChange}
 				style={{ width: 100 }}

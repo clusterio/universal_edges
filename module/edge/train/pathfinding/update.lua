@@ -264,12 +264,12 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 			local signal = surface.create_entity {
 				name = "rail-signal",
 				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -4.5 - processed_dividers * 4 }, edge),
-				direction = (edge_target.direction + 4) % 8,
+				direction = (edge_target.direction + 8) % 16,
 			}
 			local combinator = surface.create_entity {
 				name = "constant-combinator",
 				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -5.5 - processed_dividers * 4 }, edge),
-				direction = (edge_target.direction + 4) % 8,
+				direction = (edge_target.direction + 8) % 16,
 			}
 
 			if signal ~= nil and combinator ~= nil then

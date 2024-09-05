@@ -11,7 +11,7 @@ end
 -- returns edge offset if it does, otherwise nil
 local function belt_check(pos, direction, edge)
 	-- Check if the axis the belt in is pendicular to the edge
-	if edge_util.edge_get_local_target(edge).direction % 4 ~= direction % 4 then
+	if edge_util.edge_get_local_target(edge).direction % 8 ~= direction % 8 then
 		return nil
 	end
 

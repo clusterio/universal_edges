@@ -30,7 +30,7 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 		loader = surface.create_entity {
 			name = loader_type,
 			position = loader_pos,
-			direction = edge_target.direction,
+			direction = (edge_target.direction + 8) % 16,
 		}
 	end
 

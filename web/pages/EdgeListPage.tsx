@@ -177,7 +177,7 @@ export default function EdgeListPage() {
 				</Form.Item>
 				<Form.Item {...fIStyle} name={["source", "direction"]} label="Direction">
 					<Select>
-						{[0, 2, 4, 6].map(value => <Select.Option key={value} value={value}>
+						{[0, 4, 8, 12].map(value => <Select.Option key={value} value={value}>
 							{direction_to_string(value)}
 						</Select.Option>)}
 					</Select>
@@ -194,7 +194,7 @@ export default function EdgeListPage() {
 				</Form.Item>
 				<Form.Item {...fIStyle} name={["target", "direction"]} label="Direction">
 					<Select>
-						{[0, 2, 4, 6].map(value => <Select.Option key={value} value={value}>
+						{[0, 4, 8, 12].map(value => <Select.Option key={value} value={value}>
 							{direction_to_string(value)}
 						</Select.Option>)}
 					</Select>

@@ -36,7 +36,7 @@ local function create_train_source_box(offset, edge, surface)
 	-- Depends on how many signals/stations we need to make space for
 	local number_of_rails_to_spawn = 2
 
-	-- if edge_target.direction % 4 == 0 then -- Entrance is north/south
+	-- if edge_target.direction % 8 == 0 then -- Entrance is north/south
 	local rails = {}
 	for i = 1, number_of_rails_to_spawn do
 		rails[#rails + 1] = surface.create_entity {
@@ -55,7 +55,7 @@ local function create_train_source_box(offset, edge, surface)
 	local signal = surface.create_entity {
 		name = "rail-signal",
 		position = edge_util.edge_pos_to_world({ edge_x + 1.5, -0.5 }, edge),
-		direction = (edge_target.direction + 4) % 8,
+		direction = (edge_target.direction + 8) % 16,
 	}
 
 	if not edge.linked_trains then

@@ -16,7 +16,7 @@ local function edge_get_remote_target(edge)
 end
 local function world_to_edge_pos(pos, edge)
 	local local_edge_target = edge_get_local_target(edge)
-	return vectorutil.vec2_rot(vectorutil.vec2_sub(pos, local_edge_target.origin), -local_edge_target.direction % 8)
+	return vectorutil.vec2_rot(vectorutil.vec2_sub(pos, local_edge_target.origin), -local_edge_target.direction % 16)
 end
 local function edge_pos_to_world(edge_pos, edge)
 	local local_edge_target = edge_get_local_target(edge)
@@ -25,7 +25,7 @@ end
 local function edge_pos_to_offset(edge_pos, edge)
 	local local_edge_target = edge_get_local_target(edge)
 	local offset = edge_pos[1]
-	if local_edge_target.direction >= 4 then
+	if local_edge_target.direction >= 8 then
 		offset = edge.length - offset
 	end
 	return offset
@@ -33,7 +33,7 @@ end
 local function offset_to_edge_x(offset, edge)
 	local local_edge_target = edge_get_local_target(edge)
 	local edge_x = offset
-	if local_edge_target.direction >= 4 then
+	if local_edge_target.direction >= 8 then
 		edge_x = edge.length - edge_x
 	end
 	return edge_x

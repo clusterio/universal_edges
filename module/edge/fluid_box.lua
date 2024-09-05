@@ -6,7 +6,7 @@ local function create_fluid_box(offset, edge, surface)
 
 	local pipe_pos = edge_util.edge_pos_to_world({ edge_x, -0.5 }, edge)
 	local pipe_type
-	if edge_target.direction % 4 == 0 then -- Entrance is north/south
+	if edge_target.direction % 8 == 0 then -- Entrance is north/south
 		pipe_type = "edge_pipe_vertical"
 	else
 		pipe_type = "edge_pipe_horizontal"
