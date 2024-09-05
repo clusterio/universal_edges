@@ -12,6 +12,14 @@ function vectorutil.vec2_sub(a, b)
 	return {a[1] - b[1], a[2] - b[2]}
 end
 
+function vectorutil.vec2_min(a, b)
+	return {math.min(a[1], b[1]), math.min(a[2], b[2])}
+end
+
+function vectorutil.vec2_max(a, b)
+	return {math.max(a[1], b[1]), math.max(a[2], b[2])}
+end
+
 function vectorutil.vec2_smul(a, s)
 	return {a[1] * s, a[2] * s}
 end

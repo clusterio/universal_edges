@@ -128,6 +128,11 @@ const beltTransfersType = Type.Array(Type.Object({
 	item_stacks: Type.Optional(Type.Array(Type.Object({}))),
 	set_flow: Type.Optional(Type.Boolean()),
 }));
+const entityTransfersType = Type.Array(Type.Object({
+	type: Type.String(),
+	player_name: Type.String(),
+	edge_pos: Type.Tuple([Type.Number(), Type.Number()]),
+}));
 const fluidTransfersType = Type.Array(Type.Object({
 	offset: Type.Number(),
 	name: Type.String(),
@@ -156,6 +161,7 @@ export class EdgeTransfer {
 	constructor(
 		public edgeId: string,
 		public beltTransfers: Static<typeof beltTransfersType>,
+		public entityTransfers: Static<typeof entityTransfersType>,
 		public fluidTransfers: Static<typeof fluidTransfersType>,
 		public powerTransfers: Static<typeof powerTransfersType>,
 		public trainTransfers: Static<typeof trainTransfersType>,
@@ -164,6 +170,7 @@ export class EdgeTransfer {
 	static jsonSchema = Type.Object({
 		edgeId: Type.String(),
 		beltTransfers: beltTransfersType,
+		entityTransfers: entityTransfersType,
 		fluidTransfers: fluidTransfersType,
 		powerTransfers: powerTransfersType,
 		trainTransfers: trainTransfersType,
@@ -173,6 +180,7 @@ export class EdgeTransfer {
 		return new this(
 			json.edgeId,
 			json.beltTransfers,
+			json.entityTransfers,
 			json.fluidTransfers,
 			json.powerTransfers,
 			json.trainTransfers
