@@ -6,21 +6,10 @@
 local vertical = table.deepcopy(data.raw["pipe"]["pipe"])
 vertical.name = "edge_pipe_vertical"
 vertical.fluid_box = {
-	base_area = 250,
-	height = 2,
+	volume = 500,
 	pipe_connections = {
-		{
-			position = {
-				0,
-				-1
-			}
-		},
-		{
-			position = {
-				0,
-				1
-			}
-		},
+		{ direction = defines.direction.north, position = { 0, 0 } },
+		{ direction = defines.direction.south, position = { 0, 0 } },
 	}
 }
 local vertical_item = {
@@ -38,21 +27,10 @@ local vertical_item = {
 local horizontal = table.deepcopy(data.raw["pipe"]["pipe"])
 horizontal.name = "edge_pipe_horizontal"
 horizontal.fluid_box = {
-	base_area = 250,
-	height = 2,
+	volume = 500,
 	pipe_connections = {
-		{
-			position = {
-				1,
-				0
-			}
-		},
-		{
-			position = {
-				-1,
-				0
-			}
-		}
+		{ direction = defines.direction.east, position = { 0, 0 } },
+		{ direction = defines.direction.west, position = { 0, 0 } }
 	}
 }
 local horizontal_item = {
