@@ -104,7 +104,7 @@ local function remove_train_source_box(offset, edge, _surface)
 		-- Rmove old visualizations
 		if link.debug_visu then
 			for index, visu in ipairs(link.debug_visu) do
-				rendering.destroy(visu)
+				if visu.valid then visu.destroy() end
 				link.debug_visu[index] = nil
 			end
 		end

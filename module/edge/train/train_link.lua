@@ -46,7 +46,7 @@ local function poll_links(id, edge, ticks_left)
 
 			-- Rmove old visualizations
 			for index, visu in ipairs(link.debug_visu) do
-				rendering.destroy(visu)
+				if visu.valid then visu.destroy() end
 				link.debug_visu[index] = nil
 			end
 

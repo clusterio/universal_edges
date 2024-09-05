@@ -33,7 +33,7 @@ local function setupGlobalData()
 		if global.universal_edges and global.universal_edges.debug_shapes then
 			local debug_shapes = global.universal_edges.debug_shapes
 			for index, id in ipairs(debug_shapes) do
-				rendering.destroy(id)
+				if id.valid then id.destroy() end
 				debug_shapes[index] = nil
 			end
 		end
@@ -55,9 +55,9 @@ end
 
 local function debug_draw()
 	local debug_shapes = global.universal_edges.debug_shapes
-	for index, id in ipairs(debug_shapes) do
-		rendering.destroy(id)
-		debug_shapes[index] = nil
+    for index, id in ipairs(debug_shapes) do
+		if id.valid then id.destroy() end
+        debug_shapes[index] = nil
 	end
 
 	for id, edge in pairs(global.universal_edges.edges) do
@@ -132,7 +132,6 @@ function universal_edges.edge_update(edge_id, edge_json)
 	end
 	if global.universal_edges.edges[edge_id] == nil then
 		game.print("Adding new edge " .. edge_id)
-		edge.ready = false
 		global.universal_edges.edges[edge_id] = edge
 		active_status_has_changed = true
 	else
@@ -354,7 +353,10 @@ universal_edges.events = {
 	[defines.events.on_entity_died] = function(event) on_removed(event.entity) end,
 	[defines.events.script_raised_destroy] = function(event) on_removed(event.entity) end,
 
-	[defines.events.on_player_joined_game] = function(event)
+    [defines.events.on_player_joined_game] = function(event)
+		if global.universal_edges == nil then
+			setupGlobalData()
+		end
 		local player = game.players[event.player_index]
 		-- Check if we have a pending request to enter a vehicle
 		if global.universal_edges.carriage_drivers[player.name] ~= nil then
