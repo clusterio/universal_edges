@@ -95,27 +95,29 @@ local function update_connector_paths(edge, offset, link)
 		edge_target.direction == defines.direction.north -- Trains exit from the north
 		or edge_target.direction == defines.direction.east -- Trains exit from the west
 	then
-		request.from_back = {
+		request.starts = { {
 			rail = link.rails[1],
 			direction = defines.rail_direction.back,
-		}
-		source_request.from_back = request.from_back
+			is_front = false,
+		} }
+		source_request.starts = request.starts
 	end
 	if
 		edge_target.direction == defines.direction.south -- Trains exit from the south
 		or edge_target.direction == defines.direction.west -- Trains exit from the east
 	then
-		request.from_front = {
+		request.starts = { {
 			rail = link.rails[1],
 			direction = defines.rail_direction.front,
-		}
-		source_request.from_front = request.from_front
+			is_front = true,
+		} }
+		source_request.starts = request.starts
 	end
 
-	local result_targets = game.request_train_path(request)
+	local result_targets = game.train_manager.request_train_path(request)
 	local reachable_targets = get_reachable_stations(result_targets, targets)
 	log("Reachable stations for offset " .. offset .. " " .. serpent.block(reachable_targets))
-	local result_sources = game.request_train_path(source_request)
+	local result_sources = game.train_manager.request_train_path(source_request)
 	local reachable_sources = {}
 	for index, penalty in pairs(result_sources.penalties) do
 		--[[ Stacked stations show as not accessible even though they are, but penalty is correct ]]

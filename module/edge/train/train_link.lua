@@ -264,7 +264,7 @@ local function receive_transfers(edge, train_transfers)
 			end
 		elseif train_transfer.train_id ~= nil then
 			-- The train was successfully spawned in on partner - delete the local train
-			local train = game.get_train_by_id(train_transfer.train_id)
+			local train = game.train_manager.get_train_by_id(train_transfer.train_id)
 			if train then
 				log("Transfer successful, deleting local train " .. train_transfer.train_id)
 				for _, carriage in ipairs(train.carriages) do
