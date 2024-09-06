@@ -5,6 +5,7 @@ local universal_serializer = require("modules/universal_edges/universal_serializ
 local edge_util = require("modules/universal_edges/edge/util")
 local belt_box = require("modules/universal_edges/edge/belt_box")
 local belt_link = require("modules/universal_edges/edge/belt_link")
+local entity_link = require("modules/universal_edges/edge/entity_link")
 local fluid_box = require("modules/universal_edges/edge/fluid_box")
 local fluid_link = require("modules/universal_edges/edge/fluid_link")
 local power_box = require("modules/universal_edges/edge/power_box")
@@ -48,6 +49,12 @@ local function setupGlobalData()
 	end
 	if not global.universal_edges.carriage_drivers then
 		global.universal_edges.carriage_drivers = {}
+	end
+	if not global.universal_edges.players_waiting_to_leave then
+		global.universal_edges.players_waiting_to_leave = {}
+	end
+	if not global.universal_edges.players_waiting_to_join then
+		global.universal_edges.players_waiting_to_join = {}
 	end
 	global.universal_edges = global.universal_edges
 end
@@ -248,6 +255,7 @@ function universal_edges.transfer(json)
 	end
 
 	local belt_response_transfers = belt_link.receive_transfers(edge, data.belt_transfers)
+	local entity_response_transfers = entity_link.receive_transfers(edge, data.entity_transfers)
 	local fluid_response_transfers = fluid_link.receive_transfers(edge, data.fluid_transfers)
 	local power_response_transfers = power_link.receive_transfers(edge, data.power_transfers)
 	local train_response_transfers = train_link.receive_transfers(edge, data.train_transfers)
@@ -258,6 +266,9 @@ function universal_edges.transfer(json)
 	if #belt_response_transfers > 0 then
 		transfer.belt_transfers = belt_response_transfers
 	end
+	if #entity_response_transfers > 0 then
+		transfer.entity_transfers = entity_response_transfers
+	end
 	if #fluid_response_transfers > 0 then
 		transfer.fluid_transfers = fluid_response_transfers
 	end
@@ -267,7 +278,7 @@ function universal_edges.transfer(json)
 	if #train_response_transfers > 0 then
 		transfer.train_transfers = train_response_transfers
 	end
-	if #belt_response_transfers + #fluid_response_transfers + #power_response_transfers + #train_response_transfers > 0 then
+	if #belt_response_transfers + #entity_response_transfers + #fluid_response_transfers + #power_response_transfers + #train_response_transfers > 0 then
 		clusterio_api.send_json("universal_edges:transfer", transfer)
 	end
 end
@@ -332,6 +343,7 @@ universal_edges.events = {
 		-- Attempt to send items and fluids to partner
 		if edge.active then
 			belt_link.poll_links(id, edge, ticks_left)
+			entity_link.poll_links(id, edge, ticks_left)
 			fluid_link.poll_links(id, edge, ticks_left)
 			power_link.poll_links(id, edge, ticks_left)
 			train_link.poll_links(id, edge, ticks_left)
@@ -357,6 +369,7 @@ universal_edges.events = {
 		if global.universal_edges == nil then
 			setupGlobalData()
 		end
+		entity_link.on_player_joined_game(event)
 		local player = game.players[event.player_index]
 		-- Check if we have a pending request to enter a vehicle
 		if global.universal_edges.carriage_drivers[player.name] ~= nil then
@@ -367,6 +380,7 @@ universal_edges.events = {
 			global.universal_edges.carriage_drivers[player.name] = nil
 		end
 	end,
+	[defines.events.on_player_left_game] = entity_link.on_player_left_game,
 
 	[defines.events.on_entity_renamed] = function(event)
 		local entity = event.entity

@@ -31,6 +31,12 @@ type BeltTransfer = {
 	item_stacks?: object[],
 };
 
+type EntityTransfer = {
+	type: string,
+	player_name: string,
+	edge_pos: [number, number],
+};
+
 type FluidTransfer = {
 	offset: number,
 	name: string,
@@ -55,6 +61,7 @@ type TrainTransfer = {
 type EdgeTransfer = {
 	edge_id: string,
 	belt_transfers: BeltTransfer[],
+	entity_transfers: EntityTransfer[],
 	fluid_transfers: FluidTransfer[],
 	power_transfers: PowerTransfer[],
 	train_transfers: TrainTransfer[],
@@ -64,6 +71,7 @@ type EdgeBuffer = {
 	edge: Edge,
 	pendingMessage: {
 		beltTransfers: Map<number, BeltTransfer>,
+		entityTransfers: EntityTransfer[],
 		fluidTransfers: Map<number, FluidTransfer>,
 		powerTransfers: Map<number, PowerTransfer>,
 		trainTransfers: Map<number, TrainTransfer>,
@@ -71,6 +79,7 @@ type EdgeBuffer = {
 	messageTransfer: lib.RateLimiter,
 	pendingCommand: {
 		beltTransfers: Map<number, BeltTransfer>
+		entityTransfers: EntityTransfer[],
 		fluidTransfers: Map<number, FluidTransfer>
 		powerTransfers: Map<number, PowerTransfer>
 		trainTransfers: Map<number, TrainTransfer>
@@ -307,6 +316,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 		}
 
 		mergeBeltTransfers(edge.pendingMessage.beltTransfers, data.belt_transfers || []);
+		edge.pendingMessage.entityTransfers.push(...(data.entity_transfers || []));
 		mergeFluidTransfers(edge.pendingMessage.fluidTransfers, data.fluid_transfers || []);
 		mergePowerTransfers(edge.pendingMessage.powerTransfers, data.power_transfers || []);
 		mergeTrainTransfers(edge.pendingMessage.trainTransfers, data.train_transfers || []);
@@ -368,6 +378,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 					edge,
 					pendingMessage: {
 						beltTransfers: new Map(),
+						entityTransfers: [],
 						fluidTransfers: new Map(),
 						powerTransfers: new Map(),
 						trainTransfers: new Map(),
@@ -380,6 +391,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 					}),
 					pendingCommand: {
 						beltTransfers: new Map(),
+						entityTransfers: [],
 						fluidTransfers: new Map(),
 						powerTransfers: new Map(),
 						trainTransfers: new Map(),
@@ -417,6 +429,9 @@ export class InstancePlugin extends BaseInstancePlugin {
 
 		// Belts
 		let beltTransfers = mapToArray(edge.pendingMessage.beltTransfers);
+		// Entites
+		let entityTransfers = edge.pendingMessage.entityTransfers;
+		edge.pendingMessage.entityTransfers = [];
 		// Fluids
 		let fluidTransfers = mapToArray(edge.pendingMessage.fluidTransfers);
 		// Power
@@ -437,6 +452,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 				new messages.EdgeTransfer(
 					edge.edge.id,
 					beltTransfers,
+					entityTransfers,
 					fluidTransfers,
 					powerTransfers,
 					trainTransfers,
@@ -450,7 +466,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 	}
 
 	async edgeTransferRequestHandler(message: messages.EdgeTransfer) {
-		let { edgeId, beltTransfers, fluidTransfers, powerTransfers, trainTransfers } = message;
+		let { edgeId, beltTransfers, entityTransfers, fluidTransfers, powerTransfers, trainTransfers } = message;
 		let edge = await this.getEdge(edgeId);
 		if (!edge) {
 			console.log("impossible the edge was not found!");
@@ -458,6 +474,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 		}
 
 		mergeBeltTransfers(edge.pendingCommand.beltTransfers, beltTransfers);
+		edge.pendingCommand.entityTransfers.push(...entityTransfers);
 		mergeFluidTransfers(edge.pendingCommand.fluidTransfers, fluidTransfers);
 		mergePowerTransfers(edge.pendingCommand.powerTransfers, powerTransfers);
 		mergeTrainTransfers(edge.pendingCommand.trainTransfers, trainTransfers);
@@ -490,6 +507,8 @@ export class InstancePlugin extends BaseInstancePlugin {
 				item_name
 			).inc(transfered_items[item_name]);
 		});
+		// Entities
+		let entityTransfers = edge.pendingCommand.entityTransfers;
 		// Fluids
 		let fluidTransfers = mapToArray(edge.pendingCommand.fluidTransfers);
 		// Power
@@ -510,6 +529,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 		let json = lib.escapeString(JSON.stringify({
 			edge_id: edgeId,
 			belt_transfers: beltTransfers,
+			entity_transfers: entityTransfers,
 			fluid_transfers: fluidTransfers,
 			power_transfers: powerTransfers,
 			train_transfers: trainTransfers,
