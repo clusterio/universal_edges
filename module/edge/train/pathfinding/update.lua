@@ -278,9 +278,10 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 				rails[#rails + 1] = signal
 				rails[#rails + 1] = combinator
 
-				signal.connect_neighbour({
-					target_entity = combinator,
-					wire = defines.wire_type.red,
+				local connector = signal.get_wire_connector(defines.wire_connector_id.circuit_red, true)
+				connector.connect_to({
+					target = combinator.get_wire_connector(defines.wire_connector_id.circuit_red, true),
+					origin = defines.wire_origin.script,
 				})
 
 				-- Set condition to make signal red
