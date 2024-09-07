@@ -11,7 +11,7 @@ import {
 } from "@clusterio/web_ui";
 
 import * as messages from "../../messages";
-import { EdgeTargetSpecification } from "../../src/types";
+import { Edge, EdgeTargetSpecification } from "../../src/types";
 import { WebPlugin } from "..";
 import { InstanceSelector } from "../components/InstanceSelector";
 import { direction_to_string } from "../../src/util/direction_to_string";
@@ -26,6 +26,72 @@ function EdgeTarget({ target }: { target: EdgeTargetSpecification }) {
 		<p>Direction: {target.direction}</p>
 		<p>Ready: {target.ready?.toString()}</p>
 	</Card>;
+}
+
+function edgeToForm(edge?: Edge) {
+	if (!edge) {
+		return {
+			isDeleted: false,
+			length: 10,
+			active: false,
+			source: {
+				instanceId: undefined,
+				origin: ["0", "0"],
+				surface: "1",
+				direction: 0,
+				ready: false,
+			},
+			target: {
+				instanceId: undefined,
+				origin: ["0", "0"],
+				surface: "1",
+				direction: 0,
+				ready: false,
+			},
+		};
+	}
+
+	return {
+		...edge,
+		updatedAtMs: Date.now(),
+		length: String(edge.length),
+		source: {
+			...edge.source,
+			surface: String(edge.source.surface),
+			origin: edge.source.origin.map(String),
+		},
+		target: {
+			...edge.target,
+			surface: String(edge.target.surface),
+			origin: edge.target.origin.map(String),
+		},
+	};
+}
+type EdgeForm = NonNullable<ReturnType<typeof edgeToForm>>;
+
+function formToEdge(form: EdgeForm, id: string, link_destinations: Edge["link_destinations"]): Edge {
+	return {
+		...form,
+		link_destinations,
+		id,
+		updatedAtMs: Date.now(),
+		length: Number(form.length),
+		active: false,
+		source: {
+			...form.source,
+			ready: false,
+			surface: Number.parseInt(form.source.surface, 10),
+			instanceId: form.source.instanceId!,
+			origin: form.source.origin.map(s => Number.parseInt(s, 10)),
+		},
+		target: {
+			...form.target,
+			ready: false,
+			surface: Number.parseInt(form.target.surface, 10),
+			instanceId: form.target.instanceId!,
+			origin: form.target.origin.map(s => Number.parseInt(s, 10)),
+		},
+	};
 }
 
 export default function EdgeListPage() {
@@ -123,56 +189,61 @@ export default function EdgeListPage() {
 			destroyOnClose // Reset form when modal is closed
 			footer={null}
 		>
-			<Form
+			<Form<EdgeForm>
 				preserve={false} // Reset form when modal is closed
 				size="small"
 				labelCol={{ span: 8 }}
 				wrapperCol={{ span: 16 }}
 				onFinish={(values) => {
-					values.id = editing;
-					values.updatedAtMs = Date.now();
-					values.source.ready = false;
-					values.target.ready = false;
-					values.active = false;
-					values.length = Number(values.length);
-					values.link_destinations = edgeConfigs.get(editing)?.link_destinations || {};
-					console.log(values);
-					control.send(new messages.SetEdgeConfig(values));
+					const original = edgeConfigs.get(editing);
+					const edge = formToEdge(values, editing, original?.link_destinations ?? {})
+					console.log(edge);
+					control.send(new messages.SetEdgeConfig(edge));
 				}}
-				initialValues={edgeConfigs.get(editing) || {
-					isDeleted: false,
-					length: 10,
-					active: false,
-					source: {
-						instanceId: undefined,
-						origin: [0, 0],
-						surface: 1,
-						direction: 0,
-						ready: false,
-					},
-					target: {
-						instanceId: undefined,
-						origin: [0, 0],
-						surface: 1,
-						direction: 0,
-						ready: false,
-					},
-				}}
+				initialValues={edgeToForm(edgeConfigs.get(editing))}
 			>
 				<Form.Item {...fIStyle} name="isDeleted" label="Delete" valuePropName="checked">
 					<Input type="checkbox" />
 				</Form.Item>
-				<Form.Item {...fIStyle} name="length" label="Length">
-					<Input type="number" />
+				<Form.Item
+					{...fIStyle}
+					name="length"
+					label="Length"
+					rules={[{ required: true, pattern: /^ *-?[0-9]+ *$/, message: "must be a number" }]}
+				>
+					<Input />
 				</Form.Item>
 				<Divider>Source</Divider>
-				<Form.Item {...fIStyle} name={["source", "instanceId"]} label="Source instance">
+				<Form.Item
+					{...fIStyle}
+					name={["source", "instanceId"]}
+					label="Source instance"
+					rules={[{ required: true }]}
+				>
 					<InstanceSelector />
 				</Form.Item>
-				<Form.Item {...fIStyle} name={["source", "origin"]} label="Position">
+				<Form.Item
+					{...fIStyle}
+					name={["source", "origin"]}
+					label="Position"
+					rules={[{
+						validator: async (_, value) => {
+							for (const pos of value) {
+								if (!/^ *-?[0-9]+ *$/.test(pos)) {
+									throw new Error("Position must be two numbers")
+								}
+							}
+						},
+					}]}
+				>
 					<InputPosition />
 				</Form.Item>
-				<Form.Item {...fIStyle} name={["source", "surface"]} label="Surface">
+				<Form.Item
+					{...fIStyle}
+					name={["source", "surface"]}
+					label="Surface"
+					rules={[{ required: true, pattern: /^ *-?[0-9]+ *$/, message: "must be a number" }]}
+				>
 					<Input />
 				</Form.Item>
 				<Form.Item {...fIStyle} name={["source", "direction"]} label="Direction">
@@ -183,13 +254,27 @@ export default function EdgeListPage() {
 					</Select>
 				</Form.Item>
 				<Divider>Target</Divider>
-				<Form.Item {...fIStyle} name={["target", "instanceId"]} label="Target instance">
+				<Form.Item
+					{...fIStyle}
+					name={["target", "instanceId"]}
+					label="Target instance"
+					rules={[{ required: true }]}
+				>
 					<InstanceSelector />
 				</Form.Item>
-				<Form.Item {...fIStyle} name={["target", "origin"]} label="Position">
+				<Form.Item
+					{...fIStyle}
+					name={["target", "origin"]}
+					label="Position"
+				>
 					<InputPosition />
 				</Form.Item>
-				<Form.Item {...fIStyle} name={["target", "surface"]} label="Surface">
+				<Form.Item
+					{...fIStyle}
+					name={["target", "surface"]}
+					label="Surface"
+					rules={[{ required: true, pattern: /^ *-?[0-9]+ *$/, message: "must be a number" }]}
+				>
 					<Input />
 				</Form.Item>
 				<Form.Item {...fIStyle} name={["target", "direction"]} label="Direction">

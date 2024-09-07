@@ -3,49 +3,26 @@ import { useState } from "react";
 
 interface InputPositionProps {
 	id?: string;
-	value?: number[];
-	onChange?: (value: number[]) => void;
+	value?: string[];
+	onChange?: (value: string[]) => void;
 }
 
 /**
  * Input position coordinates and get [x, y] as value, for use in antd Form
  */
 export default function InputPosition(props: InputPositionProps) {
-	const { id, value = [], onChange } = props;
-	const [x, setX] = useState(0);
-	const [y, setY] = useState(0);
-
-	function triggerChange(changedValue: { x?: number; y?: number }) {
-		onChange?.([changedValue.x || x, changedValue.y || y]);
-	};
-
-	function onXChange(e: React.ChangeEvent<HTMLInputElement>) {
-		const newX = parseInt(e.target.value || "0", 10);
-		if (Number.isNaN(x)) {
-			return;
-		}
-		setX(newX);
-		triggerChange({ x: newX });
-	};
-	function onYChange(e: React.ChangeEvent<HTMLInputElement>) {
-		const newY = parseInt(e.target.value || "0", 10);
-		if (Number.isNaN(y)) {
-			return;
-		}
-		setY(newY);
-		triggerChange({ y: newY });
-	};
+	const { id, value = ["0", "0"], onChange } = props;
 
 	return (
 		<span id={id}>
 			<Input
-				value={value[0] || x}
-				onChange={onXChange}
+				value={value[0]}
+				onChange={e => onChange?.([e.target.value, value[1]])}
 				style={{ width: 100 }}
 			/>
 			<Input
-				value={value[1] || y}
-				onChange={onYChange}
+				value={value[1]}
+				onChange={e => onChange?.([value[0], e.target.value])}
 				style={{ width: 100 }}
 			/>
 		</span>
