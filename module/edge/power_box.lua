@@ -1,12 +1,13 @@
 local edge_util = require("modules/universal_edges/edge/util")
 
-local eei_type = "ue_eei_input"
+local eei_type = "ue_eei_tertiary"
 
 local function create_power_box(offset, edge, surface)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 
 	local eei_pos = edge_util.edge_pos_to_world({ edge_x, -1 }, edge)
-	local charge_sensor = surface.find_entity("accumulator", eei_pos)
+    local charge_sensor = surface.find_entity("accumulator", eei_pos)
+	local powerpole = surface.find_entity("substation", eei_pos)
 	local eei
 	if surface.entity_prototype_collides(eei_type, eei_pos, false) then
 		-- Is the eei already there?
@@ -30,13 +31,21 @@ local function create_power_box(offset, edge, surface)
 		}
 	end
 
+	if not powerpole then
+		powerpole = surface.create_entity {
+			name = "substation",
+			position = eei_pos,
+		}
+	end
+
 	if not edge.linked_power then
 		edge.linked_power = {}
 	end
 
 	if edge.linked_power[offset] then
 		edge.linked_power[offset].eei = eei
-		edge.linked_power[offset].charge_sensor = charge_sensor
+        edge.linked_power[offset].charge_sensor = charge_sensor
+		edge.linked_power[offset].powerpole = powerpole
 	else
 		edge.linked_power[offset] = {
 			eei = eei,

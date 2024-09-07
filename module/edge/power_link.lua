@@ -21,7 +21,7 @@ local function poll_links(id, edge, ticks_left)
 
 		power_transfers[#power_transfers + 1] = {
 			offset = offset,
-			energy = local_energy,
+			energy = local_energy + (link.lua_buffered_energy or 0),
 		}
 	end
 
@@ -31,9 +31,41 @@ local function poll_links(id, edge, ticks_left)
 			power_transfers = power_transfers,
 		})
 	end
+
+	-- Add power to the eei from the lua buffer to get smooth graphs
+	for _, edge in pairs(global.universal_edges.edges) do
+		if not edge.linked_power then
+			goto continue
+		end
+		for _offset, link in pairs(edge.linked_power) do
+			if not link then
+				log("FATAL: Received power for non-existant link at offset " .. link.offset)
+				goto continue2
+			end
+			if not link.eei then
+				log("FATAL: received power for a link that does not have an eei " .. link.offset)
+				goto continue2
+			end
+			if global.universal_edges.linked_power_update_tick ~= nil and link.lua_buffered_energy ~= nil and link.lua_buffered_energy > 0 then
+				local ticks_until_next_frame = 5 +
+					math.max(0,
+						global.universal_edges.linked_power_update_tick +
+						(global.universal_edges.linked_power_update_period or 60) - game.tick)
+				link.eei.energy = link.eei.energy + link.lua_buffered_energy / ticks_until_next_frame
+				link.lua_buffered_energy = math.max(0,
+					link.lua_buffered_energy - link.lua_buffered_energy / ticks_until_next_frame)
+			end
+			::continue2::
+		end
+		::continue::
+	end
 end
 
 local function receive_transfers(edge, power_transfers)
+	if global.universal_edges.linked_power_update_tick then
+		global.universal_edges.linked_power_update_period = game.tick - global.universal_edges.linked_power_update_tick
+	end
+	global.universal_edges.linked_power_update_tick = game.tick
 	if power_transfers == nil then
 		return {}
 	end
@@ -51,12 +83,10 @@ local function receive_transfers(edge, power_transfers)
 
 		if power_transfer.energy then
 			local eei = link.eei
-			local eei_pos = eei.position
 			local remote_energy = power_transfer.energy
-			local local_energy = eei.energy
-			local buffer_size = eei.electric_buffer_size
-			local surface = eei.surface
+			local local_energy = eei.energy + (link.lua_buffered_energy or 0)
 			local average = (remote_energy + local_energy) / 2
+			local balancing_amount = math.abs(remote_energy - local_energy) / 2
 
 			-- Only transfer balance in one direction - the partner will handle balancing the other way
 			if average > local_energy then
@@ -65,50 +95,17 @@ local function receive_transfers(edge, power_transfers)
 					offset = power_transfer.offset,
 					amount_balanced = average - local_energy,
 				}
-				-- Update accumulator
-				eei.energy = average
+				-- Update internal buffer
+				link.lua_buffered_energy = average - eei.energy
 			end
 
-			--[[
-				Figure out correct type of eei to use. We have 3 eei variants
-				- tertiary - Acts as accumulator, use when we are low on power
-				- secondary-input - Acts as roboport, use when good on power but EEI is low
-				- secondary-output - Acts as generator, use when good on power and EEI is full
-			]]
-			local fill_percent = (local_energy / buffer_size) * 100
-			local eei_entity_to_use
-			if (link.charge_sensor.energy / link.charge_sensor.electric_buffer_size) < 0.1 and fill_percent > 10 then
-				-- Accumulators are empty, emergency charge accumulators if we can
-				eei_entity_to_use = "ue_eei_output"
-			else
-				if fill_percent < 20 then
-					-- Transition to ue_eei_input to scavenge power from accumulators
-					eei_entity_to_use = "ue_eei_input"
-				elseif fill_percent < 80 then
-					eei_entity_to_use = "ue_eei_tertiary"
-				else
-					-- Transition to ue_eei_output to store power in accumulators
-					eei_entity_to_use = "ue_eei_output"
-				end
-			end
-
-			-- Swap entity
-			if eei_entity_to_use ~= eei.name then
-				local energy_before = eei.energy
-				eei.destroy()
-				link.eei = surface.create_entity {
-					name = eei_entity_to_use,
-					position = eei_pos,
-					create_build_effect_smoke = false,
-					spawn_decorations = false,
-				}
-				eei = link.eei
-				eei.energy = energy_before
-			end
+			-- Set dynamic buffer size
+			eei.electric_buffer_size = math.max(balancing_amount * 6, 1000000, local_energy)
 		end
 		if power_transfer.amount_balanced then
 			-- Partner balanced power, we need to remove to compensate
-			link.eei.energy = math.max(0, link.eei.energy - power_transfer.amount_balanced)
+			link.eei.energy = math.max(0,
+				(link.eei.energy + (link.lua_buffered_energy or 0)) - power_transfer.amount_balanced)
 		end
 		::continue::
 	end
