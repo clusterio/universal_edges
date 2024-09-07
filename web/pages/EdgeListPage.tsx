@@ -196,7 +196,7 @@ export default function EdgeListPage() {
 				wrapperCol={{ span: 16 }}
 				onFinish={(values) => {
 					const original = edgeConfigs.get(editing);
-					const edge = formToEdge(values, editing, original?.link_destinations ?? {})
+					const edge = formToEdge(values, editing, original?.link_destinations ?? {});
 					console.log(edge);
 					control.send(new messages.SetEdgeConfig(edge));
 				}}
@@ -230,7 +230,7 @@ export default function EdgeListPage() {
 						validator: async (_, value) => {
 							for (const pos of value) {
 								if (!/^ *-?[0-9]+ *$/.test(pos)) {
-									throw new Error("Position must be two numbers")
+									throw new Error("Position must be two numbers");
 								}
 							}
 						},
@@ -238,13 +238,14 @@ export default function EdgeListPage() {
 				>
 					<InputPosition />
 				</Form.Item>
-				<Form.Item
-					{...fIStyle}
-					name={["source", "surface"]}
-					label="Surface"
-					rules={[{ required: true, pattern: /^ *-?[0-9]+ *$/, message: "must be a number" }]}
-				>
-					<Input />
+				<Form.Item {...fIStyle} name={["source", "surface"]} label="Surface" valuePropName="checked">
+					<Select>
+						{["nauvis", "vulcanus", "fulgora", "aquilo", "gleba"].map(value => (
+							<Select.Option key={value} value={value}>
+								{value}
+							</Select.Option>
+						))}
+					</Select>
 				</Form.Item>
 				<Form.Item {...fIStyle} name={["source", "direction"]} label="Direction">
 					<Select>
@@ -269,13 +270,14 @@ export default function EdgeListPage() {
 				>
 					<InputPosition />
 				</Form.Item>
-				<Form.Item
-					{...fIStyle}
-					name={["target", "surface"]}
-					label="Surface"
-					rules={[{ required: true, pattern: /^ *-?[0-9]+ *$/, message: "must be a number" }]}
-				>
-					<Input />
+				<Form.Item {...fIStyle} name={["source", "surface"]} label="Surface" valuePropName="checked">
+					<Select>
+						{["nauvis", "vulcanus", "fulgora", "aquilo", "gleba"].map(value => (
+							<Select.Option key={value} value={value}>
+								{value}
+							</Select.Option>
+						))}
+					</Select>
 				</Form.Item>
 				<Form.Item {...fIStyle} name={["target", "direction"]} label="Direction">
 					<Select>
