@@ -1,7 +1,8 @@
 local is_transport_belt = {
 	["transport-belt"] = true,
 	["fast-transport-belt"] = true,
-	["express-transport-belt"] = true,
+    ["express-transport-belt"] = true,
+	["tungsten-transport-belt"] = true,
 }
 
 local is_pipe = {
@@ -13,6 +14,7 @@ local belt_type_to_loader_type = {
 	["transport-belt"] = "loader",
 	["fast-transport-belt"] = "fast-loader",
 	["express-transport-belt"] = "express-loader",
+	["tungsten-transport-belt"] = "tungsten-loader",
 }
 
 local function realign_area(posa, posb)
