@@ -6,7 +6,7 @@ local function create_power_box(offset, edge, surface)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 
 	local eei_pos = edge_util.edge_pos_to_world({ edge_x, -1 }, edge)
-    local charge_sensor = surface.find_entity("accumulator", eei_pos)
+	local charge_sensor = surface.find_entity("accumulator", eei_pos)
 	local powerpole = surface.find_entity("substation", eei_pos)
 	local eei
 	if surface.entity_prototype_collides(eei_type, eei_pos, false) then
@@ -44,7 +44,7 @@ local function create_power_box(offset, edge, surface)
 
 	if edge.linked_power[offset] then
 		edge.linked_power[offset].eei = eei
-        edge.linked_power[offset].charge_sensor = charge_sensor
+		edge.linked_power[offset].charge_sensor = charge_sensor
 		edge.linked_power[offset].powerpole = powerpole
 	else
 		edge.linked_power[offset] = {
@@ -67,6 +67,9 @@ local function remove_power_box(offset, edge, surface)
 		if link.charge_sensor and link.charge_sensor.valid then
 			link.charge_sensor.destroy()
 		end
+		if link.powerpole and link.powerpole.valid then
+			link.powerpole.destroy()
+		end
 
 		edge.linked_power[offset] = nil
 	else
@@ -78,6 +81,10 @@ local function remove_power_box(offset, edge, surface)
 		local charge_sensor = surface.find_entity("accumulator", eei_pos)
 		if charge_sensor then
 			charge_sensor.destroy()
+		end
+		local powerpole = surface.find_entity("substation", eei_pos)
+		if powerpole then
+			powerpole.destroy()
 		end
 	end
 end
