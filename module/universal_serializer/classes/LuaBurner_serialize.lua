@@ -5,7 +5,7 @@ local function LuaBurner_serialize(burner)
 	local burner_data = {
 		heat = burner.heat,
 		remaining_burning_fuel = burner.remaining_burning_fuel,
-		currently_burning = burner.currently_burning.name,
+		currently_burning = burner.currently_burning and burner.currently_burning.name,
 	}
 
 	return burner_data
