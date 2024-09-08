@@ -509,6 +509,7 @@ export class InstancePlugin extends BaseInstancePlugin {
 		});
 		// Entities
 		let entityTransfers = edge.pendingCommand.entityTransfers;
+		edge.pendingCommand.entityTransfers = [];
 		// Fluids
 		let fluidTransfers = mapToArray(edge.pendingCommand.fluidTransfers);
 		// Power
