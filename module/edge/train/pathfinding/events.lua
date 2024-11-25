@@ -12,10 +12,10 @@ local clusterio_api = require("modules/clusterio/api")
 ]]
 
 local function on_server_startup()
-	if not global.universal_edges.pathfinder then
-		global.universal_edges.pathfinder = {}
+	if not storage.universal_edges.pathfinder then
+		storage.universal_edges.pathfinder = {}
 	end
-	for _, edge in pairs(global.universal_edges.edges) do
+	for _, edge in pairs(storage.universal_edges.edges) do
 		local train_transfers = {}
 		if edge.linked_trains then
 			for offset, link in pairs(edge.linked_trains) do
@@ -59,11 +59,11 @@ local function on_built(entity)
 	-- Queue rescan
 	if types_to_cause_update[entity.type]
 		and (
-			global.universal_edges.pathfinder.rescan_connector_paths_after == nil
-			or global.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
+			storage.universal_edges.pathfinder.rescan_connector_paths_after == nil
+			or storage.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
 		)
 	then
-		global.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
+		storage.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
 	end
 end
 
@@ -71,20 +71,20 @@ local function on_removed(entity)
 	-- Queue rescan
 	if types_to_cause_update[entity.type]
 		and (
-			global.universal_edges.pathfinder.rescan_connector_paths_after == nil
-			or global.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
+			storage.universal_edges.pathfinder.rescan_connector_paths_after == nil
+			or storage.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
 		)
 	then
-		global.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
+		storage.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
 	end
 end
 
 local function on_tick()
-	if global.universal_edges.pathfinder.rescan_connector_paths_after == game.tick then
-		global.universal_edges.pathfinder.rescan_connector_paths_after = nil
+	if storage.universal_edges.pathfinder.rescan_connector_paths_after == game.tick then
+		storage.universal_edges.pathfinder.rescan_connector_paths_after = nil
 		-- Add rescan_penalties property to all links
 		log("Starting rescan")
-		for _, edge in pairs(global.universal_edges.edges) do
+		for _, edge in pairs(storage.universal_edges.edges) do
 			if edge.linked_trains then
 				for _, link in pairs(edge.linked_trains) do
 					if link.is_input == false then

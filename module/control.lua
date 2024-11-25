@@ -26,20 +26,20 @@ local universal_edges = {
 
 local function setupGlobalData()
 	local GLOBAL_VERSION = 3
-	if global.universal_edges == nil
-		or global.universal_edges.GLOBAL_VERSION == nil
-		or global.universal_edges.GLOBAL_VERSION < GLOBAL_VERSION
+	if storage.universal_edges == nil
+		or storage.universal_edges.GLOBAL_VERSION == nil
+		or storage.universal_edges.GLOBAL_VERSION < GLOBAL_VERSION
 	then
 		-- Cleanup old global before resetting
-		if global.universal_edges and global.universal_edges.debug_shapes then
-			local debug_shapes = global.universal_edges.debug_shapes
+		if storage.universal_edges and storage.universal_edges.debug_shapes then
+			local debug_shapes = storage.universal_edges.debug_shapes
 			for index, id in ipairs(debug_shapes) do
 				if id.valid then id.destroy() end
 				debug_shapes[index] = nil
 			end
 		end
 
-		global.universal_edges = {
+		storage.universal_edges = {
 			edges = {},
 			debug_shapes = {},
 			config = {},
@@ -47,31 +47,31 @@ local function setupGlobalData()
 			GLOBAL_VERSION = GLOBAL_VERSION,
 		}
 	end
-	if not global.universal_edges.carriage_drivers then
-		global.universal_edges.carriage_drivers = {}
+	if not storage.universal_edges.carriage_drivers then
+		storage.universal_edges.carriage_drivers = {}
 	end
-	if not global.universal_edges.players_waiting_to_leave then
-		global.universal_edges.players_waiting_to_leave = {}
+	if not storage.universal_edges.players_waiting_to_leave then
+		storage.universal_edges.players_waiting_to_leave = {}
 	end
-	if not global.universal_edges.players_waiting_to_join then
-		global.universal_edges.players_waiting_to_join = {}
+	if not storage.universal_edges.players_waiting_to_join then
+		storage.universal_edges.players_waiting_to_join = {}
 	end
-	global.universal_edges = global.universal_edges
+	storage.universal_edges = storage.universal_edges
 end
 
 
 local function debug_draw()
-	local debug_shapes = global.universal_edges.debug_shapes
+	local debug_shapes = storage.universal_edges.debug_shapes
     for index, id in ipairs(debug_shapes) do
 		if id.valid then id.destroy() end
         debug_shapes[index] = nil
 	end
 
-	for id, edge in pairs(global.universal_edges.edges) do
+	for id, edge in pairs(storage.universal_edges.edges) do
 		local edge_target
-		if global.universal_edges.config.instance_id == edge.source.instanceId then
+		if storage.universal_edges.config.instance_id == edge.source.instanceId then
 			edge_target = edge.source
-		elseif global.universal_edges.config.instance_id == edge.target.instanceId then
+		elseif storage.universal_edges.config.instance_id == edge.target.instanceId then
 			edge_target = edge.target
 		else
 			log("Edge with id " .. id .. " has invalid source/target")
@@ -108,17 +108,17 @@ local function debug_draw()
 end
 
 function universal_edges.set_config(config)
-	if global.universal_edges.config == nil then global.universal_edges.config = {} end
-	global.universal_edges.config.instance_id = config.instance_id
+	if storage.universal_edges.config == nil then storage.universal_edges.config = {} end
+	storage.universal_edges.config.instance_id = config.instance_id
 end
 
 local function cleanup()
 	-- Filter out edges that do not have source or target on this instance
-	for id, edge in pairs(global.universal_edges.edges) do
-		if tostring(global.universal_edges.config.instance_id) ~= tostring(edge.source.instanceId)
-			and tostring(global.universal_edges.config.instance_id) ~= tostring(edge.target.instanceId)
+	for id, edge in pairs(storage.universal_edges.edges) do
+		if tostring(storage.universal_edges.config.instance_id) ~= tostring(edge.source.instanceId)
+			and tostring(storage.universal_edges.config.instance_id) ~= tostring(edge.target.instanceId)
 		then
-			global.universal_edges.edges[id] = nil
+			storage.universal_edges.edges[id] = nil
 		end
 	end
 end
@@ -133,17 +133,17 @@ function universal_edges.edge_update(edge_id, edge_json)
 	if edge.isDeleted then
 		game.print("Deleting edge " .. edge_id)
 		-- Perform cleanup, remove edge
-		global.universal_edges.edges[edge_id] = nil
+		storage.universal_edges.edges[edge_id] = nil
 		debug_draw()
 		return
 	end
-	if global.universal_edges.edges[edge_id] == nil then
+	if storage.universal_edges.edges[edge_id] == nil then
 		game.print("Adding new edge " .. edge_id)
-		global.universal_edges.edges[edge_id] = edge
+		storage.universal_edges.edges[edge_id] = edge
 		active_status_has_changed = true
 	else
 		-- Do a partial update
-		local old_edge = global.universal_edges.edges[edge_id]
+		local old_edge = storage.universal_edges.edges[edge_id]
 		old_edge.updatedAtMs = edge.updatedAtMs
 		old_edge.source = edge.source
 		old_edge.target = edge.target
@@ -207,7 +207,7 @@ function universal_edges.edge_link_update(json)
 	if update == nil then return end
 
 	local data = update.data
-	local edge = global.universal_edges.edges[update.edge_id]
+	local edge = storage.universal_edges.edges[update.edge_id]
 	if not edge then
 		log("Got update for unknown edge " .. serpent.line(update))
 		return
@@ -245,7 +245,7 @@ function universal_edges.transfer(json)
 	local data = game.json_to_table(json)
 	if data == nil then return end
 
-	local edge = global.universal_edges.edges[data.edge_id]
+	local edge = storage.universal_edges.edges[data.edge_id]
 	if not edge then
 		rcon.print("invalid edge")
 		return
@@ -304,11 +304,11 @@ universal_edges.events = {
 		log("Universal edges startup")
 		setupGlobalData()
 		pathfinder_events.on_server_startup()
-		if not global.universal_edges.config.ticks_per_edge then
-			global.universal_edges.config.ticks_per_edge = 15
+		if not storage.universal_edges.config.ticks_per_edge then
+			storage.universal_edges.config.ticks_per_edge = 15
 		end
 		-- Refresh belt edge flow status in cases where the belt is not packed
-		for _, edge in pairs(global.universal_edges.edges) do
+		for _, edge in pairs(storage.universal_edges.edges) do
 			-- Active status is remembered from last shutdown, if its wrong this gets overwritten later
 			if edge.active and edge.linked_belts then
 				for _offset, link in pairs(edge.linked_belts) do
@@ -323,20 +323,20 @@ universal_edges.events = {
 	[defines.events.on_tick] = function(event)
 		universal_serializer.events.on_tick(event)
 		pathfinder_events.on_tick()
-		local ticks_left = -game.tick % global.universal_edges.config.ticks_per_edge
-		local id = global.universal_edges.current_edge_id
+		local ticks_left = -game.tick % storage.universal_edges.config.ticks_per_edge
+		local id = storage.universal_edges.current_edge_id
 		if id == nil then
-			id = next(global.universal_edges.edges)
+			id = next(storage.universal_edges.edges)
 			if id == nil then
 				return -- no edges
 			end
-			global.universal_edges.current_edge_id = id
+			storage.universal_edges.current_edge_id = id
 		end
-		local edge = global.universal_edges.edges[id]
+		local edge = storage.universal_edges.edges[id]
 
 		-- edge may have been removed while iterating over it
 		if edge == nil then
-			global.universal_edges.current_edge_id = nil
+			storage.universal_edges.current_edge_id = nil
 			return
 		end
 
@@ -351,7 +351,7 @@ universal_edges.events = {
 		end
 
 		if ticks_left == 0 then
-			global.universal_edges.current_edge_id = next(global.universal_edges.edges, id)
+			storage.universal_edges.current_edge_id = next(storage.universal_edges.edges, id)
 		end
 	end,
 
@@ -366,18 +366,18 @@ universal_edges.events = {
 	[defines.events.script_raised_destroy] = function(event) on_removed(event.entity) end,
 
     [defines.events.on_player_joined_game] = function(event)
-		if global.universal_edges == nil then
+		if storage.universal_edges == nil then
 			setupGlobalData()
 		end
 		entity_link.on_player_joined_game(event)
 		local player = game.players[event.player_index]
 		-- Check if we have a pending request to enter a vehicle
-		if global.universal_edges.carriage_drivers[player.name] ~= nil then
-			local entity = global.universal_edges.carriage_drivers[player.name]
+		if storage.universal_edges.carriage_drivers[player.name] ~= nil then
+			local entity = storage.universal_edges.carriage_drivers[player.name]
 			if entity.valid then
 				entity.set_driver(player)
 			end
-			global.universal_edges.carriage_drivers[player.name] = nil
+			storage.universal_edges.carriage_drivers[player.name] = nil
 		end
 	end,
 	[defines.events.on_player_left_game] = entity_link.on_player_left_game,
@@ -387,11 +387,11 @@ universal_edges.events = {
 		if entity.name == "train-stop"
 			and entity.backer_name
 			and (
-				global.universal_edges.pathfinder.rescan_connector_paths_after == nil
-				or global.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
+				storage.universal_edges.pathfinder.rescan_connector_paths_after == nil
+				or storage.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
 			)
 		then
-			global.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
+			storage.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
 		end
 	end,
 }

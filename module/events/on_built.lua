@@ -16,7 +16,7 @@ local pathfinder_events = require("modules/universal_edges/edge/train/pathfindin
 local function on_built(entity)
 	if entity.valid and util.is_transport_belt[entity.name] then
 		local pos = { entity.position.x, entity.position.y }
-		for id, edge in pairs(global.universal_edges.edges) do
+		for id, edge in pairs(storage.universal_edges.edges) do
 			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				local offset = belt_check(pos, entity.direction, edge)
 				if offset ~= nil then
@@ -28,7 +28,7 @@ local function on_built(entity)
 	end
 	if entity.valid and util.is_pipe[entity.name] then
 		local pos = { entity.position.x, entity.position.y }
-		for id, edge in pairs(global.universal_edges.edges) do
+		for id, edge in pairs(storage.universal_edges.edges) do
 			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				local offset = fluid_check(pos, entity.direction, edge)
 				if offset ~= nil then
@@ -39,7 +39,7 @@ local function on_built(entity)
 	end
 	if entity.valid and entity.name == "substation" then
 		local pos = { entity.position.x, entity.position.y }
-		for id, edge in pairs(global.universal_edges.edges) do
+		for id, edge in pairs(storage.universal_edges.edges) do
 			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				local offset = power_check(pos, edge)
 				if offset ~= nil then
@@ -50,7 +50,7 @@ local function on_built(entity)
 	end
 	if entity.valid and entity.name == "straight-rail" then
 		local pos = { entity.position.x, entity.position.y }
-		for id, edge in pairs(global.universal_edges.edges) do
+		for id, edge in pairs(storage.universal_edges.edges) do
 			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				-- We can reuse power_check since rail is the same size as substation
 				local offset = power_check(pos, edge)

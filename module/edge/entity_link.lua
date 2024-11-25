@@ -18,7 +18,7 @@ local function poll_links(id, edge, ticks_left)
 	end
 
 	-- Clear records from players waiting to leave that left the edge again
-	for player_name, leave in pairs(global.universal_edges.players_waiting_to_leave) do
+	for player_name, leave in pairs(storage.universal_edges.players_waiting_to_leave) do
 		if leave.edge_id == edge.id then
 			local clear = false
 			if not leave.entity.valid then
@@ -30,7 +30,7 @@ local function poll_links(id, edge, ticks_left)
 				end
 			end
 			if clear then
-				global.universal_edges.players_waiting_to_leave[player_name] = nil
+				storage.universal_edges.players_waiting_to_leave[player_name] = nil
 			end
 		end
 	end
@@ -49,10 +49,10 @@ local function poll_links(id, edge, ticks_left)
 		end
 		if entity.type == "character" then
 			if entity.player then
-				local waiting = global.universal_edges.players_waiting_to_leave[entity.player.name]
+				local waiting = storage.universal_edges.players_waiting_to_leave[entity.player.name]
 				if waiting == nil or waiting.edge_id ~= edge.id then
 					edge_pos = edge_util.world_to_edge_pos({entity.position.x, entity.position.y}, edge)
-					global.universal_edges.players_waiting_to_leave[entity.player.name] = {
+					storage.universal_edges.players_waiting_to_leave[entity.player.name] = {
 						edge_id = edge.id,
 						entity = entity,
 						edge_pos = edge_pos,
@@ -84,14 +84,14 @@ local function on_player_left_game(event)
 	if player == nil then
 		return
 	end
-	if not global.universal_edges.players_waiting_to_leave then
+	if not storage.universal_edges.players_waiting_to_leave then
 		return
 	end
-	if not global.universal_edges.players_waiting_to_leave[player.name] then
+	if not storage.universal_edges.players_waiting_to_leave[player.name] then
 		return
 	end
-	local leave = global.universal_edges.players_waiting_to_leave[player.name]
-	global.universal_edges.players_waiting_to_leave[player.name] = nil
+	local leave = storage.universal_edges.players_waiting_to_leave[player.name]
+	storage.universal_edges.players_waiting_to_leave[player.name] = nil
 	clusterio_api.send_json("universal_edges:transfer", {
 		edge_id = leave.edge_id,
 		entity_transfers = {
@@ -113,7 +113,7 @@ local function receive_transfers(edge, entity_transfers)
 	local entity_response_transfers = {}
 	for _, entity_transfer in ipairs(entity_transfers) do
 		if entity_transfer.type == "player" then
-			global.universal_edges.players_waiting_to_join[entity_transfer.player_name] = {
+			storage.universal_edges.players_waiting_to_join[entity_transfer.player_name] = {
 				edge_id = edge.id,
 				edge_pos = entity_transfer.edge_pos
 			}
@@ -127,12 +127,12 @@ local function on_player_joined_game(event)
 	if player == nil then
 		return
 	end
-	if not global.universal_edges.players_waiting_to_join[player.name] then
+	if not storage.universal_edges.players_waiting_to_join[player.name] then
 		return
 	end
-	local join = global.universal_edges.players_waiting_to_join[player.name]
-	global.universal_edges.players_waiting_to_join[player.name] = nil
-	local edge = global.universal_edges.edges[join.edge_id]
+	local join = storage.universal_edges.players_waiting_to_join[player.name]
+	storage.universal_edges.players_waiting_to_join[player.name] = nil
+	local edge = storage.universal_edges.edges[join.edge_id]
 	if not edge then
 		log("Got player joined for unknown edge " .. serpent.line(join))
 		return

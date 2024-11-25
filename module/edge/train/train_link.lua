@@ -275,13 +275,13 @@ local function receive_transfers(edge, train_transfers)
 						if player ~= nil then
 							-- Check if both sides of the edge are on the same instanceId
 							if edge.source.instanceId == edge.target.instanceId then
-								local new_carriage = global.universal_edges.carriage_drivers[player.name]
+								local new_carriage = storage.universal_edges.carriage_drivers[player.name]
 								if new_carriage ~= nil and new_carriage.valid then
 									new_carriage.set_driver(player)
 								else
 									player.print("Carriage not found, did you miss your train?")
 								end
-								global.universal_edges.carriage_drivers[player.name] = nil
+								storage.universal_edges.carriage_drivers[player.name] = nil
 							else
 								-- Cross server train rides need talking to the controller to figure out where to go
 								clusterio_api.send_json("universal_edges:teleport_player_to_server", {

@@ -1,16 +1,16 @@
 local vectorutil = require("modules/universal_edges/vectorutil")
 
 local function edge_get_local_target(edge)
-	if global.universal_edges.config.instance_id == edge.source.instanceId then
+	if storage.universal_edges.config.instance_id == edge.source.instanceId then
 		return edge.source
-	elseif global.universal_edges.config.instance_id == edge.target.instanceId then
+	elseif storage.universal_edges.config.instance_id == edge.target.instanceId then
 		return edge.target
 	end
 end
 local function edge_get_remote_target(edge)
-	if global.universal_edges.config.instance_id == edge.source.instanceId then
+	if storage.universal_edges.config.instance_id == edge.source.instanceId then
 		return edge.target
-	elseif global.universal_edges.config.instance_id == edge.target.instanceId then
+	elseif storage.universal_edges.config.instance_id == edge.target.instanceId then
 		return edge.source
 	end
 end

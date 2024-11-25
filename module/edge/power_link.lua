@@ -33,7 +33,7 @@ local function poll_links(id, edge, ticks_left)
 	end
 
 	-- Add power to the eei from the lua buffer to get smooth graphs
-	for _, edge in pairs(global.universal_edges.edges) do
+	for _, edge in pairs(storage.universal_edges.edges) do
 		if not edge.linked_power then
 			goto continue
 		end
@@ -46,11 +46,11 @@ local function poll_links(id, edge, ticks_left)
 				log("FATAL: received power for a link that does not have an eei " .. link.offset)
 				goto continue2
 			end
-			if global.universal_edges.linked_power_update_tick ~= nil and link.lua_buffered_energy ~= nil and link.lua_buffered_energy > 0 then
+			if storage.universal_edges.linked_power_update_tick ~= nil and link.lua_buffered_energy ~= nil and link.lua_buffered_energy > 0 then
 				local ticks_until_next_frame = 5 +
 					math.max(0,
-						global.universal_edges.linked_power_update_tick +
-						(global.universal_edges.linked_power_update_period or 60) - game.tick)
+						storage.universal_edges.linked_power_update_tick +
+						(storage.universal_edges.linked_power_update_period or 60) - game.tick)
 				link.eei.energy = link.eei.energy + link.lua_buffered_energy / ticks_until_next_frame
 				link.lua_buffered_energy = math.max(0,
 					link.lua_buffered_energy - link.lua_buffered_energy / ticks_until_next_frame)
@@ -62,7 +62,7 @@ local function poll_links(id, edge, ticks_left)
 
     -- Balance links in the same power network
     local networks = {}
-    for _, edge in pairs(global.universal_edges.edges) do
+    for _, edge in pairs(storage.universal_edges.edges) do
         if not edge.linked_power then
             goto continue
         end
@@ -100,10 +100,10 @@ local function poll_links(id, edge, ticks_left)
 end
 
 local function receive_transfers(edge, power_transfers)
-	if global.universal_edges.linked_power_update_tick then
-		global.universal_edges.linked_power_update_period = game.tick - global.universal_edges.linked_power_update_tick
+	if storage.universal_edges.linked_power_update_tick then
+		storage.universal_edges.linked_power_update_period = game.tick - storage.universal_edges.linked_power_update_tick
 	end
-	global.universal_edges.linked_power_update_tick = game.tick
+	storage.universal_edges.linked_power_update_tick = game.tick
 	if power_transfers == nil then
 		return {}
 	end

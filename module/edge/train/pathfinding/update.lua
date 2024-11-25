@@ -327,11 +327,11 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 		paths with modificaitons.
 	]]
 	if (
-			global.universal_edges.pathfinder.rescan_connector_paths_after == nil
-			or global.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
+			storage.universal_edges.pathfinder.rescan_connector_paths_after == nil
+			or storage.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
 		)
 	then
-		global.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
+		storage.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
 	end
 end
 

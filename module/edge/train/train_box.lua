@@ -198,11 +198,11 @@ local function create_train_destination_box(offset, edge, surface, update)
 		This enables propagaiton over multiple instances in a cluster.
 	]]
 	if (
-			global.universal_edges.pathfinder.rescan_connector_paths_after == nil
-			or global.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
+			storage.universal_edges.pathfinder.rescan_connector_paths_after == nil
+			or storage.universal_edges.pathfinder.rescan_connector_paths_after < game.tick
 		)
 	then
-		global.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
+		storage.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
 	end
 
 	return true
