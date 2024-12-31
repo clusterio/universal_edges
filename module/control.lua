@@ -355,8 +355,8 @@ universal_edges.events = {
 		end
 	end,
 
-	[defines.events.on_built_entity] = function(event) on_built(event.created_entity) end,
-	[defines.events.on_robot_built_entity] = function(event) on_built(event.created_entity) end,
+	[defines.events.on_built_entity] = function(event) on_built(event.entity) end,
+	[defines.events.on_robot_built_entity] = function(event) on_built(event.entity) end,
 	[defines.events.script_raised_built] = function(event) on_built(event.entity) end,
 	[defines.events.script_raised_revive] = function(event) on_built(event.entity) end,
 
