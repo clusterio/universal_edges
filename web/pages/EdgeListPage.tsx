@@ -80,14 +80,14 @@ function formToEdge(form: EdgeForm, id: string, link_destinations: Edge["link_de
 		source: {
 			...form.source,
 			ready: false,
-			surface: Number.parseInt(form.source.surface, 10),
+			surface: form.source.surface,
 			instanceId: form.source.instanceId!,
 			origin: form.source.origin.map(s => Number.parseInt(s, 10)),
 		},
 		target: {
 			...form.target,
 			ready: false,
-			surface: Number.parseInt(form.target.surface, 10),
+			surface: form.target.surface,
 			instanceId: form.target.instanceId!,
 			origin: form.target.origin.map(s => Number.parseInt(s, 10)),
 		},
@@ -270,7 +270,7 @@ export default function EdgeListPage() {
 				>
 					<InputPosition />
 				</Form.Item>
-				<Form.Item {...fIStyle} name={["source", "surface"]} label="Surface" valuePropName="checked">
+				<Form.Item {...fIStyle} name={["target", "surface"]} label="Surface" valuePropName="checked">
 					<Select>
 						{["nauvis", "vulcanus", "fulgora", "aquilo", "gleba"].map(value => (
 							<Select.Option key={value} value={value}>
