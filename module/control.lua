@@ -103,6 +103,33 @@ local function debug_draw()
 			to = vectorutil.vec2_add(edge_target.origin, vectorutil.vec2_smul(dir, edge.length - 0.5)),
 			surface = edge_target.surface,
 		}
+
+		-- Draw gray line on left hand side of the beam (represents the remote side)
+		local offset = {0, 0}
+		if edge_target.direction == defines.direction.north then
+			offset = {0, -0.2}
+		elseif edge_target.direction == defines.direction.south then
+			offset = {0, 0.2}
+		elseif edge_target.direction == defines.direction.east then
+			offset = {0.2, 0}
+		elseif edge_target.direction == defines.direction.west then
+			offset = {-0.2, 0}
+		end
+		debug_shapes[#debug_shapes + 1] = rendering.draw_line {
+			color = {0.5, 0.5, 0.5},
+			width = 4,
+			gap_length = 0.5,
+			dash_length = 0.5,
+			from = vectorutil.vec2_add(
+				vectorutil.vec2_add(edge_target.origin, offset),
+				vectorutil.vec2_smul(dir, 0.25)
+			),
+			to = vectorutil.vec2_add(
+				vectorutil.vec2_add(edge_target.origin, offset),
+				vectorutil.vec2_smul(dir, edge.length - 0.5)
+			),
+			surface = edge_target.surface,
+		}
 		::continue::
 	end
 end
