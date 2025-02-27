@@ -18,6 +18,11 @@ local pathfinder_events = require("modules/universal_edges/edge/train/pathfindin
 local on_built = require("modules/universal_edges/events/on_built")
 local on_removed = require("modules/universal_edges/events/on_removed")
 
+local remove_belt_link = require("modules/universal_edges/edge/remove_belt_link")
+local remove_fluid_link = require("modules/universal_edges/edge/remove_fluid_link")
+local remove_power_link = require("modules/universal_edges/edge/remove_power_link")
+local remove_train_link = require("modules/universal_edges/edge/train/remove_train_link")
+
 --- Top level module table, contains event handlers and public methods
 local universal_edges = {
 	events = {},
@@ -62,9 +67,9 @@ end
 
 local function debug_draw()
 	local debug_shapes = storage.universal_edges.debug_shapes
-    for index, id in ipairs(debug_shapes) do
+	for index, id in ipairs(debug_shapes) do
 		if id.valid then id.destroy() end
-        debug_shapes[index] = nil
+		debug_shapes[index] = nil
 	end
 
 	for id, edge in pairs(storage.universal_edges.edges) do
@@ -105,18 +110,18 @@ local function debug_draw()
 		}
 
 		-- Draw gray line on left hand side of the beam (represents the remote side)
-		local offset = {0, 0}
+		local offset = { 0, 0 }
 		if edge_target.direction == defines.direction.north then
-			offset = {0, -0.2}
+			offset = { 0, -0.2 }
 		elseif edge_target.direction == defines.direction.south then
-			offset = {0, 0.2}
+			offset = { 0, 0.2 }
 		elseif edge_target.direction == defines.direction.east then
-			offset = {0.2, 0}
+			offset = { 0.2, 0 }
 		elseif edge_target.direction == defines.direction.west then
-			offset = {-0.2, 0}
+			offset = { -0.2, 0 }
 		end
 		debug_shapes[#debug_shapes + 1] = rendering.draw_line {
-			color = {0.5, 0.5, 0.5},
+			color = { 0.5, 0.5, 0.5 },
 			width = 4,
 			gap_length = 0.5,
 			dash_length = 0.5,
@@ -154,6 +159,7 @@ end
 function universal_edges.edge_update(edge_id, edge_json)
 	log("Updating edge " .. edge_id)
 	local active_status_has_changed = false
+	local position_or_rotation_changed = false
 	if edge_id == nil or edge_json == nil then return end
 	local edge = helpers.json_to_table(edge_json)
 	if edge == nil then return end
@@ -171,6 +177,69 @@ function universal_edges.edge_update(edge_id, edge_json)
 	else
 		-- Do a partial update
 		local old_edge = storage.universal_edges.edges[edge_id]
+
+		-- Check if position or rotation has changed by comparing coordinates and direction
+		local old_source = old_edge.source
+		local new_source = edge.source
+		local old_target = old_edge.target
+		local new_target = edge.target
+
+		-- Compare source coordinates and direction
+		if old_source.instanceId == storage.universal_edges.config.instance_id then
+			if old_source.origin.x ~= new_source.origin.x or
+				old_source.origin.y ~= new_source.origin.y or
+				old_source.direction ~= new_source.direction or
+				old_source.surface ~= new_source.surface then
+				position_or_rotation_changed = true
+				log("Edge " .. edge_id .. " source position or rotation changed, will rebuild links")
+			end
+		end
+
+		-- Compare target coordinates and direction
+		if old_target.instanceId == storage.universal_edges.config.instance_id then
+			if old_target.origin.x ~= new_target.origin.x or
+				old_target.origin.y ~= new_target.origin.y or
+				old_target.direction ~= new_target.direction or
+				old_target.surface ~= new_target.surface then
+				position_or_rotation_changed = true
+				log("Edge " .. edge_id .. " target position or rotation changed, will rebuild links")
+			end
+		end
+
+		-- If position or rotation changed, remove all links and recreate them
+		if position_or_rotation_changed then
+			local surface = game.surfaces[edge_util.edge_get_local_target(old_edge).surface]
+			if surface then
+				-- Remove all existing belt links
+				if old_edge.linked_belts then
+					for offset, _ in pairs(old_edge.linked_belts) do
+						remove_belt_link(edge_id, old_edge, offset, { surface = surface })
+					end
+				end
+
+				-- Remove all existing fluid links
+				if old_edge.linked_fluids then
+					for offset, _ in pairs(old_edge.linked_fluids) do
+						remove_fluid_link(edge_id, old_edge, offset, { surface = surface })
+					end
+				end
+
+				-- Remove all existing power links
+				if old_edge.linked_powers then
+					for offset, _ in pairs(old_edge.linked_powers) do
+						remove_power_link(edge_id, old_edge, offset, { surface = surface })
+					end
+				end
+
+				-- Remove all existing train links
+				if old_edge.linked_trains then
+					for offset, _ in pairs(old_edge.linked_trains) do
+						remove_train_link(edge_id, old_edge, offset, { surface = surface })
+					end
+				end
+			end
+		end
+
 		old_edge.updatedAtMs = edge.updatedAtMs
 		old_edge.source = edge.source
 		old_edge.target = edge.target
@@ -180,6 +249,14 @@ function universal_edges.edge_update(edge_id, edge_json)
 		end
 		old_edge.active = edge.active
 		edge = old_edge
+
+		if position_or_rotation_changed then
+			-- Signal the partner instance to update the edge links
+			clusterio_api.send_json("universal_edges:edge_update", {
+				id = edge_id,
+				json = helpers.table_to_json(edge)
+			})
+		end
 	end
 
 	if active_status_has_changed then
@@ -392,7 +469,7 @@ universal_edges.events = {
 	[defines.events.on_entity_died] = function(event) on_removed(event.entity) end,
 	[defines.events.script_raised_destroy] = function(event) on_removed(event.entity) end,
 
-    [defines.events.on_player_joined_game] = function(event)
+	[defines.events.on_player_joined_game] = function(event)
 		if storage.universal_edges == nil then
 			setupGlobalData()
 		end
