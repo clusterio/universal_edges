@@ -128,7 +128,7 @@ function universal_edges.edge_update(edge_id, edge_json)
 	log("Updating edge " .. edge_id)
 	local active_status_has_changed = false
 	if edge_id == nil or edge_json == nil then return end
-	local edge = game.json_to_table(edge_json)
+	local edge = helpers.json_to_table(edge_json)
 	if edge == nil then return end
 	if edge.isDeleted then
 		game.print("Deleting edge " .. edge_id)
@@ -203,7 +203,7 @@ end
 
 -- Synchronize connector placement with partner
 function universal_edges.edge_link_update(json)
-	local update = game.json_to_table(json)
+	local update = helpers.json_to_table(json)
 	if update == nil then return end
 
 	local data = update.data
@@ -242,7 +242,7 @@ end
 
 -- Receive fluid from partner over RCON
 function universal_edges.transfer(json)
-	local data = game.json_to_table(json)
+	local data = helpers.json_to_table(json)
 	if data == nil then return end
 
 	local edge = storage.universal_edges.edges[data.edge_id]

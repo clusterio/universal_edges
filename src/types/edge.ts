@@ -18,7 +18,7 @@ export interface Edge {
 export interface EdgeTargetSpecification {
 	instanceId: number;
 	origin: number[];
-	surface: number;
+	surface: string;
 	direction: number;
 	ready: boolean;
 }
@@ -58,7 +58,7 @@ export const EdgeConnector = Type.Object({
 export const EdgeTarget = Type.Object({
 	instanceId: Type.Number(),
 	origin: Type.Array(Type.Number()),
-	surface: Type.Number(),
+	surface: Type.String(),
 	direction: Type.Number(),
 	ready: Type.Boolean(),
 });
