@@ -9,8 +9,8 @@
 		"watch": "tsc --build --watch",
 		"cloc": "cloc --exclude-dir=node_modules,dist .",
 		"lint": "eslint \"*.ts\" \"src/**/*\" \"web/**/*\" --fix",
-		"luacheck": "luacheck module/",
-		"test": "spaces-to-tabs -s 4 module/**.lua module/**/**.lua && npm run lint && npm run luacheck"
+		"luacheck": "luacheck module",
+		"test": "spaces-to-tabs -s 4 module/**.lua module/**/**.lua module/**/**/**.lua && npm run lint && npm run luacheck"
 	},
 	"engines": {
 		"node": ">=18"
@@ -52,6 +52,7 @@
 	},
 	"keywords": [
 		"clusterio",
+		"clusterio-plugin",
 		"factorio"
 	]
 }

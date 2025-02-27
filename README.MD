@@ -43,6 +43,15 @@ Edges are configured through the web interface. When they are ready and working 
 
 ## Development
 
+
+Clone the repository into the external_plugins directory of your clusterio installation. Run `pnpm install` in your clusterio directory to install the dependencies and build the plugin.
+
+Build the mod using `pnpm buildmod` and upload the mod to your server.
+
+On windows, for lua linting:
+
+    wget https://github.com/mpeterv/luacheck/releases/download/0.23.0/luacheck.exe -O luacheck.exe
+
 ### Publishing releases
 
 Releases are built and published with github actions. To publish a new version, run `npm version <major|minor|patch>` and push the commit and tag using `git push` followed by `git push --tags` - it is important to do a normal push first.

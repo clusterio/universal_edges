@@ -24,8 +24,8 @@ declare module "@clusterio/lib" {
 
 export const plugin: lib.PluginDeclaration = {
 	name: "universal_edges",
-	title: "universal_edges",
-	description: "Example Description. Plugin. Change me in index.ts",
+	title: "Universal Edges",
+	description: "Link servers with belts, trains, and other transport systems.",
 
 	controllerEntrypoint: "./dist/node/controller",
 	controllerConfigFields: {},
