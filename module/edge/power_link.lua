@@ -60,40 +60,41 @@ local function poll_links(id, edge, ticks_left)
 		::continue::
 	end
 
-    -- Balance links in the same power network
-    local networks = {}
-    for _, edge in pairs(storage.universal_edges.edges) do
-        if not edge.linked_power then
-            goto continue
-        end
-        for _offset, link in pairs(edge.linked_power) do
-            if not link then
-                log("FATAL: Received power for non-existant link at offset " .. link.offset)
-                goto continue2
-            end
-            if not link.eei then
-                log("FATAL: received power for a link that does not have an eei " .. link.offset)
-                goto continue2
-            end
-            if link.eei.valid then
-                local network = link.eei.electric_network_id
-                if not networks[network] then
-                    networks[network] = {}
-                end
-                networks[network][#networks[network] + 1] = link
-            end
-            ::continue2::
-        end
-        ::continue::
-    end
+	-- Balance links in the same power network
+	local networks = {}
+	for _, edge in pairs(storage.universal_edges.edges) do
+		if not edge.linked_power then
+			goto continue
+		end
+		for _offset, link in pairs(edge.linked_power) do
+			if not link then
+				log("FATAL: Received power for non-existant link at offset " .. link.offset)
+				goto continue2
+			end
+			if not link.eei then
+				log("FATAL: received power for a link that does not have an eei " .. link.offset)
+				goto continue2
+			end
+			if link.eei.valid then
+				local network = link.eei.electric_network_id
+				if not networks[network] then
+					networks[network] = {}
+				end
+				networks[network][#networks[network] + 1] = link
+			end
+			::continue2::
+		end
+		::continue::
+	end
 	for _id, network in pairs(networks) do
 		local total_energy = 0
 		for _, link in pairs(network) do
 			total_energy = total_energy + link.eei.energy + (link.lua_buffered_energy or 0)
 		end
 		local average_energy = total_energy / #network
-        for _, link in pairs(network) do
-			link.eei.electric_buffer_size = math.max(link.eei.electric_buffer_size, link.eei.energy + (link.lua_buffered_energy or 0), average_energy)
+		for _, link in pairs(network) do
+			link.eei.electric_buffer_size = math.max(link.eei.electric_buffer_size,
+				link.eei.energy + (link.lua_buffered_energy or 0), average_energy)
 			link.eei.energy = average_energy
 		end
 	end
@@ -101,7 +102,8 @@ end
 
 local function receive_transfers(edge, power_transfers)
 	if storage.universal_edges.linked_power_update_tick then
-		storage.universal_edges.linked_power_update_period = game.tick - storage.universal_edges.linked_power_update_tick
+		storage.universal_edges.linked_power_update_period = game.tick - storage.universal_edges
+		.linked_power_update_tick
 	end
 	storage.universal_edges.linked_power_update_tick = game.tick
 	if power_transfers == nil then
@@ -138,12 +140,16 @@ local function receive_transfers(edge, power_transfers)
 			end
 
 			-- Set dynamic buffer size
-			eei.electric_buffer_size = math.max(balancing_amount * 6, 1000000, local_energy)
+			eei.electric_buffer_size = math.max(balancing_amount * 10, 1000000, local_energy)
 		end
 		if power_transfer.amount_balanced then
-			-- Partner balanced power, we need to remove to compensate
-			link.eei.energy = math.max(0,
-				(link.eei.energy + (link.lua_buffered_energy or 0)) - power_transfer.amount_balanced)
+			-- First pull from link.lua_buffered_energy then link.eei.energy
+			local energy_to_remove_from_local = math.min(power_transfer.amount_balanced, link.lua_buffered_energy)
+			link.lua_buffered_energy = math.max(0, link.lua_buffered_energy - energy_to_remove_from_local)
+			power_transfer.amount_balanced = power_transfer.amount_balanced - energy_to_remove_from_local
+
+			-- Pull from the accumulator item
+			link.eei.energy = math.max(0, link.eei.energy - power_transfer.amount_balanced)
 		end
 		::continue::
 	end
