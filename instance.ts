@@ -251,7 +251,8 @@ export class InstancePlugin extends BaseInstancePlugin {
 		this.logger.info("instance::onStop");
 	}
 
-	// Get an edge from cache, if it is not yet in cahce then wait for it to become available. This fixes inconsistent state on server startup
+	// Get an edge from cache, if it is not yet in cache then wait for it to become available.
+	// This fixes inconsistent state on server startup
 	async getEdge(id: string) {
 		let edge = this.edges.get(id);
 		if (edge) {
@@ -364,7 +365,15 @@ export class InstancePlugin extends BaseInstancePlugin {
 		}
 
 		// Forward request to controller
-		const { address } = await this.instance.sendTo("controller", new messages.TeleportPlayerToServer(data.player_name, data.edge_id, target_instance_id, data.offset));
+		const { address } = await this.instance.sendTo(
+			"controller",
+			new messages.TeleportPlayerToServer(
+				data.player_name,
+				data.edge_id,
+				target_instance_id,
+				data.offset,
+			)
+		);
 		// Send response back to game
 		await this.sendRcon(`/sc universal_edges.teleport_player_to_server_response("${data.player_name}", "${address}")`);
 	}
