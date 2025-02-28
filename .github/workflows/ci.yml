@@ -31,7 +31,7 @@ jobs:
         files: module/
         annotate: "error"
   publish:
-    needs: [jslint, lualint]
+    needs: [jslint]
     name: "Publish to npm"
     runs-on: ubuntu-latest
 
