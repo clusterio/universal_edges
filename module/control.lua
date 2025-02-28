@@ -18,10 +18,17 @@ local pathfinder_events = require("modules/universal_edges/edge/train/pathfindin
 local on_built = require("modules/universal_edges/events/on_built")
 local on_removed = require("modules/universal_edges/events/on_removed")
 
+local belt_check = require("modules/universal_edges/edge/belt_check")
+local fluid_check = require("modules/universal_edges/edge/fluid_check")
+local power_check = require("modules/universal_edges/edge/power_check")
 local remove_belt_link = require("modules/universal_edges/edge/remove_belt_link")
 local remove_fluid_link = require("modules/universal_edges/edge/remove_fluid_link")
 local remove_power_link = require("modules/universal_edges/edge/remove_power_link")
 local remove_train_link = require("modules/universal_edges/edge/train/remove_train_link")
+local create_belt_link = require("modules/universal_edges/edge/create_belt_link")
+local create_fluid_link = require("modules/universal_edges/edge/create_fluid_link")
+local create_power_link = require("modules/universal_edges/edge/create_power_link")
+local create_train_link = require("modules/universal_edges/edge/train/create_train_link")
 
 --- Top level module table, contains event handlers and public methods
 local universal_edges = {
@@ -186,8 +193,8 @@ function universal_edges.edge_update(edge_id, edge_json)
 
 		-- Compare source coordinates and direction
 		if old_source.instanceId == storage.universal_edges.config.instance_id then
-			if old_source.origin.x ~= new_source.origin.x or
-				old_source.origin.y ~= new_source.origin.y or
+			if old_source.origin[1] ~= new_source.origin[1] or
+				old_source.origin[2] ~= new_source.origin[2] or
 				old_source.direction ~= new_source.direction or
 				old_source.surface ~= new_source.surface then
 				position_or_rotation_changed = true
@@ -197,8 +204,8 @@ function universal_edges.edge_update(edge_id, edge_json)
 
 		-- Compare target coordinates and direction
 		if old_target.instanceId == storage.universal_edges.config.instance_id then
-			if old_target.origin.x ~= new_target.origin.x or
-				old_target.origin.y ~= new_target.origin.y or
+			if old_target.origin[1] ~= new_target.origin[1] or
+				old_target.origin[2] ~= new_target.origin[2] or
 				old_target.direction ~= new_target.direction or
 				old_target.surface ~= new_target.surface then
 				position_or_rotation_changed = true
@@ -249,6 +256,73 @@ function universal_edges.edge_update(edge_id, edge_json)
 		end
 		old_edge.active = edge.active
 		edge = old_edge
+
+		-- After updating the edge properties, check for entities that should be connected at the new position
+		if position_or_rotation_changed and edge.active then
+			local surface = game.surfaces[edge_util.edge_get_local_target(edge).surface]
+			if surface then
+				-- Calculate area around the edge based on its position and direction
+				local local_target = edge_util.edge_get_local_target(edge)
+				local origin = local_target.origin
+				local direction = local_target.direction
+				local dir_vec = vectorutil.dir_to_vec(direction)
+				local length = edge.length or 2
+
+				-- Create a search area with some padding around the edge
+				local padding = 2
+				local start_pos = { x = origin[1] - padding, y = origin[2] - padding }
+				local end_pos = {
+					x = origin[1] + dir_vec[1] * length + padding,
+					y = origin[2] + dir_vec[2] * length + padding
+				}
+
+				-- Make sure start_pos coordinates are smaller than end_pos
+				local area = {
+					{ math.min(start_pos.x, end_pos.x), math.min(start_pos.y, end_pos.y) },
+					{ math.max(start_pos.x, end_pos.x), math.max(start_pos.y, end_pos.y) }
+				}
+
+				-- Scan for transport belts in the area
+				local belts = surface.find_entities_filtered { area = area, type = "transport-belt" }
+				for _, belt in pairs(belts) do
+					local pos = { belt.position.x, belt.position.y }
+					local offset = belt_check(pos, belt.direction, edge)
+					if offset ~= nil then
+						create_belt_link(edge_id, edge, offset, belt)
+					end
+				end
+
+				-- Scan for pipes in the area
+				local pipes = surface.find_entities_filtered { area = area, type = { "pipe", "pipe-to-ground" } }
+				for _, pipe in pairs(pipes) do
+					local pos = { pipe.position.x, pipe.position.y }
+					local offset = fluid_check(pos, pipe.direction, edge)
+					if offset ~= nil then
+						create_fluid_link(edge_id, edge, offset, pipe)
+					end
+				end
+
+				-- Scan for substations in the area
+				local substations = surface.find_entities_filtered { area = area, name = "substation" }
+				for _, substation in pairs(substations) do
+					local pos = { substation.position.x, substation.position.y }
+					local offset = power_check(pos, edge)
+					if offset ~= nil then
+						create_power_link(edge_id, edge, offset, substation)
+					end
+				end
+
+				-- Scan for straight rails in the area
+				local rails = surface.find_entities_filtered { area = area, name = "straight-rail" }
+				for _, rail in pairs(rails) do
+					local pos = { rail.position.x, rail.position.y }
+					local offset = power_check(pos, edge)
+					if offset ~= nil then
+						create_train_link(edge_id, edge, offset, rail)
+					end
+				end
+			end
+		end
 
 		if position_or_rotation_changed then
 			-- Signal the partner instance to update the edge links
