@@ -7,6 +7,7 @@ local is_transport_belt = {
 
 local is_pipe = {
 	["pipe"] = true,
+	["pipe-to-ground"] = true,
 	["pump"] = true,
 }
 
