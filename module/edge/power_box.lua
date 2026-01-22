@@ -50,6 +50,7 @@ local function create_power_box(offset, edge, surface)
 		edge.linked_power[offset] = {
 			eei = eei,
 			charge_sensor = charge_sensor,
+			powerpole = powerpole,
 		}
 	end
 
