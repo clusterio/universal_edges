@@ -5,6 +5,7 @@
 -- Generate horizontal and vertical pipe
 local vertical = table.deepcopy(data.raw["pipe"]["pipe"])
 vertical.name = "edge_pipe_vertical"
+vertical.selectable_in_game = false
 vertical.fluid_box = {
 	volume = 500,
 	pipe_connections = {
@@ -26,6 +27,7 @@ local vertical_item = {
 
 local horizontal = table.deepcopy(data.raw["pipe"]["pipe"])
 horizontal.name = "edge_pipe_horizontal"
+horizontal.selectable_in_game = false
 horizontal.fluid_box = {
 	volume = 500,
 	pipe_connections = {
