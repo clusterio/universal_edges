@@ -2,6 +2,7 @@ local clusterio_api = require("modules/clusterio/api")
 local vectorutil = require("vectorutil")
 local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
 
+local util = require("modules/universal_edges/util")
 local edge_util = require("modules/universal_edges/edge/util")
 local belt_box = require("modules/universal_edges/edge/belt_box")
 local belt_link = require("modules/universal_edges/edge/belt_link")
@@ -302,13 +303,13 @@ function universal_edges.edge_update(edge_id, edge_json)
 					end
 				end
 
-				-- Scan for substations in the area
-				local substations = surface.find_entities_filtered { area = area, name = "substation" }
-				for _, substation in pairs(substations) do
-					local pos = { substation.position.x, substation.position.y }
-					local offset = power_check(pos, edge)
+				-- Scan for power_entities in the area
+				local power_entities = surface.find_entities_filtered { area = area, name = util.is_power_entity }
+				for _, power_entity in pairs(power_entities) do
+					local pos = { power_entity.position.x, power_entity.position.y }
+					local offset = power_check(pos, edge, power_entity)
 					if offset ~= nil then
-						create_power_link(edge_id, edge, offset, substation)
+						create_power_link(edge_id, edge, offset, power_entity)
 					end
 				end
 
@@ -316,7 +317,7 @@ function universal_edges.edge_update(edge_id, edge_json)
 				local rails = surface.find_entities_filtered { area = area, name = "straight-rail" }
 				for _, rail in pairs(rails) do
 					local pos = { rail.position.x, rail.position.y }
-					local offset = power_check(pos, edge)
+					local offset = power_check(pos, edge, rail)
 					if offset ~= nil then
 						create_train_link(edge_id, edge, offset, rail)
 					end
