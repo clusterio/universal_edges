@@ -93,8 +93,14 @@ local function poll_links(id, edge, ticks_left)
 		end
 		local average_energy = total_energy / #network
 		for _, link in pairs(network) do
+			-- ensure electric buffer size is at least large enough to hold either the current stored
+			-- energy (including any lua buffer) or the computed average for the network
 			link.eei.electric_buffer_size = math.max(link.eei.electric_buffer_size,
 				link.eei.energy + (link.lua_buffered_energy or 0), average_energy)
+			-- Clear the Lua-side buffered energy before applying the average to avoid double-counting.
+			-- The total energy across the network should remain equal to total_energy, so each
+			-- link's eei.energy is set to the computed average and any transient lua buffer is removed.
+			link.lua_buffered_energy = 0
 			link.eei.energy = average_energy
 		end
 	end
