@@ -15,7 +15,7 @@ local function is_in_2x2_placement_area(edge_pos, edge)
 end
 
 -- List of 2x2 entities (the rest are assumed to be 1x1)
-local 2x2_entities = {
+local entities_2x2 = {
 	["substation"] = true,
 	["big-electric-pole"] = true,
 	["straight-rail"] = true,
@@ -27,7 +27,7 @@ local function power_check(pos, edge, entity)
 	local edge_pos = edge_util.world_to_edge_pos(pos, edge)
 	
 	-- Check if this is a 2x2 entity, otherwise treat as 1x1
-	local is_2x2 = entity and 2x2_entities[entity.name]
+	local is_2x2 = entity and entities_2x2[entity.name]
 	
 	if is_2x2 then
 		if not is_in_2x2_placement_area(edge_pos, edge) then
