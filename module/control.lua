@@ -311,6 +311,12 @@ function universal_edges.edge_update(edge_id, edge_json)
 						create_fluid_link(edge_id, edge, offset, pump)
 					end
 				end
+
+				-- Scan for power_entities in the area
+				local power_entities = surface.find_entities_filtered { area = area, name = util.is_power_entity }
+				for _, power_entity in pairs(power_entities) do
+					local pos = { power_entity.position.x, power_entity.position.y }
+					local offset = power_check(pos, edge, power_entity)
 					if offset ~= nil then
 						create_power_link(edge_id, edge, offset, power_entity)
 					end
