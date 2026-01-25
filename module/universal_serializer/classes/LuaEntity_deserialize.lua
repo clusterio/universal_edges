@@ -98,6 +98,11 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 	if entity_data.temperature ~= nil then
 		entity.temperature = entity_data.temperature
 	end
+	if entity_data.speed ~= nil then
+		pcall(function()
+			entity.speed = entity_data.speed
+		end)
+	end
 	if entity.supports_backer_name() then
 		entity.backer_name = entity_data.backer_name
 	end

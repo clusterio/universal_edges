@@ -73,6 +73,10 @@ local function entity_serialize(entity)
 	if entity.type == "train-stop" then
 		entity_data.trains_limit = entity.trains_limit
 	end
+	-- Vehicle speed (car, tank, spidertron)
+	if entity.type == "car" or entity.type == "spider-vehicle" then
+		entity_data.speed = entity.speed
+	end
 	-- Circuit connection
 	local control_behavior = entity.get_control_behavior()
 	if control_behavior ~= nil then
