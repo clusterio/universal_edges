@@ -3,6 +3,38 @@ local edge_util = require("modules/universal_edges/edge/util")
 local vectorutil = require("modules/universal_edges/vectorutil")
 local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
 
+local EDGE_CROSS_THRESHOLD = -0.5
+local EDGE_SCAN_PADDING = 16
+
+local function get_entity_key(entity)
+	if entity.type == "character" and entity.player then
+		return "player:" .. entity.player.name
+	end
+	if entity.unit_number then
+		return "unit:" .. entity.unit_number
+	end
+	return "entity:" .. entity.name
+end
+
+local function edge_cross_position(prev_edge_pos, current_edge_pos)
+	if current_edge_pos[2] > EDGE_CROSS_THRESHOLD then
+		return nil
+	end
+	if not prev_edge_pos or prev_edge_pos[2] > EDGE_CROSS_THRESHOLD then
+		if prev_edge_pos and current_edge_pos[2] ~= prev_edge_pos[2] then
+			local t = (EDGE_CROSS_THRESHOLD - prev_edge_pos[2]) / (current_edge_pos[2] - prev_edge_pos[2])
+			if t < 0 then t = 0 end
+			if t > 1 then t = 1 end
+			return {
+				prev_edge_pos[1] + (current_edge_pos[1] - prev_edge_pos[1]) * t,
+				EDGE_CROSS_THRESHOLD,
+			}
+		end
+		return { current_edge_pos[1], EDGE_CROSS_THRESHOLD }
+	end
+	return nil
+end
+
 --[[
 	Send entities across the edege
 ]]
@@ -36,22 +68,33 @@ local function poll_links(id, edge, ticks_left)
 	end
 
 	local surface = game.surfaces[edge_util.edge_get_local_target(edge).surface]
-	local origin = edge_util.edge_pos_to_world({0, 0}, edge)
-	local cross = edge_util.edge_pos_to_world({edge.length, -3}, edge)
+	local origin = edge_util.edge_pos_to_world({0, EDGE_SCAN_PADDING}, edge)
+	local cross = edge_util.edge_pos_to_world({edge.length, -EDGE_SCAN_PADDING}, edge)
 	local bounds = {vectorutil.vec2_min(origin, cross), vectorutil.vec2_max(origin, cross)}
 	local entities = surface.find_entities_filtered{type = {"character", "spider-vehicle", "car", "tank"}, area = bounds}
 	local entity_transfers = {}
+	if not storage.universal_edges.entity_last_positions then
+		storage.universal_edges.entity_last_positions = {}
+	end
+	local last_positions = storage.universal_edges.entity_last_positions[edge.id] or {}
+	local next_positions = {}
 	for _, entity in ipairs(entities) do
+		local key = get_entity_key(entity)
 		local edge_pos = edge_util.world_to_edge_pos({entity.position.x, entity.position.y}, edge)
+		local prev_edge_pos = nil
+		if key ~= nil then
+			prev_edge_pos = last_positions[key]
+			next_positions[key] = edge_pos
+		end
+		local cross_edge_pos = edge_cross_position(prev_edge_pos, edge_pos)
 		-- make sure the center of the entity has crossed so that the other side doesn't teleport it back
-		if edge_pos[2] > -0.5 then
+		if cross_edge_pos == nil then
 			goto continue
 		end
 		if entity.type == "character" then
 			if entity.player then
 				local waiting = storage.universal_edges.players_waiting_to_leave[entity.player.name]
 				if waiting == nil or waiting.edge_id ~= edge.id then
-					edge_pos = edge_util.world_to_edge_pos({entity.position.x, entity.position.y}, edge)
 					storage.universal_edges.players_waiting_to_leave[entity.player.name] = {
 						edge_id = edge.id,
 						entity = entity,
@@ -68,7 +111,7 @@ local function poll_links(id, edge, ticks_left)
 				--serialized.position = edge_util.world_to_edge_pos(serialized.position, edge)
 				--entity_transfers[#entity_transfers + 1] = serialized
 			end
-		elseif entity.type == "spider-vehicle" or entity.type == "car" or entity.type == "tank" then
+		elseif entity.type == "spider-vehicle" or entity.type == "car" then
 			local driver_name = nil
 			local passenger_name = nil
 			local driver = entity.get_driver()
@@ -120,6 +163,7 @@ local function poll_links(id, edge, ticks_left)
 			entity_transfers = entity_transfers,
 		})
 	end
+	storage.universal_edges.entity_last_positions[edge.id] = next_positions
 end
 
 local function on_player_left_game(event)

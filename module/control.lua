@@ -56,6 +56,7 @@ local function setupGlobalData()
 			debug_shapes = {},
 			config = {},
 			vehicle_drivers = {},
+			entity_last_positions = {},
 			GLOBAL_VERSION = GLOBAL_VERSION,
 		}
 	end
@@ -70,6 +71,9 @@ local function setupGlobalData()
 	end
 	if not storage.universal_edges.players_waiting_to_join then
 		storage.universal_edges.players_waiting_to_join = {}
+	end
+	if not storage.universal_edges.entity_last_positions then
+		storage.universal_edges.entity_last_positions = {}
 	end
 	storage.universal_edges = storage.universal_edges
 end
