@@ -69,11 +69,37 @@ local function poll_links(id, edge, ticks_left)
 				--entity_transfers[#entity_transfers + 1] = serialized
 			end
 		elseif entity.type == "spider-vehicle" or entity.type == "car" or entity.type == "tank" then
+			local driver_name = nil
+			local passenger_name = nil
+			local driver = entity.get_driver()
+			if driver and driver.player then
+				driver_name = driver.player.name
+			end
+			local passenger = entity.get_passenger()
+			if passenger and passenger.player then
+				passenger_name = passenger.player.name
+			end
 			local serialized = universal_serializer.LuaEntity.serialize(entity)
+			if driver_name ~= nil then
+				clusterio_api.send_json("universal_edges:teleport_player_to_server", {
+					player_name = driver_name,
+					edge_id = edge.id,
+					offset = edge_util.edge_pos_to_offset(edge_util.world_to_edge_pos(serialized.position, edge), edge),
+				})
+			end
+			if passenger_name ~= nil then
+				clusterio_api.send_json("universal_edges:teleport_player_to_server", {
+					player_name = passenger_name,
+					edge_id = edge.id,
+					offset = edge_util.edge_pos_to_offset(edge_util.world_to_edge_pos(serialized.position, edge), edge),
+				})
+			end
 			entity_transfers[#entity_transfers + 1] = {
 				type = "vehicle",
 				serialized_entity = serialized,
 				edge_pos = edge_util.world_to_edge_pos(serialized.position, edge),
+				driver_name = driver_name,
+				passenger_name = passenger_name,
 			}
 			entity.destroy()
 		end
@@ -131,7 +157,13 @@ local function receive_transfers(edge, entity_transfers)
 			local flipped_pos = edge_util.flip_edge_pos(entity_transfer.edge_pos, edge)
 			entity_transfer.serialized_entity.position = edge_util.edge_pos_to_world(flipped_pos, edge)
 			entity_transfer.serialized_entity.surface = local_target.surface
-			universal_serializer.LuaEntity.deserialize(entity_transfer.serialized_entity)
+			local entity = universal_serializer.LuaEntity.deserialize(entity_transfer.serialized_entity)
+			if entity_transfer.driver_name and entity and entity.valid then
+				storage.universal_edges.vehicle_drivers[entity_transfer.driver_name] = entity
+			end
+			if entity_transfer.passenger_name and entity and entity.valid then
+				storage.universal_edges.vehicle_passengers[entity_transfer.passenger_name] = entity
+			end
 		end
 	end
 	return entity_response_transfers
