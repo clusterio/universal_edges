@@ -80,6 +80,15 @@ local function poll_links(id, edge, ticks_left)
 				passenger_name = passenger.player.name
 			end
 			local serialized = universal_serializer.LuaEntity.serialize(entity)
+			if serialized.type == "spider-vehicle" and serialized.spidertron
+				and serialized.spidertron.autopilot_destinations then
+				for index, destination in pairs(serialized.spidertron.autopilot_destinations) do
+					local edge_pos = edge_util.world_to_edge_pos(destination, edge)
+					if edge_pos ~= nil then
+						serialized.spidertron.autopilot_destinations[index] = edge_pos
+					end
+				end
+			end
 			if driver_name ~= nil then
 				clusterio_api.send_json("universal_edges:teleport_player_to_server", {
 					player_name = driver_name,
@@ -157,6 +166,20 @@ local function receive_transfers(edge, entity_transfers)
 			local flipped_pos = edge_util.flip_edge_pos(entity_transfer.edge_pos, edge)
 			entity_transfer.serialized_entity.position = edge_util.edge_pos_to_world(flipped_pos, edge)
 			entity_transfer.serialized_entity.surface = local_target.surface
+			if entity_transfer.serialized_entity.type == "spider-vehicle"
+				and entity_transfer.serialized_entity.spidertron
+				and entity_transfer.serialized_entity.spidertron.autopilot_destinations then
+				for index, destination in pairs(entity_transfer.serialized_entity.spidertron.autopilot_destinations) do
+					local world = edge_util.edge_pos_to_world(
+						edge_util.flip_edge_pos(destination, edge),
+						edge
+					)
+					if world ~= nil then
+						entity_transfer.serialized_entity.spidertron.autopilot_destinations[index] =
+							edge_util.array_to_pos(world)
+					end
+				end
+			end
 			local entity = universal_serializer.LuaEntity.deserialize(entity_transfer.serialized_entity)
 			if entity_transfer.driver_name and entity and entity.valid then
 				storage.universal_edges.vehicle_drivers[entity_transfer.driver_name] = entity
