@@ -123,6 +123,36 @@ local function entity_serialize(entity)
 		entity_data.train = LuaTrain_serialize(entity.train)
 	end
 
+	-- Cars & Tanks
+	if entity.type == "car" then
+		if entity.name == "car" then
+			entity_data.car = {}
+			-- Health
+			entity_data.car.health = entity.health
+		elseif entity.name == "tank" then
+			entity_data.tank = {}
+			-- Health
+			entity_data.tank.health = entity.health
+			-- Logistic requests
+			entity_data.tank.enable_logistics_while_moving = entity.enable_logistics_while_moving
+			-- trash_unrequested
+			entity_data.tank.logistic_requests = {}
+			local logistic_point = entity.get_logistic_point(0) ---@cast logistic_point -nil
+			entity_data.tank.trash_not_requested = logistic_point.trash_not_requested
+			if logistic_point then
+				local logistic_sections = logistic_point.sections
+				if logistic_sections then
+					for section_index, logistic_section in pairs(logistic_sections) do
+						entity_data.tank.logistic_requests[section_index] = {
+							active = logistic_section.active,
+							filters = logistic_section.filters
+						}
+					end
+				end
+			end
+		end
+	end
+
 	-- Spidertron
 	if entity.type == "spider-vehicle" then
 		entity_data.spidertron = {}

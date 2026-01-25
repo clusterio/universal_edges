@@ -68,7 +68,7 @@ local function poll_links(id, edge, ticks_left)
 				--serialized.position = edge_util.world_to_edge_pos(serialized.position, edge)
 				--entity_transfers[#entity_transfers + 1] = serialized
 			end
-		elseif entity.type == "spider-vehicle" then
+		elseif entity.type == "spider-vehicle" or entity.type == "car" or entity.type == "tank" then
 			local serialized = universal_serializer.LuaEntity.serialize(entity)
 			entity_transfers[#entity_transfers + 1] = {
 				type = "vehicle",

@@ -163,6 +163,31 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 		LuaTrain_deserialize(entity, entity_data.train)
 	end
 
+	-- Cars
+	if entity_data.type == "car" then
+		if entity.name == "car" then
+			-- Health
+			entity.health = entity_data.car.health
+		elseif entity.name == "tank" then
+			-- Health
+			entity.health = entity_data.tank.health
+			-- logistics
+			entity.enable_logistics_while_moving = entity_data.tank.enable_logistics_while_moving
+			local logistic_point = entity.get_logistic_point(0)
+			logistic_point.trash_not_requested = entity_data.tank.trash_not_requested
+			if logistic_point then
+				-- remove the first default section
+				logistic_point.remove_section(1)
+				-- create sections and set logistic filters
+				for _, transferred_section in pairs(entity_data.tank.logistic_requests) do
+					local section = logistic_point.add_section()
+					section.active = transferred_section.active
+					section.filters = transferred_section.filters
+				end
+			end
+		end
+	end
+
 	-- Spidertron
 	if entity_data.type == "spider-vehicle" then
 		-- Name
