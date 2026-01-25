@@ -201,10 +201,10 @@ local function entity_serialize(entity)
 		entity_data.fluidbox = LuaFluidBox_serialize(entity.fluidbox)
 	end
 
-	entity_data.inventories = {}
 	--[[ Handle inventories ]]
+	entity_data.inventories = {}
 	--[[ Inventories are indexed from 1 to n, we don't care about their names. ]]
-	for i = 1, 10 do
+	for i = 1, entity.get_max_inventory_index() do
 		if entity.get_inventory(i) ~= nil then
 			entity_data.inventories[i] = clusterio_serialize.serialize_inventory(entity.get_inventory(i))
 		end

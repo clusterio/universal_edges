@@ -237,7 +237,7 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 	end
 
 	--[[ Handle inventories ]]
-	for i = 1, 10 do
+	for i = 1, entity.get_max_inventory_index() do
 		if entity_data.inventories[i] ~= nil then
 			clusterio_serialize.deserialize_inventory(entity.get_inventory(i), entity_data.inventories[i])
 		end
