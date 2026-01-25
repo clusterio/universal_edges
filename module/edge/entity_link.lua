@@ -39,7 +39,7 @@ local function poll_links(id, edge, ticks_left)
 	local origin = edge_util.edge_pos_to_world({0, 0}, edge)
 	local cross = edge_util.edge_pos_to_world({edge.length, -3}, edge)
 	local bounds = {vectorutil.vec2_min(origin, cross), vectorutil.vec2_max(origin, cross)}
-	local entities = surface.find_entities_filtered{type = {"character"}, area = bounds}
+	local entities = surface.find_entities_filtered{type = {"character", "spider-vehicle", "car", "tank"}, area = bounds}
 	local entity_transfers = {}
 	for _, entity in ipairs(entities) do
 		local edge_pos = edge_util.world_to_edge_pos({entity.position.x, entity.position.y}, edge)
@@ -68,6 +68,14 @@ local function poll_links(id, edge, ticks_left)
 				--serialized.position = edge_util.world_to_edge_pos(serialized.position, edge)
 				--entity_transfers[#entity_transfers + 1] = serialized
 			end
+		elseif entity.type == "spider-vehicle" then
+			local serialized = universal_serializer.LuaEntity.serialize(entity)
+			entity_transfers[#entity_transfers + 1] = {
+				type = "vehicle",
+				serialized_entity = serialized,
+				edge_pos = edge_util.world_to_edge_pos(serialized.position, edge),
+			}
+			entity.destroy()
 		end
 		::continue::
 	end
@@ -117,6 +125,9 @@ local function receive_transfers(edge, entity_transfers)
 				edge_id = edge.id,
 				edge_pos = entity_transfer.edge_pos
 			}
+		end
+		if entity_transfer.type == "vehicle" then
+			universal_serializer.LuaEntity.deserialize(entity_transfer.serialized_entity)
 		end
 	end
 	return entity_response_transfers

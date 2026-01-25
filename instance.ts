@@ -32,8 +32,12 @@ type BeltTransfer = {
 };
 
 type EntityTransfer = {
-	type: string,
+	type: "player",
 	player_name: string,
+	edge_pos: [number, number],
+} | {
+	type: "vehicle",
+	serialized_entity: object,
 	edge_pos: [number, number],
 };
 
