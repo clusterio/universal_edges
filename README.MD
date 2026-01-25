@@ -25,6 +25,7 @@ Edges are configured through the web interface. When they are ready and working 
 - [x] Belt transfers
 - [x] Fluids transfers
 - [x] Electricity transfers
+- [ ] Circuit transfers
 - [ ] Train transfers
 	- [x] Delete source train
 	- [x] Correct landing location
@@ -39,7 +40,9 @@ Edges are configured through the web interface. When they are ready and working 
 		- [x] Update on edge activation/deactivation
 		- [ ] Global option to not repath on edge deactivated
 - [ ] Vehicle support (cars, tanks)
-- [ ] Spidertron support (like vehicles, but with paths saved)
+    - [ ] Remember drivers
+- [x] Spidertron support (like vehicles, but with paths saved)
+    - [ ] Remember drivers
 
 ## Development
 

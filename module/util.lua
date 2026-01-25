@@ -11,6 +11,13 @@ local is_pipe = {
 	["pump"] = true,
 }
 
+local is_power_entity = {
+	["small-electric-pole"] = true,
+	["medium-electric-pole"] = true,
+	["big-electric-pole"] = true,
+	["substation"] = true,
+}
+
 local belt_type_to_loader_type = {
 	["transport-belt"] = "loader",
 	["fast-transport-belt"] = "fast-loader",
@@ -37,6 +44,7 @@ end
 return {
 	is_transport_belt = is_transport_belt,
 	is_pipe = is_pipe,
+	is_power_entity = is_power_entity,
 	belt_type_to_loader_type = belt_type_to_loader_type,
 	realign_area = realign_area,
 }

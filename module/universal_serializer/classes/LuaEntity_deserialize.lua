@@ -163,6 +163,64 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 		LuaTrain_deserialize(entity, entity_data.train)
 	end
 
+	-- Cars
+	if entity_data.type == "car" then
+		if entity.name == "car" then
+			-- Health
+			entity.health = entity_data.car.health
+		elseif entity.name == "tank" then
+			-- Health
+			entity.health = entity_data.tank.health
+			-- logistics
+			entity.enable_logistics_while_moving = entity_data.tank.enable_logistics_while_moving
+			local logistic_point = entity.get_logistic_point(0)
+			logistic_point.trash_not_requested = entity_data.tank.trash_not_requested
+			if logistic_point then
+				-- remove the first default section
+				logistic_point.remove_section(1)
+				-- create sections and set logistic filters
+				for _, transferred_section in pairs(entity_data.tank.logistic_requests) do
+					local section = logistic_point.add_section()
+					section.active = transferred_section.active
+					section.filters = transferred_section.filters
+				end
+			end
+		end
+	end
+
+	-- Spidertron
+	if entity_data.type == "spider-vehicle" then
+		-- Name
+		entity.entity_label = entity_data.spidertron.entity_label
+		-- color
+		entity.color = entity_data.spidertron.color
+		-- Health
+		entity.health = entity_data.spidertron.health
+		-- autopilot destinations
+		for _, pos in pairs(entity_data.spidertron.autopilot_destinations) do
+			entity.add_autopilot_destination(pos)
+		end
+		-- logistics
+		entity.enable_logistics_while_moving = entity_data.spidertron.enable_logistics_while_moving
+		local logistic_point = entity.get_logistic_point(0)
+		logistic_point.trash_not_requested = entity_data.spidertron.trash_not_requested
+		if logistic_point then
+			-- remove the first default section
+			logistic_point.remove_section(1)
+			-- create sections and set logistic filters
+			for _, transferred_section in pairs(entity_data.spidertron.logistic_requests) do
+				local section = logistic_point.add_section()
+				section.active = transferred_section.active
+				section.filters = transferred_section.filters
+			end
+		end
+	end
+
+	-- Equipment grid for vehicles (spidertron, car, tank)
+	if entity_data.equipment_grid ~= nil and entity.grid then
+		clusterio_serialize.deserialize_equipment_grid(entity.grid, entity_data.equipment_grid)
+	end
+
 	-- Burner
 	if entity_data.burner ~= nil and entity.burner then
 		LuaBurner_deserialize(entity.burner, entity_data.burner)
@@ -179,7 +237,7 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 	end
 
 	--[[ Handle inventories ]]
-	for i = 1, 10 do
+	for i = 1, entity.get_max_inventory_index() do
 		if entity_data.inventories[i] ~= nil then
 			clusterio_serialize.deserialize_inventory(entity.get_inventory(i), entity_data.inventories[i])
 		end

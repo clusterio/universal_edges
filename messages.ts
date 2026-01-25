@@ -128,11 +128,18 @@ const beltTransfersType = Type.Array(Type.Object({
 	item_stacks: Type.Optional(Type.Array(Type.Object({}))),
 	set_flow: Type.Optional(Type.Boolean()),
 }));
-const entityTransfersType = Type.Array(Type.Object({
-	type: Type.String(),
-	player_name: Type.String(),
-	edge_pos: Type.Tuple([Type.Number(), Type.Number()]),
-}));
+const entityTransfersType = Type.Array(Type.Union([
+	Type.Object({
+		type: Type.Literal("player"),
+		player_name: Type.String(),
+		edge_pos: Type.Tuple([Type.Number(), Type.Number()]),
+	}),
+	Type.Object({
+		type: Type.Literal("vehicle"),
+		serialized_entity: Type.Object({}),
+		edge_pos: Type.Tuple([Type.Number(), Type.Number()]),
+	})
+]));
 const fluidTransfersType = Type.Array(Type.Object({
 	offset: Type.Number(),
 	name: Type.String(),

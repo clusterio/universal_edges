@@ -123,6 +123,74 @@ local function entity_serialize(entity)
 		entity_data.train = LuaTrain_serialize(entity.train)
 	end
 
+	-- Cars & Tanks
+	if entity.type == "car" then
+		if entity.name == "car" then
+			entity_data.car = {}
+			-- Health
+			entity_data.car.health = entity.health
+		elseif entity.name == "tank" then
+			entity_data.tank = {}
+			-- Health
+			entity_data.tank.health = entity.health
+			-- Logistic requests
+			entity_data.tank.enable_logistics_while_moving = entity.enable_logistics_while_moving
+			-- trash_unrequested
+			entity_data.tank.logistic_requests = {}
+			local logistic_point = entity.get_logistic_point(0) ---@cast logistic_point -nil
+			entity_data.tank.trash_not_requested = logistic_point.trash_not_requested
+			if logistic_point then
+				local logistic_sections = logistic_point.sections
+				if logistic_sections then
+					for section_index, logistic_section in pairs(logistic_sections) do
+						entity_data.tank.logistic_requests[section_index] = {
+							active = logistic_section.active,
+							filters = logistic_section.filters
+						}
+					end
+				end
+			end
+		end
+	end
+
+	-- Spidertron
+	if entity.type == "spider-vehicle" then
+		entity_data.spidertron = {}
+		-- Name
+		entity_data.spidertron.entity_label = entity.entity_label
+		-- Color
+		entity_data.spidertron.color = entity.color
+		-- Health
+		entity_data.spidertron.health = entity.health
+		-- Autopilot destinations
+		entity_data.spidertron.autopilot_destinations = {[1] = entity.autopilot_destination}
+		for _, destination in pairs(entity.autopilot_destinations) do
+			table.insert(entity_data.spidertron.autopilot_destinations, destination)
+		end
+		-- Logistic requests
+		entity_data.spidertron.enable_logistics_while_moving = entity.enable_logistics_while_moving
+		-- trash_unrequested
+		entity_data.spidertron.logistic_requests = {}
+		local logistic_point = entity.get_logistic_point(0) ---@cast logistic_point -nil
+		entity_data.spidertron.trash_not_requested = logistic_point.trash_not_requested
+		if logistic_point then
+			local logistic_sections = logistic_point.sections
+			if logistic_sections then
+				for section_index, logistic_section in pairs(logistic_sections) do
+					entity_data.spidertron.logistic_requests[section_index] = {
+						active = logistic_section.active,
+						filters = logistic_section.filters
+					}
+				end
+			end
+		end
+	end
+
+	-- Equipment grid for vehicles (spidertron, car, tank)
+	if entity.grid then
+		entity_data.equipment_grid = clusterio_serialize.serialize_equipment_grid(entity.grid)
+	end
+
 	-- Burner
 	if entity.burner ~= nil then
 		entity_data.burner = LuaBurner_serialize(entity.burner)
@@ -133,10 +201,10 @@ local function entity_serialize(entity)
 		entity_data.fluidbox = LuaFluidBox_serialize(entity.fluidbox)
 	end
 
-	entity_data.inventories = {}
 	--[[ Handle inventories ]]
+	entity_data.inventories = {}
 	--[[ Inventories are indexed from 1 to n, we don't care about their names. ]]
-	for i = 1, 10 do
+	for i = 1, entity.get_max_inventory_index() do
 		if entity.get_inventory(i) ~= nil then
 			entity_data.inventories[i] = clusterio_serialize.serialize_inventory(entity.get_inventory(i))
 		end
