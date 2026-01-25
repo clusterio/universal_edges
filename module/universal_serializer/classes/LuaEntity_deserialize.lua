@@ -218,16 +218,7 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 
 	-- Equipment grid for vehicles (spidertron, car, tank)
 	if entity_data.equipment_grid ~= nil and entity.grid then
-		for _, equipment_data in pairs(entity_data.equipment_grid.equipment) do
-			local equipment = entity.grid.put{
-				name = equipment_data.name,
-				position = equipment_data.position
-			}
-			if equipment then
-				equipment.energy = equipment_data.energy or 0
-				equipment.shield = equipment_data.shield or 0
-			end
-		end
+		clusterio_serialize.deserialize_equipment_grid(entity.grid, entity_data.equipment_grid)
 	end
 
 	-- Burner

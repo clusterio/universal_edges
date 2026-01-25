@@ -188,19 +188,7 @@ local function entity_serialize(entity)
 
 	-- Equipment grid for vehicles (spidertron, car, tank)
 	if entity.grid then
-		entity_data.equipment_grid = {}
-		entity_data.equipment_grid.equipment = {}
-
-		for _, equipment in pairs(entity.grid.equipment) do
-			local equipment_data = {
-				name = equipment.name,
-				position = equipment.position,
-				energy = equipment.energy,
-				shield = equipment.shield,
-				burner = nil,
-			}
-			table.insert(entity_data.equipment_grid.equipment, equipment_data)
-		end
+		entity_data.equipment_grid = clusterio_serialize.serialize_equipment_grid(entity.grid)
 	end
 
 	-- Burner
