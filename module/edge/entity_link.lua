@@ -127,6 +127,10 @@ local function receive_transfers(edge, entity_transfers)
 			}
 		end
 		if entity_transfer.type == "vehicle" then
+			local local_target = edge_util.edge_get_local_target(edge)
+			local flipped_pos = edge_util.flip_edge_pos(entity_transfer.edge_pos, edge)
+			entity_transfer.serialized_entity.position = edge_util.edge_pos_to_world(flipped_pos, edge)
+			entity_transfer.serialized_entity.surface = local_target.surface
 			universal_serializer.LuaEntity.deserialize(entity_transfer.serialized_entity)
 		end
 	end
