@@ -93,7 +93,7 @@ local function poll_links(id, edge, ticks_left)
 					}, edge),
 					edge_util.edge_pos_to_world({
 						edge_x - 1,
-						1 - link.teleport_area_size * 2
+						1 - link.parking_area_size * 2
 					}, edge)
 				)
 

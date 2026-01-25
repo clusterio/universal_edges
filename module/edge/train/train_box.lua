@@ -68,7 +68,6 @@ local function create_train_source_box(offset, edge, surface)
 		stop = stop,
 		signal = signal,
 		parking_area_size = parking_area_size,
-		teleport_area_size = 3, -- Gets longer the more pathfinding stations we have to make space for
 	}
 
 	return {
