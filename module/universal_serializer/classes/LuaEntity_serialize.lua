@@ -172,11 +172,8 @@ local function entity_serialize(entity)
 			table.insert(entity_data.spidertron.autopilot_destinations, destination)
 		end
 		-- Logistic requests
-		entity_data.spidertron.enable_logistics_while_moving = entity.enable_logistics_while_moving
-		-- trash_unrequested
 		entity_data.spidertron.logistic_requests = {}
 		local logistic_point = entity.get_logistic_point(0) ---@cast logistic_point -nil
-		entity_data.spidertron.trash_not_requested = logistic_point.trash_not_requested
 		if logistic_point then
 			local logistic_sections = logistic_point.sections
 			if logistic_sections then
@@ -188,6 +185,11 @@ local function entity_serialize(entity)
 				end
 			end
 		end
+		-- Spider settings
+		entity_data.spidertron.enable_logistics_while_moving = entity.enable_logistics_while_moving
+		entity_data.spidertron.trash_not_requested = logistic_point.trash_not_requested
+		entity_data.spidertron.driver_is_gunner = entity.driver_is_gunner
+		entity_data.spidertron.vehicle_automatic_targeting_parameters = entity.vehicle_automatic_targeting_parameters
 	end
 
 	-- Equipment grid for vehicles (spidertron, car, tank)
