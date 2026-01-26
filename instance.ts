@@ -39,6 +39,8 @@ type EntityTransfer = {
 	type: "vehicle",
 	serialized_entity: object,
 	edge_pos: [number, number],
+	driver_name?: string,
+	passenger_name?: string,
 };
 
 type FluidTransfer = {

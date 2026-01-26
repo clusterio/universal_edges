@@ -55,18 +55,25 @@ local function setupGlobalData()
 			edges = {},
 			debug_shapes = {},
 			config = {},
-			carriage_drivers = {},
+			vehicle_drivers = {},
+			entity_last_positions = {},
 			GLOBAL_VERSION = GLOBAL_VERSION,
 		}
 	end
-	if not storage.universal_edges.carriage_drivers then
-		storage.universal_edges.carriage_drivers = {}
+	if not storage.universal_edges.vehicle_drivers then
+		storage.universal_edges.vehicle_drivers = {}
+	end
+	if not storage.universal_edges.vehicle_passengers then
+		storage.universal_edges.vehicle_passengers = {}
 	end
 	if not storage.universal_edges.players_waiting_to_leave then
 		storage.universal_edges.players_waiting_to_leave = {}
 	end
 	if not storage.universal_edges.players_waiting_to_join then
 		storage.universal_edges.players_waiting_to_join = {}
+	end
+	if not storage.universal_edges.entity_last_positions then
+		storage.universal_edges.entity_last_positions = {}
 	end
 	storage.universal_edges = storage.universal_edges
 end
@@ -559,13 +566,20 @@ universal_edges.events = {
 		end
 		entity_link.on_player_joined_game(event)
 		local player = game.players[event.player_index]
-		-- Check if we have a pending request to enter a vehicle
-		if storage.universal_edges.carriage_drivers[player.name] ~= nil then
-			local entity = storage.universal_edges.carriage_drivers[player.name]
+		-- Check if we have a pending request to enter a vehicle after cross-instance teleport
+		if storage.universal_edges.vehicle_drivers[player.name] ~= nil then
+			local entity = storage.universal_edges.vehicle_drivers[player.name]
 			if entity.valid then
 				entity.set_driver(player)
 			end
-			storage.universal_edges.carriage_drivers[player.name] = nil
+			storage.universal_edges.vehicle_drivers[player.name] = nil
+		end
+		if storage.universal_edges.vehicle_passengers[player.name] ~= nil then
+			local entity = storage.universal_edges.vehicle_passengers[player.name]
+			if entity.valid then
+				entity.set_passenger(player)
+			end
+			storage.universal_edges.vehicle_passengers[player.name] = nil
 		end
 	end,
 	[defines.events.on_player_left_game] = entity_link.on_player_left_game,

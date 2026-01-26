@@ -17,12 +17,16 @@ local function poll_links(id, edge, ticks_left)
 	for offset, link in itertools.partial_pairs(
 		edge.linked_power, edge.linked_power_state, ticks_left
 	) do
-		local local_energy = link.eei.energy
+		if link.eei and link.eei.valid then
+			local local_energy = link.eei.energy
 
-		power_transfers[#power_transfers + 1] = {
-			offset = offset,
-			energy = local_energy + (link.lua_buffered_energy or 0),
-		}
+			power_transfers[#power_transfers + 1] = {
+				offset = offset,
+				energy = local_energy + (link.lua_buffered_energy or 0),
+			}
+		else
+			log("FATAL: received power for a link that does not have an eei " .. offset)
+		end
 	end
 
 	if #power_transfers > 0 then

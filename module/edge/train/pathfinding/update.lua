@@ -279,10 +279,11 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 				rails[#rails + 1] = combinator
 
 				local connector = signal.get_wire_connector(defines.wire_connector_id.circuit_red, true)
-				connector.connect_to({
-					target = combinator.get_wire_connector(defines.wire_connector_id.circuit_red, true),
-					origin = defines.wire_origin.script,
-				})
+				connector.connect_to(
+					combinator.get_wire_connector(defines.wire_connector_id.circuit_red, true),
+					false,
+					defines.wire_origin.script
+				)
 
 				-- Set condition to make signal red
 				-- The pathfinding penalty does not apply unless the signal has been made red by a circuit condition
@@ -290,14 +291,12 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 				local control_behaviour = signal.get_or_create_control_behavior()
 				control_behaviour.close_signal = true
 				control_behaviour.circuit_condition = {
-					condition = {
-						first_signal = {
-							type = "item",
-							name = "rail-signal",
-						},
-						comparator = "<",
-						constant = 1,
-					}
+					first_signal = {
+						type = "item",
+						name = "rail-signal",
+					},
+					comparator = "<",
+					constant = 1,
 				}
 			end
 

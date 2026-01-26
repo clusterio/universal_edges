@@ -93,7 +93,7 @@ local function poll_links(id, edge, ticks_left)
 					}, edge),
 					edge_util.edge_pos_to_world({
 						edge_x - 1,
-						1 - link.teleport_area_size * 2
+						1 - link.parking_area_size * 2
 					}, edge)
 				)
 
@@ -110,40 +110,49 @@ local function poll_links(id, edge, ticks_left)
 				if #entities > 0 then
 					local luaTrain = entities[1].train
 					if luaTrain then
-						-- Check that none of the wagons are rotated. Rotated wagons cause issues when spawning
-						local rotated_wagons = false
-						for _, carriage in ipairs(luaTrain.carriages) do
-							if carriage.orientation % 0.25 ~= 0 then
-								rotated_wagons = true
-								break
+						local ordered_carriages = {}
+						for index, carriage in ipairs(luaTrain.carriages) do
+							ordered_carriages[index] = carriage
+						end
+						if luaTrain.front_stock and ordered_carriages[1] ~= luaTrain.front_stock then
+							local reversed = {}
+							for index = #ordered_carriages, 1, -1 do
+								reversed[#reversed + 1] = ordered_carriages[index]
 							end
+							ordered_carriages = reversed
 						end
 
-						if rotated_wagons then
-							game.print(
-								"Train at "
-								.. serpent.line(luaTrain.carriages[1].position)
-								.. " is attempting to teleport with wagons on a curve, this is not supported yet."
-							)
-						else
-							-- Serialize train
-							local train = universal_serializer.LuaTrainComplete.serialize(luaTrain)
-
-							-- Translate carriage positions to be relative to edge
-							for _, carriage in ipairs(train.carriages) do
-								-- Translate to edge position
-								local edge_position = edge_util.world_to_edge_pos(carriage.position, edge)
-								-- Compensate for edge direction
-								edge_position[1] = edge.length - edge_position[1]
-								carriage.position = edge_position
-							end
-
-							train_transfers[#train_transfers + 1] = {
-								offset = offset,
-								train = train,
-								train_id = luaTrain.id, -- Used to delete train after successfull spawning
-							}
+						local carriage_spacing = nil
+						if #ordered_carriages > 1 then
+							local pos_a = ordered_carriages[1].position
+							local pos_b = ordered_carriages[2].position
+							local dx = pos_a.x - pos_b.x
+							local dy = pos_a.y - pos_b.y
+							carriage_spacing = math.sqrt(dx * dx + dy * dy)
 						end
+
+						-- Serialize train
+						local train = universal_serializer.LuaTrainComplete.serialize(luaTrain, ordered_carriages)
+						train.carriage_spacing = carriage_spacing
+						if train.train and ordered_carriages[1] then
+							train.train.front_direction = ordered_carriages[1].direction
+							train.train.front_orientation = ordered_carriages[1].orientation
+						end
+
+						-- Translate carriage positions to be relative to edge
+						for _, carriage in ipairs(train.carriages) do
+							-- Translate to edge position
+							local edge_position = edge_util.world_to_edge_pos(carriage.position, edge)
+							-- Compensate for edge direction
+							edge_position[1] = edge.length - edge_position[1]
+							carriage.position = edge_position
+						end
+
+						train_transfers[#train_transfers + 1] = {
+							offset = offset,
+							train = train,
+							train_id = luaTrain.id, -- Used to delete train after successfull spawning
+						}
 					end
 				end
 			end
@@ -184,29 +193,63 @@ local function push_train_link(edge, _offset, link, train)
 		return false
 	end
 
-	-- Normalize edge position of carriages to fit outside of the edge (y is negative)
 	local train_start_position = -4
-	-- Find position of first wagon (lowest y position)
-	local first_wagon = train.carriages[1].position[2]
-	for _, carriage in ipairs(train.carriages) do
-		local y = carriage.position[2]
-		if y < first_wagon then
-			first_wagon = y
+	local edge_x = edge_util.offset_to_edge_x(_offset, edge)
+
+	local function snap_orientation(orientation)
+		if orientation == nil then
+			return nil
 		end
+		local snapped = math.floor((orientation + 0.125) / 0.25) * 0.25
+		snapped = snapped % 1
+		if snapped < 0 then
+			snapped = snapped + 1
+		end
+		return snapped
 	end
 
-	-- Sort carriages by y position
-	table.sort(train.carriages, function(a, b)
-		return a.position[2] < b.position[2]
-	end)
+	local function orientation_to_direction(orientation)
+		if orientation == 0 then return defines.direction.north end
+		if orientation == 0.25 then return defines.direction.east end
+		if orientation == 0.5 then return defines.direction.south end
+		if orientation == 0.75 then return defines.direction.west end
+		return nil
+	end
 
-	-- Update position
-	for _, carriage in ipairs(train.carriages) do
-		local y = carriage.position[2]
-		-- Invert y because it was on the outside of the border and is now going to be on the inside of the border (on the partner side)
-		-- This effectively inverts the train
-		y = y * -1 + first_wagon + train_start_position
-		carriage.position[2] = y
+	local function get_position_components(position)
+		local x = position.x or position[1]
+		local y = position.y or position[2]
+		return x, y
+	end
+
+	local spacing = train.carriage_spacing
+	if spacing == nil and #train.carriages > 1 then
+		local ax, ay = get_position_components(train.carriages[1].position)
+		local bx, by = get_position_components(train.carriages[2].position)
+		local dx = ax - bx
+		local dy = ay - by
+		spacing = math.sqrt(dx * dx + dy * dy)
+	end
+	if spacing == nil or spacing == 0 then
+		spacing = 7
+	end
+
+	local front_orientation = train.train and train.train.front_orientation or train.carriages[1].orientation
+	local snapped_orientation = snap_orientation(front_orientation)
+	local snapped_direction = train.train and train.train.front_direction
+	if snapped_orientation ~= nil then
+		snapped_direction = orientation_to_direction(snapped_orientation)
+	end
+
+	for index, carriage in ipairs(train.carriages) do
+		local carriage_index = index - 1
+		carriage.position = { edge_x, train_start_position - carriage_index * spacing }
+		if snapped_orientation ~= nil then
+			carriage.orientation = snapped_orientation
+		end
+		if snapped_direction ~= nil then
+			carriage.direction = snapped_direction
+		end
 	end
 
 	for _, carriage in ipairs(train.carriages) do
@@ -268,20 +311,20 @@ local function receive_transfers(edge, train_transfers)
 			if train then
 				log("Transfer successful, deleting local train " .. train_transfer.train_id)
 				for _, carriage in ipairs(train.carriages) do
-					-- Remove driver from carriage and ask them to teleport
+					-- Remove driver from train and ask them to teleport
 					if carriage.get_driver() then
 						-- Teleport player to the other side of the edge
 						local player = carriage.get_driver().player
 						if player ~= nil then
 							-- Check if both sides of the edge are on the same instanceId
 							if edge.source.instanceId == edge.target.instanceId then
-								local new_carriage = storage.universal_edges.carriage_drivers[player.name]
+								local new_carriage = storage.universal_edges.vehicle_drivers[player.name]
 								if new_carriage ~= nil and new_carriage.valid then
 									new_carriage.set_driver(player)
 								else
 									player.print("Carriage not found, did you miss your train?")
 								end
-								storage.universal_edges.carriage_drivers[player.name] = nil
+								storage.universal_edges.vehicle_drivers[player.name] = nil
 							else
 								-- Cross server train rides need talking to the controller to figure out where to go
 								clusterio_api.send_json("universal_edges:teleport_player_to_server", {
