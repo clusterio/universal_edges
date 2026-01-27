@@ -263,7 +263,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 			// Find reachable_sources
 			[...destinations.values()].forEach((dest) => {
 				// Add targets from adjacent nodes
-				dest.targets.forEach((target) => dest.reachable_targets.set(target, 1));
+				dest.targets.forEach((target) => { dest.reachable_targets.set(target, 1); });
 			});
 
 			[...destinations.values()].forEach((dest) => {
