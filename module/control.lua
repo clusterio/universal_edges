@@ -3,6 +3,8 @@ local vectorutil = require("vectorutil")
 local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
 
 local edge_util = require("modules/universal_edges/edge/util")
+local util = require("modules/universal_edges/util")
+local barrier_manager = require("modules/universal_edges/barrier_manager")
 local belt_box = require("modules/universal_edges/edge/belt_box")
 local belt_link = require("modules/universal_edges/edge/belt_link")
 local entity_link = require("modules/universal_edges/edge/entity_link")
@@ -50,6 +52,17 @@ local function setupGlobalData()
 				debug_shapes[index] = nil
 			end
 		end
+		
+		-- Cleanup old barriers before resetting
+		if storage.universal_edges and storage.universal_edges.barriers then
+			for edge_id, barriers in pairs(storage.universal_edges.barriers) do
+				for _, barrier in ipairs(barriers) do
+					if barrier and barrier.valid then
+						barrier.destroy()
+					end
+				end
+			end
+		end
 
 		storage.universal_edges = {
 			edges = {},
@@ -57,6 +70,7 @@ local function setupGlobalData()
 			config = {},
 			vehicle_drivers = {},
 			entity_last_positions = {},
+			barriers = {},  -- Storage for barrier entities
 			GLOBAL_VERSION = GLOBAL_VERSION,
 		}
 	end
@@ -75,8 +89,8 @@ local function setupGlobalData()
 	if not storage.universal_edges.entity_last_positions then
 		storage.universal_edges.entity_last_positions = {}
 	end
-	if not storage.universal_edges.proximity_check then
-		storage.universal_edges.proximity_check = true
+	if not storage.universal_edges.barriers then
+		storage.universal_edges.barriers = {}
 	end
 	storage.universal_edges = storage.universal_edges
 end
@@ -182,10 +196,8 @@ function universal_edges.edge_update(edge_id, edge_json)
 	if edge == nil then return end
 	if edge.isDeleted then
 		game.print("Deleting edge " .. edge_id)
-		-- Invalidate playable area cache when edge is deleted
-		if storage.universal_edges.edges[edge_id] then
-			refresh_playable_area(storage.universal_edges.edges[edge_id])
-		end
+		-- Remove barriers before cleaning up edge
+		barrier_manager.remove_edge_barriers(edge_id)
 		-- Perform cleanup, remove edge
 		storage.universal_edges.edges[edge_id] = nil
 		debug_draw()
@@ -195,6 +207,10 @@ function universal_edges.edge_update(edge_id, edge_json)
 		game.print("Adding new edge " .. edge_id)
 		storage.universal_edges.edges[edge_id] = edge
 		active_status_has_changed = true
+		-- Create barriers for the new edge
+		if edge.active then
+			barrier_manager.create_edge_barriers(edge_id, edge)
+		end
 	else
 		-- Do a partial update
 		local old_edge = storage.universal_edges.edges[edge_id]
@@ -229,6 +245,9 @@ function universal_edges.edge_update(edge_id, edge_json)
 
 		-- If position or rotation changed, remove all links and recreate them
 		if position_or_rotation_changed then
+			-- Update barriers for position/rotation change
+			barrier_manager.update_edge_barriers(edge_id, edge)
+			
 			local surface = game.surfaces[edge_util.edge_get_local_target(old_edge).surface]
 			if surface then
 				-- Remove all existing belt links
@@ -358,6 +377,9 @@ function universal_edges.edge_update(edge_id, edge_json)
 	end
 
 	if active_status_has_changed then
+		-- Update barriers when edge active status changes  
+		barrier_manager.update_edge_barriers(edge_id, edge)
+		
 		if not edge.active then
 			if edge.linked_belts then
 				for _offset, link in pairs(edge.linked_belts) do
@@ -518,6 +540,13 @@ universal_edges.events = {
 						link.start_index = 1
 					end
 				end
+			end
+		end
+		
+		-- Recreate barriers for all active edges on server startup
+		for edge_id, edge in pairs(storage.universal_edges.edges) do
+			if edge.active then
+				barrier_manager.create_edge_barriers(edge_id, edge)
 			end
 		end
 	end,
