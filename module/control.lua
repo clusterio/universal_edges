@@ -30,9 +30,6 @@ local create_fluid_link = require("modules/universal_edges/edge/create_fluid_lin
 local create_power_link = require("modules/universal_edges/edge/create_power_link")
 local create_train_link = require("modules/universal_edges/edge/train/create_train_link")
 
-local playable_area_cache = {} -- Cache for playable area centers per surface
-local PROXIMITY_BUFFER_DISTANCE = 64 -- Additional buffer distance beyond edge starts, this is for diagonal axis
-
 --- Top level module table, contains event handlers and public methods
 local universal_edges = {
 	events = {},
@@ -171,174 +168,6 @@ local function cleanup()
 			and tostring(storage.universal_edges.config.instance_id) ~= tostring(edge.target.instanceId)
 		then
 			storage.universal_edges.edges[id] = nil
-		end
-	end
-end
-
-
---[[
-	Calculate the center point of the playable area based on all edge endpoints on current surface
-	Returns both the center point and the maximum distance from center to edge starts
-]]
-local function calculate_playable_area_center(surface_name)
-	-- Check if we have a cached value
-	if playable_area_cache[surface_name] then
-		return playable_area_cache[surface_name].center, playable_area_cache[surface_name].max_distance_to_edge
-	end
-
-	if not storage.universal_edges.edges then
-		return nil, 0
-	end
-
-	local edge_endpoints = {}
-	local edge_starts = {}
-	local current_instance_id = storage.universal_edges.config.instance_id
-
-	-- Collect all edge endpoints and starts on the current surface for this instance
-	for _, edge in pairs(storage.universal_edges.edges) do
-		if edge.active then
-			local local_target = edge_util.edge_get_local_target(edge)
-			if local_target and local_target.surface == surface_name then
-				-- Add the origin point (start of edge)
-				local start_point = {local_target.origin[1], local_target.origin[2]}
-				edge_endpoints[#edge_endpoints + 1] = start_point
-				edge_starts[#edge_starts + 1] = start_point
-
-				-- Add the end point of the edge
-				local end_pos = edge_util.edge_pos_to_world({edge.length, 0}, edge)
-				edge_endpoints[#edge_endpoints + 1] = {end_pos[1], end_pos[2]}
-			end
-		end
-	end
-
-	-- If no edge endpoints found, cache nil and return nil
-	if #edge_endpoints == 0 then
-		playable_area_cache[surface_name] = { center = nil, max_distance_to_edge = 0 }
-		return nil, 0
-	end
-
-	-- Calculate center point as the average of all edge endpoints
-	local sum_x, sum_y = 0, 0
-	for _, point in ipairs(edge_endpoints) do
-		sum_x = sum_x + point[1]
-		sum_y = sum_y + point[2]
-	end
-
-	local center = {
-		x = sum_x / #edge_endpoints,
-		y = sum_y / #edge_endpoints
-	}
-
-	-- Calculate the maximum distance from center to any edge start
-	local max_distance_to_edge = 0
-	for _, start_point in ipairs(edge_starts) do
-		local dx = start_point[1] - center.x
-		local dy = start_point[2] - center.y
-		local distance = math.sqrt(dx * dx + dy * dy)
-		if distance > max_distance_to_edge then
-			max_distance_to_edge = distance
-		end
-	end
-
-	-- Cache the result with both center and max distance to edge starts
-	playable_area_cache[surface_name] = { center = center, max_distance_to_edge = max_distance_to_edge }
-	return center, max_distance_to_edge
-end
-
---[[
-	Invalidate the playable area cache for a specific surface
-]]
-local function invalidate_playable_area_cache(surface_name)
-	if surface_name then
-		playable_area_cache[surface_name] = nil
-	else
-		-- Clear all cached values
-		for key in pairs(playable_area_cache) do
-			playable_area_cache[key] = nil
-		end
-	end
-end
-
---[[
-	Invalidate the playable areacache when edge status changes
-]]
-local function refresh_playable_area(edge)
-	-- Invalidate cache for both source and target surfaces
-	local source_target = edge_util.edge_get_local_target(edge)
-	if source_target then
-		invalidate_playable_area_cache(source_target.surface)
-	end
-end
-
---[[
-	Check if a player is within proximity of the playable area center
-]]
-local function is_player_near_playable_area(player_pos, surface_name)
-	local center, max_distance_to_edge = calculate_playable_area_center(surface_name)
-	if not center then
-		return true -- If no center can be determined, assume player is active
-	end
-
-	-- Calculate proximity distance: distance to furthest edge start + buffer
-	local proximity_distance = max_distance_to_edge + PROXIMITY_BUFFER_DISTANCE
-
-	local dx = player_pos.x - center.x
-	local dy = player_pos.y - center.y
-	local distance_squared = dx * dx + dy * dy
-
-	return distance_squared <= (proximity_distance * proximity_distance)
-end
-
---[[
-	Check if players are out of bounds and teleport them back to the center
-]]
-local function check_player_proximity(surface)
-	-- ingame override /c storage.universal_edges.proximity_check = false
-	-- proximity checks are also possible to bypass with editor mode
-	if not storage.universal_edges.proximity_check then
-		return
-	end
-
-	if not storage.universal_edges.config.instance_id then
-		return
-	end
-
-	local center, max_distance_to_edge = calculate_playable_area_center(surface.name)
-	if not center then
-		return -- No edges on this surface, skip proximity check
-	end
-
-	-- Calculate proximity distance for logging purposes
-	local proximity_distance = max_distance_to_edge + PROXIMITY_BUFFER_DISTANCE
-
-	-- Check all players on this surface
-	for _, player in pairs(game.connected_players) do
-		if player.surface == surface and player.character and player.character.valid then
-			if not is_player_near_playable_area(player.physical_position, surface.name) then
-				-- Player is out of bounds, teleport them to the center
-				local teleport_pos = {center.x, center.y}
-
-				-- Find a safe position near the center
-				local safe_pos = surface.find_non_colliding_position("character", teleport_pos, 32, 1)
-				if safe_pos then
-					teleport_pos = safe_pos
-				end
-
-				-- Force player to exit any vehicle they may be in
-				local vehicle = player.character.vehicle
-				if vehicle ~= nil then
-					vehicle.teleport(teleport_pos)
-				else
-					player.character.teleport(teleport_pos)
-				end
-
-				-- Calculate actual distance for the message
-				local dx = player.physical_position.x - center.x
-				local dy = player.physical_position.y - center.y
-				local actual_distance = math.sqrt(dx * dx + dy * dy)
-
-				player.print("You were too far from the playable area and have been teleported back.")
-			end
 		end
 	end
 end
@@ -525,8 +354,6 @@ function universal_edges.edge_update(edge_id, edge_json)
 				id = edge_id,
 				json = helpers.table_to_json(edge)
 			})
-			-- Invalidate playable area cache when edge position changes
-			refresh_playable_area(edge)
 		end
 	end
 
@@ -570,9 +397,6 @@ function universal_edges.edge_update(edge_id, edge_json)
 				end
 			end
 		end
-
-		-- Invalidate playable area cache when edge status changes
-		refresh_playable_area(edge)
 	end
 
 	debug_draw()
@@ -701,13 +525,6 @@ universal_edges.events = {
 	[defines.events.on_tick] = function(event)
 		universal_serializer.events.on_tick(event)
 		pathfinder_events.on_tick()
-
-		-- Check player proximity every 600 ticks (10 seconds)
-		if game.tick % 600 == 0 then
-			for _, surface in pairs(game.surfaces) do
-				check_player_proximity(surface)
-			end
-		end
 
 		local ticks_left = -game.tick % storage.universal_edges.config.ticks_per_edge
 		local id = storage.universal_edges.current_edge_id
