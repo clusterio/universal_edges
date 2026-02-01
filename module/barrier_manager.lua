@@ -27,7 +27,13 @@ local function create_edge_barriers(edge_id, edge)
 	if not storage.universal_edges.barriers then
 		storage.universal_edges.barriers = {}
 	end
-	storage.universal_edges.barriers[edge_id] = {}
+	if not storage.universal_edges.barriers[edge_id] then
+		storage.universal_edges.barriers[edge_id] = {}
+	else
+		--remove edge barriers if they already exist
+		barrier_manager.remove_edge_barriers(edge_id)
+		storage.universal_edges.barriers[edge_id] = {}
+	end
 	-- Determine which side is the "outside" based on edge direction
 	-- The outside is the side that leads away from the partner instance
 	local outside_side = -1  -- Default to negative side (left/up relative to edge direction)
