@@ -1,5 +1,4 @@
 local edge_util = require("modules/universal_edges/edge/util")
-local vectorutil = require("modules/universal_edges/vectorutil")
 
 local barrier_manager = {}
 
@@ -15,7 +14,6 @@ local function create_edge_barriers(edge_id, edge)
 	if not edge_target then
 		return
 	end
-
 	local surface = game.surfaces[edge_target.surface]
 	if not surface then
 		return
@@ -25,19 +23,14 @@ local function create_edge_barriers(edge_id, edge)
 	local num_barriers = math.ceil(barrier_length / BARRIER_SPACING)
 	-- Calculate starting position offset to center the barriers
 	local start_offset = (edge.length - barrier_length) / 2
-	-- Calculate the perpendicular direction for barrier placement
-	local edge_direction = edge_target.direction
-	local dir_vec = vectorutil.dir_to_vec(edge_direction)
 	-- Initialize barrier storage for this edge if it doesn't exist
 	if not storage.universal_edges.barriers then
 		storage.universal_edges.barriers = {}
 	end
 	storage.universal_edges.barriers[edge_id] = {}
-
 	-- Determine which side is the "outside" based on edge direction
 	-- The outside is the side that leads away from the partner instance
 	local outside_side = -1  -- Default to negative side (left/up relative to edge direction)
-
 	-- Create barriers only on the outside edge
 	for i = 0, num_barriers - 1 do
 		-- Calculate position along the edge
@@ -48,18 +41,33 @@ local function create_edge_barriers(edge_id, edge)
 		local edge_pos_y = outside_side * BARRIER_DISTANCE_FROM_EDGE
 		-- Convert edge position to world coordinates
 		local world_pos = edge_util.edge_pos_to_world({edge_pos_x, edge_pos_y}, edge)
+		local chunk_pos = {x = math.floor(world_pos[1] / 32), y = math.floor(world_pos[2] / 32)}
 		-- Create the barrier entity
-		local barrier = surface.create_entity{
-			name = "ue_world_barrier",
-			position = world_pos,
-			raise_built = false
-		}
-		if barrier then
-			barrier.destructible = false  -- Make completely indestructible
-			-- Store reference to the barrier
-			table.insert(storage.universal_edges.barriers[edge_id], barrier)
+		if surface.is_chunk_generated(chunk_pos) then
+			local barrier = surface.create_entity{
+				name = "ue_world_barrier",
+				position = world_pos,
+				raise_built = false
+			}
+			if barrier then
+				barrier.destructible = false  -- Make completely indestructible
+				-- Store reference to the barrier
+				table.insert(storage.universal_edges.barriers[edge_id], barrier)
+			else
+				log("Failed to create barrier at world position " .. world_pos[1] .. ", " .. world_pos[2] .. " for edge " .. edge_id)
+			end
 		else
-			log("Failed to create barrier at world position " .. world_pos[1] .. ", " .. world_pos[2] .. " for edge " .. edge_id)
+			log("Skipping barrier creation at " .. chunk_pos.x .. ", " .. chunk_pos.y .. " for edge " .. edge_id .. " because chunk is not generated")
+			if not storage.universal_edges.barriers["pending"] then
+				storage.universal_edges.barriers["pending"] = {}
+			end
+			if not storage.universal_edges.barriers["pending"][chunk_pos.x] then
+				storage.universal_edges.barriers["pending"][chunk_pos.x] = {}
+			end
+			if not storage.universal_edges.barriers["pending"][chunk_pos.x][chunk_pos.y] then
+				storage.universal_edges.barriers["pending"][chunk_pos.x][chunk_pos.y] = {}
+			end
+			table.insert(storage.universal_edges.barriers["pending"][chunk_pos.x][chunk_pos.y], {position = world_pos, edge_id = edge_id})
 		end
 	end
 end
@@ -90,8 +98,45 @@ local function update_edge_barriers(edge_id, edge)
 	end
 end
 
+local function on_chunk_generated(event)
+	local chunk_pos = event.position
+	-- Check if any barriers need to be created in this chunk
+	if not storage.universal_edges.barriers then return end
+	if not storage.universal_edges.barriers["pending"] then return end
+	if not storage.universal_edges.barriers["pending"][chunk_pos.x] then return end
+	if not storage.universal_edges.barriers["pending"][chunk_pos.x][chunk_pos.y] then return end
+	local surface = event.surface
+	local pending_list = storage.universal_edges.barriers["pending"][chunk_pos.x][chunk_pos.y]
+	-- Process all pending entities in this chunk
+	for _, pending in ipairs(pending_list) do
+		local world_pos = pending.position
+		local barrier = surface.create_entity{
+			name = "ue_world_barrier",
+			position = world_pos,
+			raise_built = false
+		}
+		if barrier then
+			barrier.destructible = false  -- Make completely indestructible
+			-- Store reference to the barrier
+			-- Ensure the barriers table exists for this edge
+			if not storage.universal_edges.barriers[pending.edge_id] then
+				storage.universal_edges.barriers[pending.edge_id] = {}
+			end
+			table.insert(storage.universal_edges.barriers[pending.edge_id], barrier)
+		else
+			log("Failed to create barrier at world position " .. world_pos[1] .. ", " .. world_pos[2] .. " for edge " .. pending.edge_id)
+		end
+	end
+	-- Clean up the pending list for this chunk
+	storage.universal_edges.barriers["pending"][chunk_pos.x][chunk_pos.y] = nil
+	if not next(storage.universal_edges.barriers["pending"][chunk_pos.x]) then
+		storage.universal_edges.barriers["pending"][chunk_pos.x] = nil
+	end
+end
+
 barrier_manager.create_edge_barriers = create_edge_barriers
 barrier_manager.remove_edge_barriers = remove_edge_barriers
 barrier_manager.update_edge_barriers = update_edge_barriers
+barrier_manager.on_chunk_generated = on_chunk_generated
 
 return barrier_manager

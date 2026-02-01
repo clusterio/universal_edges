@@ -208,9 +208,7 @@ function universal_edges.edge_update(edge_id, edge_json)
 		storage.universal_edges.edges[edge_id] = edge
 		active_status_has_changed = true
 		-- Create barriers for the new edge
-		if edge.active then
 			barrier_manager.create_edge_barriers(edge_id, edge)
-		end
 	else
 		-- Do a partial update
 		local old_edge = storage.universal_edges.edges[edge_id]
@@ -289,6 +287,10 @@ function universal_edges.edge_update(edge_id, edge_json)
 		end
 		old_edge.active = edge.active
 		edge = old_edge
+
+		-- reset world barriers
+		barrier_manager.remove_edge_barriers(edge_id)
+		barrier_manager.create_edge_barriers(edge_id, edge)
 
 		-- After updating the edge properties, check for entities that should be connected at the new position
 		if position_or_rotation_changed and edge.active then
@@ -377,9 +379,6 @@ function universal_edges.edge_update(edge_id, edge_json)
 	end
 
 	if active_status_has_changed then
-		-- Update barriers when edge active status changes  
-		barrier_manager.update_edge_barriers(edge_id, edge)
-		
 		if not edge.active then
 			if edge.linked_belts then
 				for _offset, link in pairs(edge.linked_belts) do
@@ -545,9 +544,7 @@ universal_edges.events = {
 		
 		-- Recreate barriers for all active edges on server startup
 		for edge_id, edge in pairs(storage.universal_edges.edges) do
-			if edge.active then
 				barrier_manager.create_edge_barriers(edge_id, edge)
-			end
 		end
 	end,
 
@@ -632,6 +629,9 @@ universal_edges.events = {
 		then
 			storage.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
 		end
+	end,
+	[defines.events.on_chunk_generated] = function(event)
+		barrier_manager.on_chunk_generated(event)
 	end,
 }
 
