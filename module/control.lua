@@ -52,17 +52,6 @@ local function setupGlobalData()
 				debug_shapes[index] = nil
 			end
 		end
-		
-		-- Cleanup old barriers before resetting
-		if storage.universal_edges and storage.universal_edges.barriers then
-			for edge_id, barriers in pairs(storage.universal_edges.barriers) do
-				for _, barrier in ipairs(barriers) do
-					if barrier and barrier.valid then
-						barrier.destroy()
-					end
-				end
-			end
-		end
 
 		storage.universal_edges = {
 			edges = {},
@@ -197,7 +186,7 @@ function universal_edges.edge_update(edge_id, edge_json)
 	if edge.isDeleted then
 		game.print("Deleting edge " .. edge_id)
 		-- Remove barriers before cleaning up edge
-		barrier_manager.remove_edge_barriers(edge_id)
+		barrier_manager.remove_edge_barriers(edge)
 		-- Perform cleanup, remove edge
 		storage.universal_edges.edges[edge_id] = nil
 		debug_draw()
@@ -208,7 +197,7 @@ function universal_edges.edge_update(edge_id, edge_json)
 		storage.universal_edges.edges[edge_id] = edge
 		active_status_has_changed = true
 		-- Create barriers for the new edge
-			barrier_manager.create_edge_barriers(edge_id, edge)
+		barrier_manager.create_edge_barriers(edge)
 	else
 		-- Do a partial update
 		local old_edge = storage.universal_edges.edges[edge_id]
@@ -240,12 +229,11 @@ function universal_edges.edge_update(edge_id, edge_json)
 				log("Edge " .. edge_id .. " target position or rotation changed, will rebuild links")
 			end
 		end
-
+		
 		-- If position or rotation changed, remove all links and recreate them
 		if position_or_rotation_changed then
-			-- Update barriers for position/rotation change
-			barrier_manager.update_edge_barriers(edge_id, edge)
-			
+			barrier_manager.remove_edge_barriers(old_edge)
+			barrier_manager.create_edge_barriers(edge)
 			local surface = game.surfaces[edge_util.edge_get_local_target(old_edge).surface]
 			if surface then
 				-- Remove all existing belt links
@@ -278,6 +266,12 @@ function universal_edges.edge_update(edge_id, edge_json)
 			end
 		end
 
+		-- If edge length changed
+		if old_edge.length ~= edge.length then
+			barrier_manager.remove_edge_barriers(old_edge)
+			barrier_manager.create_edge_barriers(edge)
+		end
+
 		old_edge.updatedAtMs = edge.updatedAtMs
 		old_edge.source = edge.source
 		old_edge.target = edge.target
@@ -287,10 +281,6 @@ function universal_edges.edge_update(edge_id, edge_json)
 		end
 		old_edge.active = edge.active
 		edge = old_edge
-
-		-- reset world barriers
-		barrier_manager.remove_edge_barriers(edge_id)
-		barrier_manager.create_edge_barriers(edge_id, edge)
 
 		-- After updating the edge properties, check for entities that should be connected at the new position
 		if position_or_rotation_changed and edge.active then
@@ -541,10 +531,10 @@ universal_edges.events = {
 				end
 			end
 		end
-		
+
 		-- Recreate barriers for all active edges on server startup
-		for edge_id, edge in pairs(storage.universal_edges.edges) do
-				barrier_manager.create_edge_barriers(edge_id, edge)
+		for _, edge in pairs(storage.universal_edges.edges) do
+			barrier_manager.create_edge_barriers(edge)
 		end
 	end,
 
