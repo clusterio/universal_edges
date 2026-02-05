@@ -3,6 +3,8 @@ local vectorutil = require("vectorutil")
 local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
 
 local edge_util = require("modules/universal_edges/edge/util")
+local util = require("modules/universal_edges/util")
+local barrier_manager = require("modules/universal_edges/barrier_manager")
 local belt_box = require("modules/universal_edges/edge/belt_box")
 local belt_link = require("modules/universal_edges/edge/belt_link")
 local entity_link = require("modules/universal_edges/edge/entity_link")
@@ -57,6 +59,7 @@ local function setupGlobalData()
 			config = {},
 			vehicle_drivers = {},
 			entity_last_positions = {},
+			barriers = {},  -- Storage for barrier entities
 			GLOBAL_VERSION = GLOBAL_VERSION,
 		}
 	end
@@ -74,6 +77,9 @@ local function setupGlobalData()
 	end
 	if not storage.universal_edges.entity_last_positions then
 		storage.universal_edges.entity_last_positions = {}
+	end
+	if not storage.universal_edges.barriers then
+		storage.universal_edges.barriers = {}
 	end
 	storage.universal_edges = storage.universal_edges
 end
@@ -179,6 +185,8 @@ function universal_edges.edge_update(edge_id, edge_json)
 	if edge == nil then return end
 	if edge.isDeleted then
 		game.print("Deleting edge " .. edge_id)
+		-- Remove barriers before cleaning up edge
+		barrier_manager.remove_edge_barriers(edge)
 		-- Perform cleanup, remove edge
 		storage.universal_edges.edges[edge_id] = nil
 		debug_draw()
@@ -188,6 +196,8 @@ function universal_edges.edge_update(edge_id, edge_json)
 		game.print("Adding new edge " .. edge_id)
 		storage.universal_edges.edges[edge_id] = edge
 		active_status_has_changed = true
+		-- Create barriers for the new edge
+		barrier_manager.create_edge_barriers(edge)
 	else
 		-- Do a partial update
 		local old_edge = storage.universal_edges.edges[edge_id]
@@ -219,9 +229,11 @@ function universal_edges.edge_update(edge_id, edge_json)
 				log("Edge " .. edge_id .. " target position or rotation changed, will rebuild links")
 			end
 		end
-
+		
 		-- If position or rotation changed, remove all links and recreate them
 		if position_or_rotation_changed then
+			barrier_manager.remove_edge_barriers(old_edge)
+			barrier_manager.create_edge_barriers(edge)
 			local surface = game.surfaces[edge_util.edge_get_local_target(old_edge).surface]
 			if surface then
 				-- Remove all existing belt links
@@ -252,6 +264,12 @@ function universal_edges.edge_update(edge_id, edge_json)
 					end
 				end
 			end
+		end
+
+		-- If edge length changed
+		if old_edge.length ~= edge.length then
+			barrier_manager.remove_edge_barriers(old_edge)
+			barrier_manager.create_edge_barriers(edge)
 		end
 
 		old_edge.updatedAtMs = edge.updatedAtMs
@@ -513,11 +531,17 @@ universal_edges.events = {
 				end
 			end
 		end
+
+		-- Recreate barriers for all active edges on server startup
+		for _, edge in pairs(storage.universal_edges.edges) do
+			barrier_manager.create_edge_barriers(edge)
+		end
 	end,
 
 	[defines.events.on_tick] = function(event)
 		universal_serializer.events.on_tick(event)
 		pathfinder_events.on_tick()
+
 		local ticks_left = -game.tick % storage.universal_edges.config.ticks_per_edge
 		local id = storage.universal_edges.current_edge_id
 		if id == nil then
@@ -595,6 +619,9 @@ universal_edges.events = {
 		then
 			storage.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
 		end
+	end,
+	[defines.events.on_chunk_generated] = function(event)
+		barrier_manager.on_chunk_generated(event)
 	end,
 }
 

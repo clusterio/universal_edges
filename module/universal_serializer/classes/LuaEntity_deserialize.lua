@@ -201,14 +201,12 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 		entity.color = entity_data.spidertron.color
 		-- Health
 		entity.health = entity_data.spidertron.health
-		-- autopilot destinations
+		-- Autopilot destinations
 		for _, pos in pairs(entity_data.spidertron.autopilot_destinations) do
 			entity.add_autopilot_destination(pos)
 		end
-		-- logistics
-		entity.enable_logistics_while_moving = entity_data.spidertron.enable_logistics_while_moving
+		-- Logistic requests
 		local logistic_point = entity.get_logistic_point(0)
-		logistic_point.trash_not_requested = entity_data.spidertron.trash_not_requested
 		if logistic_point then
 			-- remove the first default section
 			logistic_point.remove_section(1)
@@ -219,6 +217,11 @@ local function entity_deserialize(serialized_entity, _is_already_delayed)
 				section.filters = transferred_section.filters
 			end
 		end
+		-- Spider settings
+		entity.enable_logistics_while_moving = entity_data.spidertron.enable_logistics_while_moving
+		logistic_point.trash_not_requested = entity_data.spidertron.trash_not_requested
+		entity.driver_is_gunner = entity_data.spidertron.driver_is_gunner
+		entity.vehicle_automatic_targeting_parameters = entity_data.spidertron.vehicle_automatic_targeting_parameters
 	end
 
 	-- Equipment grid for vehicles (spidertron, car, tank)
