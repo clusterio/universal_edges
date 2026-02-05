@@ -148,7 +148,7 @@ local function on_chunk_generated(event)
 			if not storage.universal_edges.barriers[surface_index][pending.edge_id] then
 				storage.universal_edges.barriers[surface_index][pending.edge_id] = {}
 			end
-			table.insert(storage.universal_edges.barriers[pending.edge_id], barrier)
+			table.insert(storage.universal_edges.barriers[surface_index][pending.edge_id], barrier)
 		else
 			log("Failed to create barrier at world position " .. world_pos[1] .. ", " .. world_pos[2] .. " for edge " .. pending.edge_id)
 		end
