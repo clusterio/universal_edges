@@ -54,6 +54,7 @@ type FluidTransfer = {
 type PowerTransfer = {
 	offset: number,
 	energy?: number,
+	capacity?: number,
 	amount_balanced?: number,
 }
 
@@ -170,6 +171,7 @@ function mergePowerTransfers(
 		}
 		// When sending amount we send the current amount in the tank, hence we want to overwrite instead of adding here
 		if (powerTransfer.energy !== undefined) { pending.energy = powerTransfer.energy; }
+		if (powerTransfer.capacity !== undefined) { pending.capacity = powerTransfer.capacity; }
 		// Amount balanced is the amount of fluid we have added on the current instance. This one needs to be additive.
 		if (powerTransfer.amount_balanced !== undefined) {
 			if (pending.amount_balanced !== undefined) {
