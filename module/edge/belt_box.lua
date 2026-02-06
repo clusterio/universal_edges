@@ -1,6 +1,11 @@
 local util = require("modules/universal_edges/util")
 local edge_util = require("modules/universal_edges/edge/util")
 
+---@param offset number
+---@param edge UniversalEdge
+---@param is_input boolean
+---@param belt_type unknown
+---@param surface LuaSurface
 local function create_belt_box(offset, edge, is_input, belt_type, surface)
 	local edge_target = edge_util.edge_get_local_target(edge)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
@@ -12,7 +17,7 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 		-- Is the loader already there?
 		loader = surface.find_entity(loader_type, loader_pos)
 		if not loader then
-			return false
+			return
 		end
 	end
 
@@ -22,7 +27,7 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 		-- Is the chest already there?
 		chest = surface.find_entity("steel-chest", chest_pos)
 		if not chest then
-			return false
+			return
 		end
 	end
 
@@ -32,6 +37,7 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 			position = loader_pos,
 			direction = (edge_target.direction + 8) % 16,
 		}
+		assert(loader, "FATAL: failed to create loader for belt box at offset " .. offset .. " on edge " .. edge.id)
 	end
 
 	loader.loader_type = is_input and "input" or "output"
@@ -41,6 +47,7 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 			name = "steel-chest",
 			position = chest_pos,
 		}
+		assert(chest, "FATAL: failed to create chest for belt box at offset " .. offset .. " on edge " .. edge.id)
 	end
 
 	if not edge.linked_belts then
@@ -50,7 +57,7 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 	if edge.linked_belts[offset] then
 		edge.linked_belts[offset].chest = chest
 		edge.linked_belts[offset].is_input = is_input
-		edge.linked_belts[offset].flag_for_removal = false
+		edge.linked_belts[offset].flag_for_removal = false -- flag_for_removal does not seem to do anything?
 	else
 		edge.linked_belts[offset] = {
 			chest = chest,
@@ -59,10 +66,11 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 			flag_for_removal = nil,
 		}
 	end
-
-	return true
 end
 
+---@param offset number
+---@param edge UniversalEdge
+---@param surface LuaSurface
 local function remove_belt_box(offset, edge, surface)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 	if edge.linked_belts and edge.linked_belts[offset] then

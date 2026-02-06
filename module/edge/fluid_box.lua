@@ -1,5 +1,8 @@
 local edge_util = require("modules/universal_edges/edge/util")
 
+---@param offset number
+---@param edge UniversalEdge
+---@param surface LuaSurface
 local function create_fluid_box(offset, edge, surface)
 	local edge_target = edge_util.edge_get_local_target(edge)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
@@ -45,6 +48,9 @@ local function create_fluid_box(offset, edge, surface)
 	return true
 end
 
+---@param offset number
+---@param edge UniversalEdge
+---@param surface LuaSurface?
 local function remove_fluid_box(offset, edge, surface)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 	if edge.linked_fluids and edge.linked_fluids[offset] then

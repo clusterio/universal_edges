@@ -2,6 +2,9 @@ local edge_util = require("modules/universal_edges/edge/util")
 
 local eei_type = "ue_eei_tertiary"
 
+---@param offset number
+---@param edge UniversalEdge
+---@param surface LuaSurface
 local function create_power_box(offset, edge, surface)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 
@@ -22,6 +25,7 @@ local function create_power_box(offset, edge, surface)
 			name = eei_type,
 			position = eei_pos,
 		}
+		assert(eei, "FATAL: failed to create EEI for power box at " .. serpent.line(eei_pos))
 	end
 
 	if not charge_sensor then
@@ -29,6 +33,7 @@ local function create_power_box(offset, edge, surface)
 			name = "accumulator",
 			position = eei_pos,
 		}
+		assert(charge_sensor, "FATAL: failed to create charge sensor for power box at " .. serpent.line(eei_pos))
 	end
 
 	if not powerpole then
@@ -36,6 +41,7 @@ local function create_power_box(offset, edge, surface)
 			name = "substation",
 			position = eei_pos,
 		}
+		assert(powerpole, "FATAL: failed to create power pole for power box at " .. serpent.line(eei_pos))
 	end
 
 	if not edge.linked_power then
@@ -51,12 +57,16 @@ local function create_power_box(offset, edge, surface)
 			eei = eei,
 			charge_sensor = charge_sensor,
 			powerpole = powerpole,
+			lua_buffered_energy = 0,
 		}
 	end
 
 	return true
 end
 
+---@param offset number
+---@param edge UniversalEdge
+---@param surface LuaSurface
 local function remove_power_box(offset, edge, surface)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 	if edge.linked_power and edge.linked_power[offset] then

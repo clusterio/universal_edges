@@ -3,10 +3,11 @@ local itertools = require("modules/universal_edges/itertools")
 
 local fluid_box = require("modules/universal_edges/edge/fluid_box")
 
---[[
-	Send fluid level to partner for balancing
-]]
-local function poll_links(id, edge, ticks_left)
+-- Send fluid level to partner for balancing
+---@param edge_id string
+---@param edge UniversalEdge
+---@param ticks_left number
+local function poll_links(edge_id, edge, ticks_left)
 	if not edge.linked_fluids then
 		return
 	end
@@ -21,7 +22,7 @@ local function poll_links(id, edge, ticks_left)
 	) do
 		if link.pipe == nil or link.pipe.valid == false then
 			-- Pipe was destroyed, remove it from the list
-			fluid_box.remove(offset, edge)
+			fluid_box.remove(offset, edge, nil)
 			goto continue
 		end
 		local fluidbox = link.pipe.fluidbox
@@ -38,12 +39,15 @@ local function poll_links(id, edge, ticks_left)
 
 	if #fluid_transfers > 0 then
 		clusterio_api.send_json("universal_edges:transfer", {
-			edge_id = id,
+			edge_id = edge_id,
 			fluid_transfers = fluid_transfers,
 		})
 	end
 end
 
+---@param edge UniversalEdge
+---@param fluid_transfers unknown
+---@return table
 local function receive_transfers(edge, fluid_transfers)
 	if fluid_transfers == nil then
 		return {}

@@ -1,5 +1,8 @@
 local edge_util = require("modules/universal_edges/edge/util")
 
+---@param edge_pos Vector
+---@param edge UniversalEdge
+---@return boolean
 local function is_in_1x1_placement_area(edge_pos, edge)
 	if edge_pos[2] <= 0 or edge_pos[2] >= 1 then return false end
 	if edge_pos[1] <= 0 or edge_pos[1] >= edge.length then return false end
@@ -7,6 +10,10 @@ local function is_in_1x1_placement_area(edge_pos, edge)
 	return true
 end
 
+---@param edge_pos Vector
+---@param direction uint32
+---@param edge UniversalEdge
+---@return boolean
 local function is_pump_in_placement_area(edge_pos, direction, edge)
 	-- Pumps are 2x1 entities and need to be perpendicular to the edge to transfer fluids across it
 	-- The pump should span across the edge boundary (Y=0 line)
@@ -47,9 +54,14 @@ end
 
 -- Check if a fluid entity at world pos and direction is going to or from the given edge
 -- returns edge offset if it does, otherwise nil
+---@param pos MapPosition
+---@param direction uint32
+---@param edge UniversalEdge
+---@param entity LuaEntity
+---@return nil | number
 local function fluid_check(pos, direction, edge, entity)
 	local edge_pos = edge_util.world_to_edge_pos(pos, edge)
-	
+
 	-- Handle pumps separately due to their 2x1 size and directional requirements
 	if entity and entity.name == "pump" then
 		if is_pump_in_placement_area(edge_pos, direction, edge) then
@@ -58,7 +70,7 @@ local function fluid_check(pos, direction, edge, entity)
 			return nil
 		end
 	end
-	
+
 	-- Handle pipes and pipe-to-ground (1x1 entities)
 	if not is_in_1x1_placement_area(edge_pos, edge) then
 		return nil

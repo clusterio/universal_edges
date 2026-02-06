@@ -33,10 +33,7 @@ local create_power_link = require("modules/universal_edges/edge/create_power_lin
 local create_train_link = require("modules/universal_edges/edge/train/create_train_link")
 
 --- Top level module table, contains event handlers and public methods
-local universal_edges = {
-	events = {},
-	on_nth_tick = {},
-}
+local universal_edges = {}
 
 local function setupGlobalData()
 	local GLOBAL_VERSION = 3
@@ -159,9 +156,11 @@ local function debug_draw()
 	end
 end
 
+---@param config UniversalEdgesConfig
 function universal_edges.set_config(config)
 	if storage.universal_edges.config == nil then storage.universal_edges.config = {} end
 	storage.universal_edges.config.instance_id = config.instance_id
+	storage.universal_edges.config.ticks_per_edge = 15
 end
 
 local function cleanup()
@@ -176,15 +175,18 @@ local function cleanup()
 end
 
 -- Synchronize edge configuration and status
+---@param edge_id string
+---@param edge_json string
 function universal_edges.edge_update(edge_id, edge_json)
 	log("Updating edge " .. edge_id)
 	local active_status_has_changed = false
 	local position_or_rotation_changed = false
 	if edge_id == nil or edge_json == nil then return end
-	local edge = helpers.json_to_table(edge_json)
+	local edge = helpers.json_to_table(edge_json) ---@cast edge UniversalEdge
 	if edge == nil then return end
 	if edge.isDeleted then
 		game.print("Deleting edge " .. edge_id)
+		log("Deleting edge " .. edge_id)
 		-- Remove barriers before cleaning up edge
 		barrier_manager.remove_edge_barriers(edge)
 		-- Perform cleanup, remove edge
@@ -194,6 +196,7 @@ function universal_edges.edge_update(edge_id, edge_json)
 	end
 	if storage.universal_edges.edges[edge_id] == nil then
 		game.print("Adding new edge " .. edge_id)
+		log("Adding new edge " .. edge_id)
 		storage.universal_edges.edges[edge_id] = edge
 		active_status_has_changed = true
 		-- Create barriers for the new edge
@@ -415,6 +418,7 @@ function universal_edges.edge_update(edge_id, edge_json)
 end
 
 -- Synchronize connector placement with partner
+---@param json string
 function universal_edges.edge_link_update(json)
 	local update = helpers.json_to_table(json)
 	if update == nil then return end
@@ -445,7 +449,7 @@ function universal_edges.edge_link_update(json)
 	elseif update.type == "create_train_link" then
 		train_box.create_destination(data.offset, edge, surface, update)
 	elseif update.type == "remove_train_link" then
-		train_box.remove_destination(data.offset, edge, surface)
+		train_box.remove_destination(data.offset, edge)
 	elseif update.type == "update_train_penalty_map" then
 		pathfinder_update.update_train_penalty_map(data.offset, edge, data.penalty_map)
 	else
@@ -454,6 +458,7 @@ function universal_edges.edge_link_update(json)
 end
 
 -- Receive fluid from partner over RCON
+---@param json string
 function universal_edges.transfer(json)
 	local data = helpers.json_to_table(json)
 	if data == nil then return end
@@ -496,6 +501,8 @@ function universal_edges.transfer(json)
 	end
 end
 
+---@param player_name string
+---@param address string
 function universal_edges.teleport_player_to_server_response(player_name, address)
 	if player_name == nil or address == nil then return end
 	local player = game.players[player_name]
@@ -513,7 +520,7 @@ function universal_edges.teleport_player_to_server_response(player_name, address
 end
 
 universal_edges.events = {
-	[clusterio_api.events.on_server_startup] = function(_event)
+	[clusterio_api.events.on_server_startup] = function()
 		log("Universal edges startup")
 		setupGlobalData()
 		pathfinder_events.on_server_startup()
@@ -538,20 +545,20 @@ universal_edges.events = {
 		end
 	end,
 
-	[defines.events.on_tick] = function(event)
-		universal_serializer.events.on_tick(event)
+	[defines.events.on_tick] = function()
+		universal_serializer.events.on_tick()
 		pathfinder_events.on_tick()
 
 		local ticks_left = -game.tick % storage.universal_edges.config.ticks_per_edge
-		local id = storage.universal_edges.current_edge_id
-		if id == nil then
-			id = next(storage.universal_edges.edges)
-			if id == nil then
+		local edge_id = storage.universal_edges.current_edge_id
+		if edge_id == nil then
+			edge_id = next(storage.universal_edges.edges)
+			if edge_id == nil then
 				return -- no edges
 			end
-			storage.universal_edges.current_edge_id = id
+			storage.universal_edges.current_edge_id = edge_id
 		end
-		local edge = storage.universal_edges.edges[id]
+		local edge = storage.universal_edges.edges[edge_id]
 
 		-- edge may have been removed while iterating over it
 		if edge == nil then
@@ -561,29 +568,44 @@ universal_edges.events = {
 
 		-- Attempt to send items and fluids to partner
 		if edge.active then
-			belt_link.poll_links(id, edge, ticks_left)
-			entity_link.poll_links(id, edge, ticks_left)
-			fluid_link.poll_links(id, edge, ticks_left)
-			power_link.poll_links(id, edge, ticks_left)
-			train_link.poll_links(id, edge, ticks_left)
-			pathfinder_update.poll_connectors(id, edge, ticks_left)
+			belt_link.poll_links(edge_id, edge, ticks_left)
+			entity_link.poll_links(edge_id, edge, ticks_left)
+			fluid_link.poll_links(edge_id, edge, ticks_left)
+			power_link.poll_links(edge_id, edge, ticks_left)
+			train_link.poll_links(edge_id, edge, ticks_left)
+			pathfinder_update.poll_connectors(edge, ticks_left)
 		end
 
 		if ticks_left == 0 then
-			storage.universal_edges.current_edge_id = next(storage.universal_edges.edges, id)
+			storage.universal_edges.current_edge_id = next(storage.universal_edges.edges, edge_id)
 		end
 	end,
 
+	---@param event EventData.on_built_entity
 	[defines.events.on_built_entity] = function(event) on_built(event.entity) end,
+
+	---@param event EventData.on_robot_built_entity
 	[defines.events.on_robot_built_entity] = function(event) on_built(event.entity) end,
+
+	---@param event EventData.script_raised_built
 	[defines.events.script_raised_built] = function(event) on_built(event.entity) end,
+
+	---@param event EventData.script_raised_revive
 	[defines.events.script_raised_revive] = function(event) on_built(event.entity) end,
 
+	---@param event EventData.on_player_mined_entity
 	[defines.events.on_player_mined_entity] = function(event) on_removed(event.entity) end,
+
+	---@param event EventData.on_robot_mined_entity
 	[defines.events.on_robot_mined_entity] = function(event) on_removed(event.entity) end,
+
+	---@param event EventData.on_entity_died
 	[defines.events.on_entity_died] = function(event) on_removed(event.entity) end,
+
+	---@param event EventData.script_raised_destroy
 	[defines.events.script_raised_destroy] = function(event) on_removed(event.entity) end,
 
+	---@param event EventData.on_player_joined_game
 	[defines.events.on_player_joined_game] = function(event)
 		if storage.universal_edges == nil then
 			setupGlobalData()
@@ -606,8 +628,11 @@ universal_edges.events = {
 			storage.universal_edges.vehicle_passengers[player.name] = nil
 		end
 	end,
-	[defines.events.on_player_left_game] = entity_link.on_player_left_game,
 
+	---@param event EventData.on_player_left_game
+	[defines.events.on_player_left_game] = function(event) entity_link.on_player_left_game(event) end,
+
+	---@param event EventData.on_entity_renamed
 	[defines.events.on_entity_renamed] = function(event)
 		local entity = event.entity
 		if entity.name == "train-stop"
@@ -620,6 +645,8 @@ universal_edges.events = {
 			storage.universal_edges.pathfinder.rescan_connector_paths_after = game.tick + 180
 		end
 	end,
+
+	---@param event EventData.on_chunk_generated
 	[defines.events.on_chunk_generated] = function(event)
 		barrier_manager.on_chunk_generated(event)
 	end,

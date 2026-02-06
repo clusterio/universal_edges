@@ -2,6 +2,9 @@ local clusterio_api = require("modules/clusterio/api")
 local serialize = require("modules/clusterio/serialize")
 local itertools = require("modules/universal_edges/itertools")
 
+---@param offset number
+---@param link LinkedBelt
+---@return table?
 local function poll_input_belt_link(offset, link)
 	if not link.chest or not link.chest.valid then
 		return
@@ -29,6 +32,9 @@ local function poll_input_belt_link(offset, link)
 	end
 end
 
+---@param offset number
+---@param link LinkedBelt
+---@return table?
 local function poll_output_belt_link(offset, link)
 	if not link.chest or not link.chest.valid then
 		return
@@ -45,6 +51,9 @@ local function poll_output_belt_link(offset, link)
 end
 
 -- Shift the item in the inventory up by the given count of slots
+---@param inventory LuaInventory
+---@param shift number 
+---@return number, number
 local function shift_inventory(inventory, shift)
 	if inventory.is_empty() then
 		return shift, shift
@@ -79,9 +88,11 @@ local function shift_inventory(inventory, shift)
 	return current_shift, shift_top
 end
 
---[[
-	Handle items received from transfer, return flow status (is the space for more?)
-]]
+-- Handle items received from transfer, return flow status (is the space for more?)
+---@param offset number
+---@param link LinkedBelt
+---@param item_stacks table
+---@return table?
 local function push_belt_link(offset, link, item_stacks)
 	if not link.chest or not link.chest.valid then
 		log("FATAL: recevied items but target chest does not exist at off " .. offset)
@@ -116,16 +127,21 @@ local function push_belt_link(offset, link, item_stacks)
 	end
 end
 
---[[
-	Attempt sending items to partner
-]]
-local function poll_links(id, edge, ticks_left)
+-- Attempt sending items to partner
+---@param edge_id string
+---@param edge UniversalEdge
+---@param ticks_left number
+local function poll_links(edge_id, edge, ticks_left)
 	if not edge.linked_belts then
 		return
 	end
 
 	if not edge.linked_belts_state then
-		edge.linked_belts_state = {}
+		edge.linked_belts_state = {
+			endpoint = 1,
+			index = 1,
+			pos = 0,
+		}
 	end
 
 	local belt_transfers = {}
@@ -146,18 +162,21 @@ local function poll_links(id, edge, ticks_left)
 
 	if #belt_transfers > 0 then
 		clusterio_api.send_json("universal_edges:transfer", {
-			edge_id = id,
+			edge_id = edge_id,
 			belt_transfers = belt_transfers,
 		})
 	end
 end
 
+---@param edge UniversalEdge
+---@param belt_transfers unknown
+---@return table
 local function receive_transfers(edge, belt_transfers)
 	if belt_transfers == nil then
 		return {}
 	end
 	local belt_response_transfers = {}
-	for _offset, belt_transfer in ipairs(belt_transfers) do
+	for _, belt_transfer in ipairs(belt_transfers) do
 		local link = (edge.linked_belts or {})[belt_transfer.offset]
 		if not link then
 			log("FATAL: recevied items for non-existant link at offset " .. belt_transfer.offset)

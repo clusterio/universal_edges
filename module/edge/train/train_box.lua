@@ -8,6 +8,10 @@ local edge_util = require("modules/universal_edges/edge/util")
 	- get parking area length
 	- make parking area indestructible?
 ]]
+---@param offset number
+---@param edge UniversalEdge
+---@param surface LuaSurface
+---@return table?
 local function create_train_source_box(offset, edge, surface)
 	if not edge.linked_trains then
 		edge.linked_trains = {}
@@ -75,7 +79,9 @@ local function create_train_source_box(offset, edge, surface)
 	}
 end
 
-local function remove_train_source_box(offset, edge, _surface)
+---@param offset number
+---@param edge UniversalEdge
+local function remove_train_source_box(offset, edge)
 	if not edge.linked_trains then
 		edge.linked_trains = {}
 	end
@@ -118,6 +124,10 @@ end
 	- extends back as far as parking_area_size
 	- signal on rear end as occopancy detector
 ]]
+---@param offset number
+---@param edge UniversalEdge
+---@param surface LuaSurface
+---@param update table
 local function create_train_destination_box(offset, edge, surface, update)
 	log("Creating train destination box" .. serpent.block(update))
 	local edge_target = edge_util.edge_get_local_target(edge)
@@ -175,6 +185,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 		position = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge),
 		direction = edge_target.direction,
 	}
+	assert("FATAL: Failed to create train destination signal at " .. serpent.line(edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge)))
 
 	if not edge.linked_trains then
 		edge.linked_trains = {}
@@ -207,7 +218,9 @@ local function create_train_destination_box(offset, edge, surface, update)
 	return true
 end
 
-local function remove_train_destination_box(offset, edge, _surface)
+---@param offset number
+---@param edge UniversalEdge
+local function remove_train_destination_box(offset, edge)
 	game.print("Removing destination box at " .. offset)
 	if edge.linked_trains and edge.linked_trains[offset] then
 		local link = edge.linked_trains[offset]

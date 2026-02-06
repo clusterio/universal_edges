@@ -9,7 +9,8 @@ local BARRIER_OVERLAP = 1              -- 1 tile overlap between barriers
 local BARRIER_SPACING = BARRIER_SIZE - BARRIER_OVERLAP  -- 19 tiles between barrier centers
 
 -- Create barriers along an edge
-local function create_edge_barriers(edge)
+---@param edge UniversalEdge
+function barrier_manager.create_edge_barriers(edge)
 	local edge_id = edge.id
 	local local_target = edge_util.edge_get_local_target(edge)
 	if not local_target then return end
@@ -78,7 +79,8 @@ local function create_edge_barriers(edge)
 end
 
 -- Remove all barriers for an edge
-local function remove_edge_barriers(edge)
+---@param edge UniversalEdge
+function barrier_manager.remove_edge_barriers(edge)
 	local edge_id = edge.id
 	local local_target = edge_util.edge_get_local_target(edge)
 	if not local_target then return end
@@ -88,7 +90,6 @@ local function remove_edge_barriers(edge)
 	if not storage.universal_edges.barriers then return end
 	if not storage.universal_edges.barriers[surface_index] then return end
 	if not storage.universal_edges.barriers[surface_index][edge_id] then return end
-
 	-- destroy existing barriers for this edge
 	for _, barrier in ipairs(storage.universal_edges.barriers[surface_index][edge_id]) do
 		if barrier and barrier.valid then
@@ -96,7 +97,6 @@ local function remove_edge_barriers(edge)
 		end
 	end
 	storage.universal_edges.barriers[surface_index][edge_id] = nil
-
 	-- clean up pending barriers for this edge
 	if storage.universal_edges.barriers[surface_index]["pending"] then
 		for chunk_x, column in pairs(storage.universal_edges.barriers[surface_index]["pending"]) do
@@ -122,7 +122,9 @@ local function remove_edge_barriers(edge)
 	log("Removed all barriers for edge " .. edge_id .. " on surface " .. surface.name)
 end
 
-local function on_chunk_generated(event)
+-- Event handler for when a chunk is generated, to create any pending barriers in that chunk
+---@param event EventData.on_chunk_generated
+function barrier_manager.on_chunk_generated(event)
 	local chunk_pos = event.position
 	local surface_index = event.surface.index
 	-- Check if any barriers need to be created in this chunk
@@ -159,9 +161,5 @@ local function on_chunk_generated(event)
 		storage.universal_edges.barriers[surface_index]["pending"][chunk_pos.x] = nil
 	end
 end
-
-barrier_manager.create_edge_barriers = create_edge_barriers
-barrier_manager.remove_edge_barriers = remove_edge_barriers
-barrier_manager.on_chunk_generated = on_chunk_generated
 
 return barrier_manager

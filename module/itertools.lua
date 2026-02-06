@@ -1,5 +1,11 @@
 local itertools = {}
 
+---@param tbl table
+---@param state LinkedPowerState|LinkedFluidState|LinkedBeltState|PollConnectorsState|TrainLinkState
+---@param ticks_left number
+---@return function
+---@return table
+---@return nil
 function itertools.partial_pairs(tbl, state, ticks_left)
 	-- Guard against nil or non-table arguments
 	if not tbl or type(tbl) ~= "table" then
