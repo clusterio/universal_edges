@@ -55,14 +55,17 @@
 ---@field debug_visu table
 ---@field is_input boolean
 ---@field last_penalty_map_update table
----@field parking_area_size number
+---@field parking_area_size? number
 ---@field penalty_rails table<number, LuaEntity>
 ---@field previous_flow_state boolean
 ---@field previous_signal_state number
 ---@field rails table<number, LuaEntity>
 ---@field set_flow boolean
 ---@field signal LuaEntity
----@field stop LuaEntity
+---@field stop? LuaEntity
+---@field reachable_targets table<number, string>
+---@field reachable_sources table<number, string>
+---@field rescan_penalties boolean
 
 ---@class TrainLinkState
 ---@field endpoint number

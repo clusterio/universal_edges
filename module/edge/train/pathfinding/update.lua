@@ -123,7 +123,7 @@ local function update_connector_paths(edge, offset, link)
 		source_request.starts = request.starts
 	end
 
-	local result_targets = game.train_manager.request_train_path(request)
+	local result_targets = game.train_manager.request_train_path(request) ---@cast result_targets TrainPathAllGoalsResult
 	local reachable_targets = get_reachable_stations(result_targets, targets)
 	log("Reachable stations for offset " .. offset .. " " .. serpent.block(reachable_targets))
 	local result_sources = game.train_manager.request_train_path(source_request)

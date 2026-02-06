@@ -42,13 +42,13 @@ local function poll_links(edge_id, edge, ticks_left)
 		if not iterated_edge.linked_power then
 			goto continue
 		end
-		for _offset, link in pairs(iterated_edge.linked_power) do
+		for offset, link in pairs(iterated_edge.linked_power) do
 			if not link then
-				log("FATAL: Received power for non-existant link at offset " .. link.offset)
+				log("FATAL: Received power for non-existant link at offset " .. offset)
 				goto continue2
 			end
 			if not link.eei then
-				log("FATAL: received power for a link that does not have an eei " .. link.offset)
+				log("FATAL: received power for a link that does not have an eei " .. offset)
 				goto continue2
 			end
 			if storage.universal_edges.linked_power_update_tick ~= nil and link.lua_buffered_energy ~= nil and link.lua_buffered_energy > 0 then
@@ -71,21 +71,25 @@ local function poll_links(edge_id, edge, ticks_left)
 		if not iterated_edge.linked_power then
 			goto continue
 		end
-		for _offset, link in pairs(edge.linked_power) do
+		for offset, link in pairs(iterated_edge.linked_power) do ---@cast link LinkedPower
 			if not link then
-				log("FATAL: Received power for non-existant link at offset " .. link.offset)
+				log("FATAL: Received power for non-existant link at offset " .. offset)
 				goto continue2
 			end
 			if not link.eei then
-				log("FATAL: received power for a link that does not have an eei " .. link.offset)
+				log("FATAL: received power for a link that does not have an eei " .. offset)
 				goto continue2
 			end
 			if link.eei.valid then
 				local network = link.eei.electric_network_id
+				if network then
 				if not networks[network] then
 					networks[network] = {}
 				end
 				networks[network][#networks[network] + 1] = link
+				else
+					log("FATAL: eei at position: " .. link.eei.position .. " does not have a valid electric network id " .. offset)
+				end
 			end
 			::continue2::
 		end
