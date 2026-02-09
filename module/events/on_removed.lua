@@ -13,14 +13,15 @@ local remove_power_link = require("modules/universal_edges/edge/remove_power_lin
 local remove_train_link = require("modules/universal_edges/edge/train/remove_train_link")
 local pathfinder_events = require("modules/universal_edges/edge/train/pathfinding/events")
 
+---@param entity LuaEntity
 local function on_removed(entity)
 	if entity.valid and util.is_transport_belt[entity.name] then
 		local pos = { entity.position.x, entity.position.y }
-		for id, edge in pairs(storage.universal_edges.edges) do
+		for edge_id, edge in pairs(storage.universal_edges.edges) do
 			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				local offset = belt_check(pos, entity.direction, edge)
 				if offset ~= nil then
-					remove_belt_link(id, edge, offset, entity)
+					remove_belt_link(edge_id, edge, offset, entity)
 					break
 				end
 			end
@@ -28,11 +29,11 @@ local function on_removed(entity)
 	end
 	if entity.valid and util.is_pipe[entity.name] then
 		local pos = { entity.position.x, entity.position.y }
-		for id, edge in pairs(storage.universal_edges.edges) do
+		for edge_id, edge in pairs(storage.universal_edges.edges) do
 			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				local offset = fluid_check(pos, entity.direction, edge, entity)
 				if offset ~= nil then
-					remove_fluid_link(id, edge, offset, entity)
+					remove_fluid_link(edge_id, edge, offset, entity)
 					break
 				end
 			end
@@ -40,18 +41,18 @@ local function on_removed(entity)
 	end
 	if entity.valid and util.is_power_entity[entity.name] then
 		local pos = { entity.position.x, entity.position.y }
-		for id, edge in pairs(storage.universal_edges.edges) do
+		for edge_id, edge in pairs(storage.universal_edges.edges) do
 			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				local offset = power_check(pos, edge, entity)
 				if offset ~= nil then
-					remove_power_link(id, edge, offset, entity)
+					remove_power_link(edge_id, edge, offset, entity)
 				end
 			end
 		end
 	end
 	if entity.valid and entity.name == "straight-rail" then
 		local pos = { entity.position.x, entity.position.y }
-		for id, edge in pairs(storage.universal_edges.edges) do
+		for edge_id, edge in pairs(storage.universal_edges.edges) do
 			if edge.active and game.surfaces[edge_util.edge_get_local_target(edge).surface] == entity.surface then
 				-- We can reuse power_check since rail is the same size as substation
 				local offset = power_check(pos, edge, entity)
@@ -61,7 +62,7 @@ local function on_removed(entity)
 					and edge.linked_trains[offset]
 					and edge.linked_trains[offset].is_input
 				then
-					remove_train_link(id, edge, offset, entity)
+					remove_train_link(edge_id, edge, offset, entity)
 				end
 			end
 		end

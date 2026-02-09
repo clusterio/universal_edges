@@ -3,10 +3,11 @@ local LuaTrain_deserialize = require("modules/universal_edges/universal_serializ
 local LuaBurner_deserialize = require("modules/universal_edges/universal_serializer/classes/LuaBurner_deserialize")
 local LuaFluidBox_deserialize = require("modules/universal_edges/universal_serializer/classes/LuaFluidBox_deserialize")
 
---[[
-	Function to deserialize an entity from a string.
-]]
-local function entity_deserialize(serialized_entity, _is_already_delayed)
+
+-- Function to deserialize an entity from a string.
+---@param serialized_entity table
+---@return LuaEntity?
+local function entity_deserialize(serialized_entity)
 	-- local entity_data = load("return " .. serialized_entity)()
 	local entity_data = serialized_entity
 

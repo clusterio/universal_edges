@@ -1,5 +1,5 @@
 -- Serializes a LuaFluidBox object.
----@param burner LuaFluidBox
+---@param fluidbox LuaFluidBox
 ---@return table
 local function LuaFluidBox_serialize(fluidbox)
 	local fluidbox_data = {}

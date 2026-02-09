@@ -5,16 +5,21 @@ local edge_util = require("modules/universal_edges/edge/util")
 local universal_serializer = require("modules/universal_edges/universal_serializer/universal_serializer")
 local train_box = require("modules/universal_edges/edge/train/train_box")
 
---[[
-	Attempt sending trains to partner
-]]
-local function poll_links(id, edge, ticks_left)
+-- Attempt sending trains to partner
+---@param edge_id string
+---@param edge UniversalEdge
+---@param ticks_left number
+local function poll_links(edge_id, edge, ticks_left)
 	if not edge.linked_trains then
 		return
 	end
 
 	if not edge.linked_trains_state then
-		edge.linked_trains_state = {}
+		edge.linked_trains_state = {
+		endpoint = 1,
+		index = 1,
+		pos = 1,
+		}
 	end
 
 	if not edge.pending_train_transfers then
@@ -174,7 +179,7 @@ local function poll_links(id, edge, ticks_left)
 
 	if #train_transfers > 0 then
 		clusterio_api.send_json("universal_edges:transfer", {
-			edge_id = id,
+			edge_id = edge_id,
 			train_transfers = train_transfers,
 		})
 	end
@@ -183,18 +188,18 @@ end
 --[[
 	Spawn received train and return success status
 ]]
----@param _offset number
+---@param offset number
 ---@param link table
 ---@param train table
 ---@returns boolean
-local function push_train_link(edge, _offset, link, train)
+local function push_train_link(edge, offset, link, train)
 	-- Check if the spawn location is free using link signal
 	if link.signal.signal_state ~= defines.signal_state.open then
 		return false
 	end
 
 	local train_start_position = -4
-	local edge_x = edge_util.offset_to_edge_x(_offset, edge)
+	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 
 	local function snap_orientation(orientation)
 		if orientation == nil then
@@ -265,6 +270,9 @@ local function push_train_link(edge, _offset, link, train)
 	return luaTrain ~= nil
 end
 
+---@param edge UniversalEdge
+---@param train_transfers unknown
+---@return table
 local function receive_transfers(edge, train_transfers)
 	if train_transfers == nil then
 		return {}

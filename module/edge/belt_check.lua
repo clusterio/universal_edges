@@ -1,5 +1,8 @@
 local edge_util = require("modules/universal_edges/edge/util")
 
+---@param edge_pos Vector
+---@param edge UniversalEdge
+---@return boolean
 local function is_in_1x1_placement_area(edge_pos, edge)
 	if edge_pos[2] <= 0 or edge_pos[2] >= 1 then return false end
 	if edge_pos[1] <= 0 or edge_pos[1] >= edge.length then return false end
@@ -9,6 +12,10 @@ end
 
 -- Check if a belt at world pos and direction is going to or from the given edge
 -- returns edge offset if it does, otherwise nil
+---@param pos MapPosition
+---@param direction uint32
+---@param edge UniversalEdge
+---@return nil | number
 local function belt_check(pos, direction, edge)
 	-- Check if the axis the belt in is pendicular to the edge
 	if edge_util.edge_get_local_target(edge).direction % 8 ~= direction % 8 then

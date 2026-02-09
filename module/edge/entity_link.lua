@@ -6,6 +6,8 @@ local universal_serializer = require("modules/universal_edges/universal_serializ
 local EDGE_CROSS_THRESHOLD = -0.5
 local EDGE_SCAN_PADDING = 16
 
+---@param entity LuaEntity
+---@return string
 local function get_entity_key(entity)
 	if entity.type == "character" and entity.player then
 		return "player:" .. entity.player.name
@@ -16,6 +18,9 @@ local function get_entity_key(entity)
 	return "entity:" .. entity.name
 end
 
+---@param prev_edge_pos Vector?
+---@param current_edge_pos Vector
+---@return nil | table
 local function edge_cross_position(prev_edge_pos, current_edge_pos)
 	if current_edge_pos[2] > EDGE_CROSS_THRESHOLD then
 		return nil
@@ -35,10 +40,11 @@ local function edge_cross_position(prev_edge_pos, current_edge_pos)
 	return nil
 end
 
---[[
-	Send entities across the edege
-]]
-local function poll_links(id, edge, ticks_left)
+-- Send entities across the edege
+---@param edge_id any
+---@param edge UniversalEdge
+---@param ticks_left number
+local function poll_links(edge_id, edge, ticks_left)
 	if ticks_left ~= 0 then
 		return
 	end
@@ -159,13 +165,14 @@ local function poll_links(id, edge, ticks_left)
 	end
 	if #entity_transfers > 0 then
 		clusterio_api.send_json("universal_edges:transfer", {
-			edge_id = id,
+			edge_id = edge_id,
 			entity_transfers = entity_transfers,
 		})
 	end
 	storage.universal_edges.entity_last_positions[edge.id] = next_positions
 end
 
+---@param event EventData.on_player_left_game
 local function on_player_left_game(event)
 	local player = game.get_player(event.player_index)
 	if player == nil then
@@ -191,7 +198,9 @@ local function on_player_left_game(event)
 	})
 end
 
-
+---@param edge UniversalEdge
+---@param entity_transfers unknown
+---@return table
 local function receive_transfers(edge, entity_transfers)
 	if entity_transfers == nil then
 		return {}
@@ -236,6 +245,7 @@ local function receive_transfers(edge, entity_transfers)
 	return entity_response_transfers
 end
 
+---@param event EventData.on_player_joined_game
 local function on_player_joined_game(event)
 	local player = game.get_player(event.player_index)
 	if player == nil then

@@ -1,16 +1,21 @@
 local clusterio_api = require("modules/clusterio/api")
 local itertools = require("modules/universal_edges/itertools")
 
---[[
-	Send our current EEI charge to our partner for balancing
-]]
-local function poll_links(id, edge, ticks_left)
+-- Send our current EEI charge to our partner for balancing
+---@param edge_id string
+---@param edge UniversalEdge
+---@param ticks_left number
+local function poll_links(edge_id, edge, ticks_left)
 	if not edge.linked_power then
 		return
 	end
 
 	if not edge.linked_power_state then
-		edge.linked_power_state = {}
+		edge.linked_power_state = {
+			endpoint = 1,
+			index = 1,
+			pos = 1,
+		}
 	end
 
 	local power_transfers = {}
@@ -31,23 +36,23 @@ local function poll_links(id, edge, ticks_left)
 
 	if #power_transfers > 0 then
 		clusterio_api.send_json("universal_edges:transfer", {
-			edge_id = id,
+			edge_id = edge_id,
 			power_transfers = power_transfers,
 		})
 	end
 
 	-- Add power to the eei from the lua buffer to get smooth graphs
-	for _, edge in pairs(storage.universal_edges.edges) do
-		if not edge.linked_power then
+	for _, iterated_edge in pairs(storage.universal_edges.edges) do
+		if not iterated_edge.linked_power then
 			goto continue
 		end
-		for _offset, link in pairs(edge.linked_power) do
+		for offset, link in pairs(iterated_edge.linked_power) do
 			if not link then
-				log("FATAL: Received power for non-existant link at offset " .. link.offset)
+				log("FATAL: Received power for non-existant link at offset " .. offset)
 				goto continue2
 			end
 			if not link.eei then
-				log("FATAL: received power for a link that does not have an eei " .. link.offset)
+				log("FATAL: received power for a link that does not have an eei " .. offset)
 				goto continue2
 			end
 			if storage.universal_edges.linked_power_update_tick ~= nil and link.lua_buffered_energy ~= nil and link.lua_buffered_energy > 0 then
@@ -66,31 +71,35 @@ local function poll_links(id, edge, ticks_left)
 
 	-- Balance links in the same power network
 	local networks = {}
-	for _, edge in pairs(storage.universal_edges.edges) do
-		if not edge.linked_power then
+	for _, iterated_edge in pairs(storage.universal_edges.edges) do
+		if not iterated_edge.linked_power then
 			goto continue
 		end
-		for _offset, link in pairs(edge.linked_power) do
+		for offset, link in pairs(iterated_edge.linked_power) do ---@cast link LinkedPower
 			if not link then
-				log("FATAL: Received power for non-existant link at offset " .. link.offset)
+				log("FATAL: Received power for non-existant link at offset " .. offset)
 				goto continue2
 			end
 			if not link.eei then
-				log("FATAL: received power for a link that does not have an eei " .. link.offset)
+				log("FATAL: received power for a link that does not have an eei " .. offset)
 				goto continue2
 			end
 			if link.eei.valid then
 				local network = link.eei.electric_network_id
+				if network then
 				if not networks[network] then
 					networks[network] = {}
 				end
 				networks[network][#networks[network] + 1] = link
+				else
+					log("FATAL: eei at position: " .. link.eei.position .. " does not have a valid electric network id " .. offset)
+				end
 			end
 			::continue2::
 		end
 		::continue::
 	end
-	for _id, network in pairs(networks) do
+	for _, network in pairs(networks) do
 		local total_energy = 0
 		for _, link in pairs(network) do
 			total_energy = total_energy + link.eei.energy + (link.lua_buffered_energy or 0)
@@ -110,6 +119,9 @@ local function poll_links(id, edge, ticks_left)
 	end
 end
 
+---@param edge UniversalEdge
+---@param power_transfers unknown
+---@return table
 local function receive_transfers(edge, power_transfers)
 	if storage.universal_edges.linked_power_update_tick then
 		storage.universal_edges.linked_power_update_period = game.tick - storage.universal_edges

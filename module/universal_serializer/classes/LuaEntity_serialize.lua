@@ -2,10 +2,10 @@ local clusterio_serialize = require("modules/clusterio/serialize")
 local LuaTrain_serialize = require("modules/universal_edges/universal_serializer/classes/LuaTrain_serialize")
 local LuaBurner_serialize = require("modules/universal_edges/universal_serializer/classes/LuaBurner_serialize")
 local LuaFluidBox_serialize = require("modules/universal_edges/universal_serializer/classes/LuaFluidBox_serialize")
---[[
-	Function to serialize an entity to a string.
-]]
+
+-- Function to serialize an entity to a string.
 ---@param entity LuaEntity
+---@return table
 local function entity_serialize(entity)
 	local entity_data = {
 		surface = entity.surface.name,
@@ -96,7 +96,7 @@ local function entity_serialize(entity)
 				}
 			end
 		end
-		if control_behavior.object_name == "LuaTrainStopControlBehavior" then
+		if control_behavior.object_name == "LuaTrainStopControlBehavior" then ---@cast control_behavior LuaTrainStopControlBehavior
 			entity_data.control_behavior.send_to_train = control_behavior.send_to_train
 			entity_data.control_behavior.read_from_train = control_behavior.read_from_train
 			entity_data.control_behavior.read_stopped_train = control_behavior.read_stopped_train
@@ -108,7 +108,7 @@ local function entity_serialize(entity)
 			entity_data.control_behavior.trains_limit_signal = control_behavior.trains_limit_signal
 			LuaGenericOnOffControlBehavior_serialize(control_behavior)
 		end
-		if control_behavior.object_name == "LuaInserterControlBehavior" then
+		if control_behavior.object_name == "LuaInserterControlBehavior" then ---@cast control_behavior LuaInserterControlBehavior
 			entity_data.control_behavior.circuit_read_hand_contents = control_behavior.circuit_read_hand_contents
 			entity_data.control_behavior.circuit_mode_of_operation = control_behavior.circuit_mode_of_operation
 			entity_data.control_behavior.circuit_hand_read_mode = control_behavior.circuit_hand_read_mode

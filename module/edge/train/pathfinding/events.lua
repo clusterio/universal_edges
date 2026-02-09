@@ -27,7 +27,6 @@ local function on_server_startup()
 					]]
 					link.rescan_penalties = true
 					link.penalty_map = nil
-
 					-- Update flow (Is destination station blocked by a train?)
 					link.set_flow = link.signal and link.signal.signal_state == defines.signal_state.open
 					train_transfers[#train_transfers + 1] = {
@@ -55,6 +54,7 @@ local types_to_cause_update = {
 	["train-stop"] = true,
 }
 
+---@param entity LuaEntity
 local function on_built(entity)
 	-- Queue rescan
 	if types_to_cause_update[entity.type]
@@ -67,6 +67,7 @@ local function on_built(entity)
 	end
 end
 
+---@param entity LuaEntity
 local function on_removed(entity)
 	-- Queue rescan
 	if types_to_cause_update[entity.type]

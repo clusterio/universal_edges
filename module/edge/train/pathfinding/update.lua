@@ -2,6 +2,9 @@ local clusterio_api = require("modules/clusterio/api")
 local itertools = require("modules/universal_edges/itertools")
 local edge_util = require("modules/universal_edges/edge/util")
 
+---@param result TrainPathAllGoalsResult
+---@param train_stops table<number, {train_stop: LuaEntity}>
+---@return table<number, string>
 local function get_reachable_stations(result, train_stops)
 	local reachable_stations = {}
 	for index, penalty in pairs(result.penalties) do
@@ -14,6 +17,9 @@ local function get_reachable_stations(result, train_stops)
 	return reachable_stations
 end
 
+---@param new table
+---@param old table
+---@return boolean
 local function has_string_array_changed(new, old)
 	if old ~= nil then
 		if #new ~= #old then
@@ -38,6 +44,9 @@ end
 	from this destination. Unreachable destinations are excluded from the result. We only care about
 	the closest station of each name.
 ]]
+---@param edge UniversalEdge
+---@param offset number
+---@param link TrainLink
 local function update_connector_paths(edge, offset, link)
 	if not link.rails[1] or not link.rails[1].valid then
 		log("FATAL: Rail does not exist at " .. offset)
@@ -114,7 +123,7 @@ local function update_connector_paths(edge, offset, link)
 		source_request.starts = request.starts
 	end
 
-	local result_targets = game.train_manager.request_train_path(request)
+	local result_targets = game.train_manager.request_train_path(request) ---@cast result_targets TrainPathAllGoalsResult
 	local reachable_targets = get_reachable_stations(result_targets, targets)
 	log("Reachable stations for offset " .. offset .. " " .. serpent.block(reachable_targets))
 	local result_sources = game.train_manager.request_train_path(source_request)
@@ -150,13 +159,19 @@ end
 --[[
 	Check if any connectors have updated pathfinding penalties
 ]]
-local function poll_connectors(_id, edge, ticks_left)
+---@param edge UniversalEdge
+---@param ticks_left number
+local function poll_connectors(edge, ticks_left)
 	if not edge.linked_trains then
 		return
 	end
 
 	if not edge.poll_connectors_state then
-		edge.poll_connectors_state = {}
+		edge.poll_connectors_state = {
+			endpoint = 1,
+			index = 1,
+			pos = 1,
+		}
 	end
 
 	for offset, link in itertools.partial_pairs(
@@ -173,6 +188,9 @@ end
 	This function almost belongs more in train_box
 	Basically, it creates stations and circuit locked signals to emulate the pathfinding graph on the source side of the connector
 ]]
+---@param offset number
+---@param edge UniversalEdge
+---@param penalty_map unknown
 local function update_train_penalty_map(offset, edge, penalty_map)
 	if not edge.linked_trains then
 		edge.linked_trains = {}
