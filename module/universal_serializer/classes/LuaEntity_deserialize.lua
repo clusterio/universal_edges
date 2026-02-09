@@ -88,8 +88,8 @@ local function entity_deserialize(serialized_entity)
 
 	local entity = game.surfaces[entity_data.surface].create_entity(properties)
 	if entity == nil then
-		log("Failed to create entity " .. entity_data.name .. " at " .. serpent.block(entity_data))
-		log("Properties: " .. serpent.block(properties))
+		-- log("Failed to create entity " .. entity_data.name .. " at " .. serpent.block(entity_data))
+		-- log("Properties: " .. serpent.block(properties))
 		return nil
 	end
 

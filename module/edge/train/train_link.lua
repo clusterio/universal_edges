@@ -113,7 +113,7 @@ local function poll_links(edge_id, edge, ticks_left)
 				}
 
 				if #entities > 0 then
-					local luaTrain = entities[1].train
+					local luaTrain = entities[1].train.front_stock.train
 					if luaTrain then
 						local ordered_carriages = {}
 						for index, carriage in ipairs(luaTrain.carriages) do
@@ -137,7 +137,7 @@ local function poll_links(edge_id, edge, ticks_left)
 						end
 
 						-- Serialize train
-						local train = universal_serializer.LuaTrainComplete.serialize(luaTrain, ordered_carriages)
+						local train = universal_serializer.LuaTrainComplete.serialize(entities[1], ordered_carriages)
 						train.carriage_spacing = carriage_spacing
 						if train.train and ordered_carriages[1] then
 							train.train.front_direction = ordered_carriages[1].direction

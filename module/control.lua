@@ -78,6 +78,9 @@ local function setupGlobalData()
 	if not storage.universal_edges.barriers then
 		storage.universal_edges.barriers = {}
 	end
+	if not storage.universal_edges.delayed_entities then
+		storage.universal_edges.delayed_entities = {}
+	end
 	storage.universal_edges = storage.universal_edges
 end
 
