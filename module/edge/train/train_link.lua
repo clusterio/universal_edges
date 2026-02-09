@@ -259,10 +259,10 @@ local function push_train_link(edge, offset, link, train)
 
 	for _, carriage in ipairs(train.carriages) do
 		-- Translate from edge position to world position
-		log("Edge position " .. serpent.line(carriage.position))
+		-- log("Edge position " .. serpent.line(carriage.position))
 		local world_pos = edge_util.edge_pos_to_world(carriage.position, edge)
 		carriage.position = world_pos
-		log("World position " .. serpent.line(carriage.position))
+		-- log("World position " .. serpent.line(carriage.position))
 	end
 
 	local luaTrain = universal_serializer.LuaTrainComplete.deserialize(train)
