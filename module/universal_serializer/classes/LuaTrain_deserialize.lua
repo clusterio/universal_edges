@@ -3,14 +3,15 @@
 ---@param train_data table
 ---@return LuaTrain
 local function LuaTrain_deserialize(entity, train_data)
-	local train = entity.train
+	local train = entity.train ---@cast train -nil
+	local train_schedule = train.get_schedule()
 	if train == nil then
 		error("Failed to find train")
 	end
-
 	train.manual_mode = train_data.manual_mode
 	train.speed = train_data.speed
 	train.schedule = train_data.schedule
+	train_schedule.set_interrupts(train_data.interrupts)
 
 	return train
 end
