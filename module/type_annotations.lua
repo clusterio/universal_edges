@@ -27,7 +27,7 @@
 ---@class UniversalEdge
 ---@field active boolean
 ---@field id string
----@field is_deleted boolean
+---@field isDeleted boolean
 ---@field length number
 ---@field link_destinations table
 ---@field linked_belts table<number, LinkedBelt>
