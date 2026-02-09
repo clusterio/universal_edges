@@ -72,6 +72,15 @@ local function create_train_source_box(offset, edge, surface)
 		stop = stop,
 		signal = signal,
 		parking_area_size = parking_area_size,
+		debug_visu = {},
+		penalty_rails = {},
+		reachable_targets = {},
+		reachable_sources = {},
+		rescan_penalties = false,
+		last_penalty_map_update = {},
+		set_flow = true,
+		previous_signal_state = 0,
+		previous_flow_state = false,
 	}
 
 	return {
@@ -200,6 +209,15 @@ local function create_train_destination_box(offset, edge, surface, update)
 			is_input = false,
 			rails = rails,
 			signal = signal,
+			debug_visu = {},
+			penalty_rails = {},
+			reachable_targets = {},
+			reachable_sources = {},
+			rescan_penalties = false,
+			last_penalty_map_update = {},
+			set_flow = true,
+			previous_signal_state = 0,
+			previous_flow_state = false,
 		}
 	end
 

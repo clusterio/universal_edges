@@ -167,7 +167,11 @@ local function poll_connectors(edge, ticks_left)
 	end
 
 	if not edge.poll_connectors_state then
-		edge.poll_connectors_state = {}
+		edge.poll_connectors_state = {
+			endpoint = 1,
+			index = 1,
+			pos = 1,
+		}
 	end
 
 	for offset, link in itertools.partial_pairs(

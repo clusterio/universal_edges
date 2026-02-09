@@ -15,7 +15,11 @@ local function poll_links(edge_id, edge, ticks_left)
 	end
 
 	if not edge.linked_trains_state then
-		edge.linked_trains_state = {}
+		edge.linked_trains_state = {
+		endpoint = 1,
+		index = 1,
+		pos = 1,
+		}
 	end
 
 	if not edge.pending_train_transfers then

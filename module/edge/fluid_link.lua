@@ -13,7 +13,11 @@ local function poll_links(edge_id, edge, ticks_left)
 	end
 
 	if not edge.linked_fluids_state then
-		edge.linked_fluids_state = {}
+		edge.linked_fluids_state = {
+			endpoint = 1,
+			index = 1,
+			 pos = 1,
+		}
 	end
 
 	local fluid_transfers = {}
