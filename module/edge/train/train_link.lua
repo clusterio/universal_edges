@@ -113,7 +113,7 @@ local function poll_links(edge_id, edge, ticks_left)
 				}
 
 				if #entities > 0 then
-					local luaTrain = entities[1].train.front_stock.train
+					local luaTrain = entities[1].train
 					if luaTrain then
 						local ordered_carriages = {}
 						for index, carriage in ipairs(luaTrain.carriages) do
@@ -137,7 +137,7 @@ local function poll_links(edge_id, edge, ticks_left)
 						end
 
 						-- Serialize train
-						local train = universal_serializer.LuaTrainComplete.serialize(entities[1], ordered_carriages)
+						local train = universal_serializer.LuaTrainComplete.serialize(luaTrain, ordered_carriages)
 						train.carriage_spacing = carriage_spacing
 						if train.train and ordered_carriages[1] then
 							train.train.front_direction = ordered_carriages[1].direction
@@ -293,10 +293,10 @@ local function receive_transfers(edge, train_transfers)
 
 		if train_transfer.train then
 			-- Attempt to spawn train in world
-			local success = push_train_link(edge, train_transfer.offset, link, train_transfer.train)
+			local result = push_train_link(edge, train_transfer.offset, link, train_transfer.train)
 
 			-- If successful, return train_id without a train
-			if success then
+			if result then
 				log("Success! Telling source to go away")
 				-- Sending a transfer with a `train_id` and no `train` will delete train on destination
 				train_response_transfers[#train_response_transfers + 1] = {

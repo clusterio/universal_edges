@@ -164,11 +164,6 @@ local function entity_deserialize(serialized_entity)
 		end
 	end
 
-	-- Trains
-	if entity_data.train ~= nil then
-		LuaTrain_deserialize(entity, entity_data.train)
-	end
-
 	-- Cars
 	if entity_data.type == "car" then
 		if entity.name == "car" then
