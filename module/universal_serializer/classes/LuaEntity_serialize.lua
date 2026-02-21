@@ -122,11 +122,6 @@ local function entity_serialize(entity)
 		-- LuaCircuitNetwork (not implemented, needs red and green)
 	end
 
-	-- Trains
-	if entity.train ~= nil then
-		entity_data.train = LuaTrain_serialize(entity.train)
-	end
-
 	-- Cars & Tanks
 	if entity.type == "car" then
 		if entity.name == "car" then

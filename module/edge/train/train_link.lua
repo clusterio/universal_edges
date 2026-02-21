@@ -259,10 +259,10 @@ local function push_train_link(edge, offset, link, train)
 
 	for _, carriage in ipairs(train.carriages) do
 		-- Translate from edge position to world position
-		log("Edge position " .. serpent.line(carriage.position))
+		-- log("Edge position " .. serpent.line(carriage.position))
 		local world_pos = edge_util.edge_pos_to_world(carriage.position, edge)
 		carriage.position = world_pos
-		log("World position " .. serpent.line(carriage.position))
+		-- log("World position " .. serpent.line(carriage.position))
 	end
 
 	local luaTrain = universal_serializer.LuaTrainComplete.deserialize(train)
@@ -293,10 +293,10 @@ local function receive_transfers(edge, train_transfers)
 
 		if train_transfer.train then
 			-- Attempt to spawn train in world
-			local success = push_train_link(edge, train_transfer.offset, link, train_transfer.train)
+			local result = push_train_link(edge, train_transfer.offset, link, train_transfer.train)
 
 			-- If successful, return train_id without a train
-			if success then
+			if result then
 				log("Success! Telling source to go away")
 				-- Sending a transfer with a `train_id` and no `train` will delete train on destination
 				train_response_transfers[#train_response_transfers + 1] = {

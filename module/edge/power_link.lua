@@ -87,10 +87,10 @@ local function poll_links(edge_id, edge, ticks_left)
 			if link.eei.valid then
 				local network = link.eei.electric_network_id
 				if network then
-				if not networks[network] then
-					networks[network] = {}
-				end
-				networks[network][#networks[network] + 1] = link
+					if not networks[network] then
+						networks[network] = {}
+					end
+					networks[network][#networks[network] + 1] = link
 				else
 					log("FATAL: eei at position: " .. link.eei.position .. " does not have a valid electric network id " .. offset)
 				end
