@@ -28,6 +28,7 @@ local function entity_deserialize(serialized_entity)
 		create_build_effect_smoke = false,
 		spawn_decorations = true,
 		move_stuck_players = true,
+		raise_built = true
 	}
 	if player ~= nil then -- Prevent crash if player has never joined this server
 		properties.player = player

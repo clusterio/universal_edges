@@ -159,7 +159,7 @@ local function poll_links(edge_id, edge, ticks_left)
 				driver_name = driver_name,
 				passenger_name = passenger_name,
 			}
-			entity.destroy()
+			entity.destroy{raise_destroy = true}
 		end
 		::continue::
 	end
