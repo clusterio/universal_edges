@@ -5,6 +5,7 @@ local universal_serializer = require("modules/universal_edges/universal_serializ
 local edge_util = require("modules/universal_edges/edge/util")
 local util = require("modules/universal_edges/util")
 local barrier_manager = require("modules/universal_edges/barrier_manager")
+local enemy_manager = require("modules/universal_edges/enemy_manager")
 local belt_box = require("modules/universal_edges/edge/belt_box")
 local belt_link = require("modules/universal_edges/edge/belt_link")
 local entity_link = require("modules/universal_edges/edge/entity_link")
@@ -80,6 +81,9 @@ local function setupGlobalData()
 	end
 	if not storage.universal_edges.delayed_entities then
 		storage.universal_edges.delayed_entities = {}
+	end
+	if not storage.universal_edges.enemy_checks_disabled then -- used in enemy_manager to track which surfaces have had enemy checks disabled
+		storage.universal_edges.enemy_checks_disabled = {}
 	end
 	storage.universal_edges = storage.universal_edges
 end
@@ -544,7 +548,19 @@ universal_edges.events = {
 
 		-- Recreate barriers for all active edges on server startup
 		for _, edge in pairs(storage.universal_edges.edges) do
-			barrier_manager.create_edge_barriers(edge)
+
+		--- Periodically check for enemies and disable them if none are found in the play area
+		if storage.universal_edges.enemies_disabled == false then
+			script.on_nth_tick(3600, function()
+				for _, surface in pairs(game.surfaces) do
+					local no_enemies = enemy_manager.check_for_enemies(surface)
+					if no_enemies then
+						enemy_manager.disable_enemies(surface)
+						script.on_nth_tick(3600, nil) -- Stop checking after disabling enemies
+						game.print("Enemies detected and disabled on surface: " .. surface.name)
+					end
+				end
+			end)
 		end
 	end,
 
