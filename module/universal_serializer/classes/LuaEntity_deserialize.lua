@@ -198,6 +198,8 @@ local function entity_deserialize(serialized_entity)
 		entity.color = entity_data.spidertron.color
 		-- Health
 		entity.health = entity_data.spidertron.health
+		-- Rotation
+		entity.torso_orientation = entity_data.spidertron.torso_orientation
 		-- Autopilot destinations
 		for _, pos in pairs(entity_data.spidertron.autopilot_destinations) do
 			entity.add_autopilot_destination(pos)
