@@ -22,6 +22,9 @@ local function LuaTrainComplete_deserialize(train_data)
 			table.insert(storage.universal_edges.delayed_entities, carriage)
 		else
 			if entity.name == "locomotive" then -- If locomotive, deserialize train data to start the train in motion
+				if not first_locomotive then
+					first_locomotive = entity
+				end
 				LuaTrain_deserialize(entity, train_data.train)
 			elseif first_locomotive then -- each time a carriage is spawned, the game will swap the train to manual_mode
 				first_locomotive.train.manual_mode = train_data.train.manual_mode
