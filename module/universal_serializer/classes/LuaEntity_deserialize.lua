@@ -24,7 +24,6 @@ local function entity_deserialize(serialized_entity)
 		force = entity_data.force,
 		--[[ target ]]
 		--[[ source ]]
-		raise_build = true,
 		create_build_effect_smoke = false,
 		spawn_decorations = true,
 		move_stuck_players = true,
