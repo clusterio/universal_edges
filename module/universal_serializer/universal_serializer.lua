@@ -1,6 +1,6 @@
 return {
 	events = {
-		on_tick = require("events/on_tick"),
+		on_nth_tick_15 = require("events/on_tick"),
 	},
 	LuaEntity = {
 		serialize = require("classes/LuaEntity_serialize"),

@@ -7,7 +7,8 @@ local TRAIN_TYPES = {
 	["fluid-wagon"] = true
 }
 
-local function on_tick()
+-- called from control.lua on_tick handler every 15 ticks
+local function spawn_delayed_entities()
 	-- Iterate backwards so table.remove doesn't skip entries
 	local delayed_entities = storage.universal_edges.delayed_entities
 	local i = 1
@@ -73,4 +74,4 @@ function get_position_behind_train(entity, spacing)
 end
 
 
-return on_tick
+return spawn_delayed_entities
