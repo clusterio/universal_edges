@@ -4,16 +4,17 @@ local LuaTrain_serialize = require("modules/universal_edges/universal_serializer
 -- Serializes a complete LuaTrain object, including rolling stock
 ---@param LuaTrain LuaTrain
 ---@param carriages table<number, LuaEntity>
+---@param edge UniversalEdge
 ---@return table
-local function LuaTrainComplete_serialize(LuaTrain, carriages)
+local function LuaTrainComplete_serialize(LuaTrain, carriages, edge, offset)
 	local train_data = {
-		train = LuaTrain_serialize(LuaTrain), -- metadata
+		train = LuaTrain_serialize(LuaTrain, edge, offset), -- metadata
 		carriages = {}, -- entities
 	}
 
 	local ordered_carriages = carriages or LuaTrain.carriages
 	for _, carriage in ipairs(ordered_carriages) do
-		local serialized_carriage = LuaEntity_serialize(carriage)
+		local serialized_carriage = LuaEntity_serialize(carriage, edge, offset)
 		-- Add passenger data
 		if carriage.get_driver() and carriage.get_driver().player then
 			serialized_carriage.driver_name = carriage.get_driver().player.name
