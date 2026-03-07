@@ -32,7 +32,7 @@ local function LuaTrainComplete_serialize(LuaTrain, carriages)
 				table.remove(storage.universal_edges.delayed_entities, k)
 			end
 		else
-			storage.universal_edges.delayed_entities[k] = nil
+			table.remove(storage.universal_edges.delayed_entities, k)
 		end
 	end
 	return train_data

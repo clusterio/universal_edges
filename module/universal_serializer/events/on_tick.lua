@@ -1,40 +1,47 @@
 local LuaEntity_deserialize = require("modules/universal_edges/universal_serializer/classes/LuaEntity_deserialize")
 
+local TRAIN_TYPES = {
+	["cargo-wagon"] = true,
+	["locomotive"] = true,
+	["artillery-wagon"] = true,
+	["fluid-wagon"] = true
+}
+
 local function on_tick()
-	-- Attempt to deserialize delayed entities
-	local count = 0
-	for k, delayed_entity in ipairs(storage.universal_edges.delayed_entities) do
-		-- log("on_tick: attempting delayed entity deserialization for: " .. delayed_entity.name .. " of type " .. delayed_entity.type)
-		-- update cargo-wagon position relative to train
-		if delayed_entity.type == "cargo-wagon" or delayed_entity.type == "locomotive" then
-			local locomotive_entity = delayed_entity.locomotive_entity
-			if (locomotive_entity and locomotive_entity.valid) then
-				local manual_mode = locomotive_entity.train.manual_mode
-				local locomotive_entity_speed = locomotive_entity.train.speed
-				local schedule = locomotive_entity.train.schedule
-				-- modify position to be relative to train's back stock, with an offset of 7 tiles and account for train direction
-				local offset = 7
-				delayed_entity.position = get_position_behind_train(locomotive_entity, offset)
+	-- Iterate backwards so table.remove doesn't skip entries
+	local delayed_entities = storage.universal_edges.delayed_entities
+	local i = 1
+	while i <= #delayed_entities do
+		local delayed_entity = delayed_entities[i]
+		if not TRAIN_TYPES[delayed_entity.type] then
+			log("universal_edges: undefined delayed entity type: " .. delayed_entity.type)
+			table.remove(delayed_entities, i)
+		else
+			local front_stock = delayed_entity.front_stock
+			if not (front_stock and front_stock.valid) then
+				-- Train no longer exists, discard orphaned delayed entity
+				table.remove(delayed_entities, i)
+			else
+				-- Save train state before connecting a new carriage resets it
+				local manual_mode = front_stock.train.manual_mode
+				local speed = front_stock.train.speed
+				local schedule = front_stock.train.schedule
+
+				delayed_entity.position = get_position_behind_train(front_stock, 7)
 				local created_entity = LuaEntity_deserialize(delayed_entity)
 				if created_entity then
-					-- log("Successfully deserialized delayed entity: " .. created_entity.name)
-					locomotive_entity.train.manual_mode = manual_mode
-					locomotive_entity.train.schedule = schedule
-					locomotive_entity.train.speed = locomotive_entity_speed
-					-- log(serpent.block(storage.universal_edges.delayed_entities))
-					table.remove(storage.universal_edges.delayed_entities, k)
-					count = count + 1
-					-- log("delayed entities spawn count: " .. count .. " remaining: " .. #storage.universal_edges.delayed_entities)
-					break -- Only attempt to deserialize one entity per tick to avoid potential performance issues
+					front_stock.train.manual_mode = manual_mode
+					front_stock.train.schedule = schedule
+					front_stock.train.speed = speed
+					-- Re-seat driver if this carriage had one
+					if delayed_entity.driver_name then
+						storage.universal_edges.vehicle_drivers[delayed_entity.driver_name] = created_entity
+					end
+					table.remove(delayed_entities, i)
 				else
-					-- log("unable to create entity for delayed deserialization, will try again next tick")
-					break -- If deserialization fails, try again next tick
+					break -- No space yet, try again next tick
 				end
-			else
-				-- log("FATAL: train does not exist!")
 			end
-		else
-			log("gridworld: undefined delayed entity type: " .. delayed_entity.type)
 		end
 	end
 end
