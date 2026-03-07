@@ -11,32 +11,20 @@ local function on_tick()
 			if (locomotive_entity and locomotive_entity.valid) then
 				local manual_mode = locomotive_entity.train.manual_mode
 				local locomotive_entity_speed = locomotive_entity.train.speed
+				local schedule = locomotive_entity.train.schedule
 				-- modify position to be relative to train's back stock, with an offset of 7 tiles and account for train direction
 				local offset = 7
-				rendering.draw_circle{
-					color = {r=1, g=0, b=0},
-					radius = 0.5,
-					target = delayed_entity.position,
-					surface = game.surfaces[1],
-					time_to_live = 50
-				}
 				delayed_entity.position = get_position_behind_train(locomotive_entity, offset)
-				rendering.draw_circle{
-					color = {r=0, g=1, b=0},
-					radius = 0.75,
-					target = delayed_entity.position,
-					surface = game.surfaces[1],
-					time_to_live = 1
-				}
 				local created_entity = LuaEntity_deserialize(delayed_entity)
 				if created_entity then
 					-- log("Successfully deserialized delayed entity: " .. created_entity.name)
 					locomotive_entity.train.manual_mode = manual_mode
+					locomotive_entity.train.schedule = schedule
 					locomotive_entity.train.speed = locomotive_entity_speed
 					-- log(serpent.block(storage.universal_edges.delayed_entities))
 					table.remove(storage.universal_edges.delayed_entities, k)
 					count = count + 1
-					log("delayed entities spawn count: " .. count .. " remaining: " .. #storage.universal_edges.delayed_entities)
+					-- log("delayed entities spawn count: " .. count .. " remaining: " .. #storage.universal_edges.delayed_entities)
 					break -- Only attempt to deserialize one entity per tick to avoid potential performance issues
 				else
 					-- log("unable to create entity for delayed deserialization, will try again next tick")
@@ -46,7 +34,7 @@ local function on_tick()
 				-- log("FATAL: train does not exist!")
 			end
 		else
-			log("wtf are you doing?")
+			log("gridworld: undefined delayed entity type: " .. delayed_entity.type)
 		end
 	end
 end
