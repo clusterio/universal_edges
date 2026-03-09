@@ -10,7 +10,7 @@ local function LuaTrain_serialize(train, edge, offset)
 		interrupts = train_schedule.get_interrupts()
 	}
 
-	-- Remove the current schedule record if it matches the source trainstop we're departing from
+	-- [gridworld plugin] Remove the current schedule record if it matches the source trainstop we're departing from
 	if edge and offset and train.schedule and train.schedule.records then
 		local stop_name = edge.id .. " " .. offset
 		local record = train.schedule.records[train.schedule.current]

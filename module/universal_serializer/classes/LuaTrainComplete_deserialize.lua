@@ -34,6 +34,32 @@ local function LuaTrainComplete_deserialize(train_data)
 	if first_locomotive then
 		LuaTrain_deserialize(first_locomotive, train_data.train)
 	end
+
+	-- [gridworld plugin] Destroy train pathing proxy for the arriving train's destination
+	do
+		local proxies = storage.gridworld and storage.gridworld.train_proxies
+		if not proxies then goto continue end
+
+		local schedule = first_locomotive and first_locomotive.train and first_locomotive.train.schedule
+		if not schedule then goto continue end
+
+		local record = schedule.records and schedule.records[schedule.current]
+		local destination = record and record.station
+		if not destination or not proxies[destination] or #proxies[destination] == 0 then goto continue end
+
+		local loco = table.remove(proxies[destination])
+		if loco and loco.valid then
+			loco.destroy()
+		else
+			log("Failed to destroy train proxy for destination " .. destination .. " - invalid entity")
+		end
+		if #proxies[destination] == 0 then
+			proxies[destination] = nil
+		end
+
+		::continue::
+	end
+
 	return first_locomotive
 end
 

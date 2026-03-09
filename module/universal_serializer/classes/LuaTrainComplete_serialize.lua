@@ -14,7 +14,7 @@ local function LuaTrainComplete_serialize(LuaTrain, carriages, edge, offset)
 
 	local ordered_carriages = carriages or LuaTrain.carriages
 	for _, carriage in ipairs(ordered_carriages) do
-		local serialized_carriage = LuaEntity_serialize(carriage, edge, offset)
+		local serialized_carriage = LuaEntity_serialize(carriage)
 		-- Add passenger data
 		if carriage.get_driver() and carriage.get_driver().player then
 			serialized_carriage.driver_name = carriage.get_driver().player.name
