@@ -38,7 +38,7 @@ local function create_train_source_box(offset, edge, surface)
 	end
 
 	-- Depends on how many signals/stations we need to make space for
-	local number_of_rails_to_spawn = 2
+	local number_of_rails_to_spawn = 12
 
 	-- if edge_target.direction % 8 == 0 then -- Entrance is north/south
 	local rails = {}
@@ -52,7 +52,7 @@ local function create_train_source_box(offset, edge, surface)
 
 	local stop = surface.create_entity {
 		name = "ue_source_trainstop",
-		position = edge_util.edge_pos_to_world({ edge_x + 2, -3 }, edge),
+		position = edge_util.edge_pos_to_world({ edge_x + 2, -23 }, edge),
 		direction = edge_target.direction,
 	}
 	stop.backer_name = edge.id .. " " .. offset
@@ -144,7 +144,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 
 	-- Parking length in number of rail tiles (each rail tile is 2x2)
 	-- local parking_length = update.data.parking_area_size + 2
-	local parking_length = constants.MAX_TRAIN_LENGTH * 4 + 2
+	local parking_length = constants.MAX_TRAIN_LENGTH * 4 + 2 + 5 -- +5 for train proxies
 	local rails = {}
 	for i = 1, parking_length do
 		-- Check if rail already exists - might happen if station was removed while train was on output
@@ -166,10 +166,10 @@ local function create_train_destination_box(offset, edge, surface, update)
 
 	local signal = surface.create_entity {
 		name = "rail-signal",
-		position = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge),
+		position = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 + 10 }, edge), -- +10 to move signal in front of train proxy spawn area
 		direction = edge_target.direction,
 	}
-	assert("FATAL: Failed to create train destination signal at " .. serpent.line(edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge)))
+	assert(signal, "FATAL: Failed to create train destination signal at " .. serpent.line(edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge)))
 
 	if not edge.linked_trains then
 		edge.linked_trains = {}

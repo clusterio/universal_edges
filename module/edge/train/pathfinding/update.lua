@@ -273,7 +273,7 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 	for i = 2, plan_length * 2 + 4 do
 		rails[#rails + 1] = surface.create_entity {
 			name = "straight-rail",
-			position = edge_util.edge_pos_to_world({ edge_x, -1 - i * 2 }, edge),
+			position = edge_util.edge_pos_to_world({ edge_x, -17 - i * 2 }, edge),
 			direction = edge_target.direction,
 		}
 	end
@@ -283,12 +283,12 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 			-- Add huge pathfinding penalty
 			local signal = surface.create_entity {
 				name = "rail-signal",
-				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -4.5 - processed_dividers * 4 }, edge),
+				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -20.5 - processed_dividers * 4 }, edge),
 				direction = (edge_target.direction + 8) % 16,
 			}
 			local combinator = surface.create_entity {
 				name = "constant-combinator",
-				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -5.5 - processed_dividers * 4 }, edge),
+				position = edge_util.edge_pos_to_world({ edge_x + 1.5, -21.5 - processed_dividers * 4 }, edge),
 				direction = (edge_target.direction + 8) % 16,
 			}
 
@@ -323,12 +323,13 @@ local function update_train_penalty_map(offset, edge, penalty_map)
 			-- Add stacked trainstops
 			local stop = surface.create_entity {
 				name = "ue_proxy_trainstop",
-				position = edge_util.edge_pos_to_world({ edge_x + 2, -3 - processed_dividers * 4 }, edge),
+				position = edge_util.edge_pos_to_world({ edge_x + 2, -19 - processed_dividers * 4 }, edge),
 				direction = edge_target.direction,
 				force = "player", -- Neutral/Enemy can be used to hide trainstop name from schedule GUI/map view respectively
 			}
 			if stop ~= nil then
 				stop.backer_name = item.name -- Set station name
+				stop.trains_limit = 0
 				rails[#rails + 1] = stop
 			else
 				log("Failed to create trainstop")
