@@ -320,9 +320,10 @@ local function receive_transfers(edge, train_transfers)
 				log("Transfer successful, deleting local train " .. train_transfer.train_id)
 				for _, carriage in ipairs(train.carriages) do
 					-- Remove driver from train and ask them to teleport
-					if carriage.get_driver() then
+					local driver = carriage.get_driver()
+					if driver then
 						-- Teleport player to the other side of the edge
-						local player = carriage.get_driver().player
+						local player = driver.player
 						if player ~= nil then
 							-- Check if both sides of the edge are on the same instanceId
 							if edge.source.instanceId == edge.target.instanceId then
