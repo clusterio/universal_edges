@@ -37,7 +37,12 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 			position = loader_pos,
 			direction = (edge_target.direction + 8) % 16,
 		}
-		assert(loader, "FATAL: failed to create loader for belt box at offset " .. offset .. " on edge " .. edge.id)
+		if not loader then
+			local msg = "FATAL: failed to create loader for belt box at [gps=" .. loader_pos.x .. "," .. loader_pos.y .. "," .. surface.name .. "] offset " .. offset .. " on edge " .. edge.id
+			log(msg)
+			game.print(msg)
+			return
+		end
 	end
 
 	loader.loader_type = is_input and "input" or "output"
@@ -47,7 +52,12 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 			name = "steel-chest",
 			position = chest_pos,
 		}
-		assert(chest, "FATAL: failed to create chest for belt box at offset " .. offset .. " on edge " .. edge.id)
+		if not chest then
+			local msg = "FATAL: failed to create chest for belt box at [gps=" .. chest_pos.x .. "," .. chest_pos.y .. "," .. surface.name .. "] offset " .. offset .. " on edge " .. edge.id
+			log(msg)
+			game.print(msg)
+			return
+		end
 	end
 
 	if not edge.linked_belts then

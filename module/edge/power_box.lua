@@ -25,23 +25,52 @@ local function create_power_box(offset, edge, surface)
 			name = eei_type,
 			position = eei_pos,
 		}
-		assert(eei, "FATAL: failed to create EEI for power box at " .. serpent.line(eei_pos))
+		if not eei then
+			local msg = "FATAL: failed to create EEI for power box at [gps=" .. eei_pos.x .. "," .. eei_pos.y .. "," .. surface.name .. "]"
+			log(msg)
+			game.print(msg)
+			return false
+		end
 	end
 
 	if not charge_sensor then
-		charge_sensor = surface.create_entity {
-			name = "accumulator",
-			position = eei_pos,
-		}
-		assert(charge_sensor, "FATAL: failed to create charge sensor for power box at " .. serpent.line(eei_pos))
+		if surface.entity_prototype_collides("accumulator", eei_pos, false) then
+			charge_sensor = surface.find_entity("accumulator", eei_pos)
+			if not charge_sensor then
+				return false
+			end
+		else
+			charge_sensor = surface.create_entity {
+				name = "accumulator",
+				position = eei_pos,
+			}
+			if not charge_sensor then
+				local msg = "FATAL: failed to create charge sensor for power box at [gps=" .. eei_pos.x .. "," .. eei_pos.y .. "," .. surface.name .. "]"
+				log(msg)
+				game.print(msg)
+				return false
+			end
+		end
 	end
 
 	if not powerpole then
-		powerpole = surface.create_entity {
-			name = "substation",
-			position = eei_pos,
-		}
-		assert(powerpole, "FATAL: failed to create power pole for power box at " .. serpent.line(eei_pos))
+		if surface.entity_prototype_collides("substation", eei_pos, false) then
+			powerpole = surface.find_entity("substation", eei_pos)
+			if not powerpole then
+				return false
+			end
+		else
+			powerpole = surface.create_entity {
+				name = "substation",
+				position = eei_pos,
+			}
+			if not powerpole then
+				local msg = "FATAL: failed to create power pole for power box at [gps=" .. eei_pos.x .. "," .. eei_pos.y .. "," .. surface.name .. "]"
+				log(msg)
+				game.print(msg)
+				return false
+			end
+		end
 	end
 
 	if not edge.linked_power then

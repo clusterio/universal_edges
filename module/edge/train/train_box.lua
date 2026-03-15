@@ -43,24 +43,47 @@ local function create_train_source_box(offset, edge, surface)
 	-- if edge_target.direction % 8 == 0 then -- Entrance is north/south
 	local rails = {}
 	for i = 1, number_of_rails_to_spawn do
-		rails[#rails + 1] = surface.create_entity {
+		local rail_pos = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge)
+		local rail = surface.create_entity {
 			name = "straight-rail",
-			position = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge),
+			position = rail_pos,
 			direction = edge_target.direction,
 		}
+		if not rail then
+			local msg = "FATAL: Failed to create source rail at [gps=" .. rail_pos.x .. "," .. rail_pos.y .. "," .. surface.name .. "]"
+			log(msg)
+			game.print(msg)
+			return
+		end
+		rails[#rails + 1] = rail
 	end
 
+	local stop_pos = edge_util.edge_pos_to_world({ edge_x + 2, -23 }, edge)
 	local stop = surface.create_entity {
 		name = "ue_source_trainstop",
-		position = edge_util.edge_pos_to_world({ edge_x + 2, -23 }, edge),
+		position = stop_pos,
 		direction = edge_target.direction,
 	}
+	if not stop then
+		local msg = "FATAL: Failed to create source train stop at [gps=" .. stop_pos.x .. "," .. stop_pos.y .. "," .. surface.name .. "]"
+		log(msg)
+		game.print(msg)
+		return
+	end
 	stop.backer_name = edge.id .. " " .. offset
+
+	local signal_pos = edge_util.edge_pos_to_world({ edge_x + 1.5, -0.5 }, edge)
 	local signal = surface.create_entity {
 		name = "rail-signal",
-		position = edge_util.edge_pos_to_world({ edge_x + 1.5, -0.5 }, edge),
+		position = signal_pos,
 		direction = (edge_target.direction + 8) % 16,
 	}
+	if not signal then
+		local msg = "FATAL: Failed to create source rail signal at [gps=" .. signal_pos.x .. "," .. signal_pos.y .. "," .. surface.name .. "]"
+		log(msg)
+		game.print(msg)
+		return
+	end
 
 	if not edge.linked_trains then
 		edge.linked_trains = {}
@@ -156,11 +179,19 @@ local function create_train_destination_box(offset, edge, surface, update)
 			rails[#rails + 1] = rail
 			-- Skip creating new rail
 		else
-			rails[#rails + 1] = surface.create_entity {
+			local rail_pos = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge)
+			local new_rail = surface.create_entity {
 				name = "straight-rail",
-				position = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge),
+				position = rail_pos,
 				direction = edge_target.direction,
 			}
+			if not new_rail then
+				local msg = "FATAL: Failed to create destination rail at [gps=" .. rail_pos.x .. "," .. rail_pos.y .. "," .. surface.name .. "]"
+				log(msg)
+				game.print(msg)
+				return
+			end
+			rails[#rails + 1] = new_rail
 		end
 	end
 
@@ -169,7 +200,13 @@ local function create_train_destination_box(offset, edge, surface, update)
 		position = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 + 10 }, edge), -- +10 to move signal in front of train proxy spawn area
 		direction = edge_target.direction,
 	}
-	assert(signal, "FATAL: Failed to create train destination signal at " .. serpent.line(edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge)))
+	if not signal then
+		local pos = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge)
+		local msg = "FATAL: Failed to create train destination signal at [gps=" .. pos.x .. "," .. pos.y .. "," .. surface.name .. "]"
+		log(msg)
+		game.print(msg)
+		return
+	end
 
 	if not edge.linked_trains then
 		edge.linked_trains = {}

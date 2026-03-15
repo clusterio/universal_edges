@@ -16,18 +16,25 @@ local function create_fluid_box(offset, edge, surface)
 	end
 	local pipe
 	if surface.entity_prototype_collides(pipe_type, pipe_pos, false, edge_target.direction) then
-		-- Is the pipe already there?
+		-- Something is already here — reuse it if it's our pipe, otherwise bail
 		pipe = surface.find_entity(pipe_type, pipe_pos)
 		if not pipe then
+			local msg = "FATAL: failed to create fluid pipe, blocked by another entity at [gps=" .. pipe_pos.x .. "," .. pipe_pos.y .. "," .. surface.name .. "] offset " .. offset .. " on edge " .. edge.id
+			log(msg)
+			game.print(msg)
 			return false
 		end
-	end
-
-	if not pipe then
+	else
 		pipe = surface.create_entity {
 			name = pipe_type,
 			position = pipe_pos,
 		}
+		if not pipe then
+			local msg = "FATAL: failed to create fluid pipe at [gps=" .. pipe_pos.x .. "," .. pipe_pos.y .. "," .. surface.name .. "] offset " .. offset .. " on edge " .. edge.id
+			log(msg)
+			game.print(msg)
+			return false
+		end
 	end
 
 	if not edge.linked_fluids then
