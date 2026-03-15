@@ -45,7 +45,7 @@
 ---@field updateAtMs uint
 
 ---@class EdgeSourceOrTarget
----@field direction uint32
+---@field direction defines.direction
 ---@field instanceId uint32
 ---@field origin Vector
 ---@field ready boolean
@@ -80,7 +80,8 @@
 ---@class LinkedBelt
 ---@field chest LuaEntity
 ---@field is_input boolean
----@field start_index number
+---@field start_index number?
+---@field flag_for_removal boolean?
 
 ---@class LinkedBeltState
 ---@field endpoint number

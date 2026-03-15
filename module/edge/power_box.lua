@@ -9,67 +9,31 @@ local function create_power_box(offset, edge, surface)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 
 	local eei_pos = edge_util.edge_pos_to_world({ edge_x, -1 }, edge)
-	local charge_sensor = surface.find_entity("accumulator", eei_pos)
-	local powerpole = surface.find_entity("substation", eei_pos)
-	local eei
-	if surface.entity_prototype_collides(eei_type, eei_pos, false) then
-		-- Is the eei already there?
-		eei = surface.find_entity(eei_type, eei_pos)
-		if not eei then
-			return false
-		end
-	end
 
+	local eei = surface.find_entity(eei_type, eei_pos)
 	if not eei then
-		eei = surface.create_entity {
-			name = eei_type,
-			position = eei_pos,
-		}
+		eei = surface.create_entity { name = eei_type, position = eei_pos }
 		if not eei then
-			local msg = "FATAL: failed to create EEI for power box at [gps=" .. eei_pos.x .. "," .. eei_pos.y .. "," .. surface.name .. "]"
-			log(msg)
-			game.print(msg)
+			edge_util.fatal("FATAL: failed to create EEI for power box at " .. edge_util.gps_tag(eei_pos, surface))
 			return false
 		end
 	end
 
+	local charge_sensor = surface.find_entity("accumulator", eei_pos)
 	if not charge_sensor then
-		if surface.entity_prototype_collides("accumulator", eei_pos, false) then
-			charge_sensor = surface.find_entity("accumulator", eei_pos)
-			if not charge_sensor then
-				return false
-			end
-		else
-			charge_sensor = surface.create_entity {
-				name = "accumulator",
-				position = eei_pos,
-			}
-			if not charge_sensor then
-				local msg = "FATAL: failed to create charge sensor for power box at [gps=" .. eei_pos.x .. "," .. eei_pos.y .. "," .. surface.name .. "]"
-				log(msg)
-				game.print(msg)
-				return false
-			end
+		charge_sensor = surface.create_entity { name = "accumulator", position = eei_pos }
+		if not charge_sensor then
+			edge_util.fatal("FATAL: failed to create charge sensor for power box at " .. edge_util.gps_tag(eei_pos, surface))
+			return false
 		end
 	end
 
+	local powerpole = surface.find_entity("substation", eei_pos)
 	if not powerpole then
-		if surface.entity_prototype_collides("substation", eei_pos, false) then
-			powerpole = surface.find_entity("substation", eei_pos)
-			if not powerpole then
-				return false
-			end
-		else
-			powerpole = surface.create_entity {
-				name = "substation",
-				position = eei_pos,
-			}
-			if not powerpole then
-				local msg = "FATAL: failed to create power pole for power box at [gps=" .. eei_pos.x .. "," .. eei_pos.y .. "," .. surface.name .. "]"
-				log(msg)
-				game.print(msg)
-				return false
-			end
+		powerpole = surface.create_entity { name = "substation", position = eei_pos }
+		if not powerpole then
+			edge_util.fatal("FATAL: failed to create power pole for power box at " .. edge_util.gps_tag(eei_pos, surface))
+			return false
 		end
 	end
 

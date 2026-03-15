@@ -98,4 +98,17 @@ function edge_util.offset_to_edge_x(offset, edge)
 	return edge_x
 end
 
+---@param pos MapPosition
+---@param surface LuaSurface
+---@return string
+function edge_util.gps_tag(pos, surface)
+	return "[gps=" .. pos.x .. "," .. pos.y .. "," .. surface.name .. "]"
+end
+
+---@param msg string
+function edge_util.fatal(msg)
+	log(msg)
+	game.print(msg)
+end
+
 return edge_util

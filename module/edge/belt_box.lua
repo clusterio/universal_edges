@@ -12,25 +12,7 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 
 	local loader_pos = edge_util.edge_pos_to_world({edge_x, -1}, edge)
 	local loader_type = util.belt_type_to_loader_type[belt_type]
-	local loader
-	if surface.entity_prototype_collides(loader_type, loader_pos, false, edge_target.direction) then
-		-- Is the loader already there?
-		loader = surface.find_entity(loader_type, loader_pos)
-		if not loader then
-			return
-		end
-	end
-
-	local chest_pos = edge_util.edge_pos_to_world({edge_x, -2.5}, edge)
-	local chest
-	if surface.entity_prototype_collides("steel-chest", chest_pos, false) then
-		-- Is the chest already there?
-		chest = surface.find_entity("steel-chest", chest_pos)
-		if not chest then
-			return
-		end
-	end
-
+	local loader = surface.find_entity(loader_type, loader_pos)
 	if not loader then
 		loader = surface.create_entity {
 			name = loader_type,
@@ -38,25 +20,23 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 			direction = (edge_target.direction + 8) % 16,
 		}
 		if not loader then
-			local msg = "FATAL: failed to create loader for belt box at [gps=" .. loader_pos.x .. "," .. loader_pos.y .. "," .. surface.name .. "] offset " .. offset .. " on edge " .. edge.id
-			log(msg)
-			game.print(msg)
-			return
+			edge_util.fatal("FATAL: failed to create loader for belt box at " .. edge_util.gps_tag(loader_pos, surface) .. " offset " .. offset .. " on edge " .. edge.id)
+			return false
 		end
 	end
 
 	loader.loader_type = is_input and "input" or "output"
 
+	local chest_pos = edge_util.edge_pos_to_world({edge_x, -2.5}, edge)
+	local chest = surface.find_entity("steel-chest", chest_pos)
 	if not chest then
 		chest = surface.create_entity {
 			name = "steel-chest",
 			position = chest_pos,
 		}
 		if not chest then
-			local msg = "FATAL: failed to create chest for belt box at [gps=" .. chest_pos.x .. "," .. chest_pos.y .. "," .. surface.name .. "] offset " .. offset .. " on edge " .. edge.id
-			log(msg)
-			game.print(msg)
-			return
+			edge_util.fatal("FATAL: failed to create chest for belt box at " .. edge_util.gps_tag(chest_pos, surface) .. " offset " .. offset .. " on edge " .. edge.id)
+			return false
 		end
 	end
 
@@ -72,8 +52,6 @@ local function create_belt_box(offset, edge, is_input, belt_type, surface)
 		edge.linked_belts[offset] = {
 			chest = chest,
 			is_input = is_input,
-			start_index = nil,
-			flag_for_removal = nil,
 		}
 	end
 end

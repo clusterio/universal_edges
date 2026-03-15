@@ -50,9 +50,7 @@ local function create_train_source_box(offset, edge, surface)
 			direction = edge_target.direction,
 		}
 		if not rail then
-			local msg = "FATAL: Failed to create source rail at [gps=" .. rail_pos.x .. "," .. rail_pos.y .. "," .. surface.name .. "]"
-			log(msg)
-			game.print(msg)
+			edge_util.fatal("FATAL: Failed to create source rail at " .. edge_util.gps_tag(rail_pos, surface))
 			return
 		end
 		rails[#rails + 1] = rail
@@ -65,9 +63,7 @@ local function create_train_source_box(offset, edge, surface)
 		direction = edge_target.direction,
 	}
 	if not stop then
-		local msg = "FATAL: Failed to create source train stop at [gps=" .. stop_pos.x .. "," .. stop_pos.y .. "," .. surface.name .. "]"
-		log(msg)
-		game.print(msg)
+		edge_util.fatal("FATAL: Failed to create source train stop at " .. edge_util.gps_tag(stop_pos, surface))
 		return
 	end
 	stop.backer_name = edge.id .. " " .. offset
@@ -79,9 +75,7 @@ local function create_train_source_box(offset, edge, surface)
 		direction = (edge_target.direction + 8) % 16,
 	}
 	if not signal then
-		local msg = "FATAL: Failed to create source rail signal at [gps=" .. signal_pos.x .. "," .. signal_pos.y .. "," .. surface.name .. "]"
-		log(msg)
-		game.print(msg)
+		edge_util.fatal("FATAL: Failed to create source rail signal at " .. edge_util.gps_tag(signal_pos, surface))
 		return
 	end
 
@@ -186,9 +180,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 				direction = edge_target.direction,
 			}
 			if not new_rail then
-				local msg = "FATAL: Failed to create destination rail at [gps=" .. rail_pos.x .. "," .. rail_pos.y .. "," .. surface.name .. "]"
-				log(msg)
-				game.print(msg)
+				edge_util.fatal("FATAL: Failed to create destination rail at " .. edge_util.gps_tag(rail_pos, surface))
 				return
 			end
 			rails[#rails + 1] = new_rail
@@ -202,9 +194,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 	}
 	if not signal then
 		local pos = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge)
-		local msg = "FATAL: Failed to create train destination signal at [gps=" .. pos.x .. "," .. pos.y .. "," .. surface.name .. "]"
-		log(msg)
-		game.print(msg)
+		edge_util.fatal("FATAL: Failed to create train destination signal at " .. edge_util.gps_tag(pos, surface))
 		return
 	end
 
