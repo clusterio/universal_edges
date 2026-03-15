@@ -42,18 +42,18 @@ local function poll_links(edge_id, edge, ticks_left)
 		end
 
 		local signal_state
-		if link.is_input and link.signal.valid then
+		if link.is_input then
 			signal_state = link.signal.signal_state
 			-- Update debug visualization of flow status
 			if link.debug_visu == nil then
 				link.debug_visu = {}
 			end
 
-			-- Rmove old visualizations
-			for index, visu in ipairs(link.debug_visu) do
+			-- Remove old visualizations
+			for _, visu in pairs(link.debug_visu) do
 				if visu.valid then visu.destroy() end
-				link.debug_visu[index] = nil
 			end
+			link.debug_visu = {}
 
 			local edge_x = edge_util.offset_to_edge_x(offset, edge)
 			-- Visualize set_flow
@@ -69,7 +69,7 @@ local function poll_links(edge_id, edge, ticks_left)
 			elseif link.set_flow == nil then
 				local pos = edge_util.edge_pos_to_world({ edge_x, 0 }, edge)
 				link.debug_visu[#link.debug_visu + 1] = rendering.draw_text {
-					text = "offset: " .. offset .. "signal: " .. signal_state .. " flow: " .. tostring(link.set_flow),
+					text = "offset: " .. offset .. " signal: " .. signal_state .. " flow: " .. tostring(link.set_flow),
 					surface = game.surfaces[edge_util.edge_get_local_target(edge).surface],
 					target = pos,
 					color = { r = 1, g = 1, b = 1 },
@@ -156,7 +156,7 @@ local function poll_links(edge_id, edge, ticks_left)
 						train_transfers[#train_transfers + 1] = {
 							offset = offset,
 							train = train,
-							train_id = luaTrain.id, -- Used to delete train after successfull spawning
+							train_id = luaTrain.id, -- Used to delete train after successful spawning
 						}
 					end
 				end
@@ -185,6 +185,32 @@ local function poll_links(edge_id, edge, ticks_left)
 	end
 end
 
+local function snap_orientation(orientation)
+	if orientation == nil then
+		return nil
+	end
+	local snapped = math.floor((orientation + 0.125) / 0.25) * 0.25
+	snapped = snapped % 1
+	if snapped < 0 then
+		snapped = snapped + 1
+	end
+	return snapped
+end
+
+local function orientation_to_direction(orientation)
+	if orientation == 0 then return defines.direction.north end
+	if orientation == 0.25 then return defines.direction.east end
+	if orientation == 0.5 then return defines.direction.south end
+	if orientation == 0.75 then return defines.direction.west end
+	return nil
+end
+
+local function get_position_components(position)
+	local x = position.x or position[1]
+	local y = position.y or position[2]
+	return x, y
+end
+
 --[[
 	Spawn received train and return success status
 ]]
@@ -194,38 +220,12 @@ end
 ---@returns boolean
 local function push_train_link(edge, offset, link, train)
 	-- Check if the spawn location is free using link signal
-	if link.signal.signal_state ~= defines.signal_state.open then
+	if not link.signal.valid or link.signal.signal_state ~= defines.signal_state.open then
 		return false
 	end
 
 	local train_start_position = -4
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
-
-	local function snap_orientation(orientation)
-		if orientation == nil then
-			return nil
-		end
-		local snapped = math.floor((orientation + 0.125) / 0.25) * 0.25
-		snapped = snapped % 1
-		if snapped < 0 then
-			snapped = snapped + 1
-		end
-		return snapped
-	end
-
-	local function orientation_to_direction(orientation)
-		if orientation == 0 then return defines.direction.north end
-		if orientation == 0.25 then return defines.direction.east end
-		if orientation == 0.5 then return defines.direction.south end
-		if orientation == 0.75 then return defines.direction.west end
-		return nil
-	end
-
-	local function get_position_components(position)
-		local x = position.x or position[1]
-		local y = position.y or position[2]
-		return x, y
-	end
 
 	local spacing = train.carriage_spacing
 	if spacing == nil and #train.carriages > 1 then
@@ -282,7 +282,7 @@ local function receive_transfers(edge, train_transfers)
 		-- log("TrainTransfer: " .. serpent.line(train_transfer))
 		local link = (edge.linked_trains or {})[train_transfer.offset]
 		if not link then
-			log("FATAL: Received train for non-existant link at offset " .. train_transfer.offset)
+			log("FATAL: Received train for non-existent link at offset " .. train_transfer.offset)
 			goto continue
 		end
 
@@ -347,7 +347,7 @@ local function receive_transfers(edge, train_transfers)
 					carriage.destroy()
 				end
 			else
-				log("FATAL: Train teleported successfully but origin train dissappeared")
+				log("FATAL: Train teleported successfully but origin train disappeared")
 			end
 		end
 		::continue::
