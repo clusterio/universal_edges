@@ -74,6 +74,10 @@ local function poll_links(edge_id, edge, ticks_left)
 	end
 
 	local surface = game.surfaces[edge_util.edge_get_local_target(edge).surface]
+	if not surface then
+		log("universal_edges poll_links: surface not found for edge " .. tostring(edge_id))
+		return
+	end
 	local origin = edge_util.edge_pos_to_world({0, EDGE_SCAN_PADDING}, edge)
 	local cross = edge_util.edge_pos_to_world({edge.length, -EDGE_SCAN_PADDING}, edge)
 	local bounds = {vectorutil.vec2_min(origin, cross), vectorutil.vec2_max(origin, cross)}
@@ -159,7 +163,7 @@ local function poll_links(edge_id, edge, ticks_left)
 				driver_name = driver_name,
 				passenger_name = passenger_name,
 			}
-			entity.destroy()
+			entity.destroy{raise_destroy = true}
 		end
 		::continue::
 	end

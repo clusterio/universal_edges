@@ -38,29 +38,46 @@ local function create_train_source_box(offset, edge, surface)
 	end
 
 	-- Depends on how many signals/stations we need to make space for
-	local number_of_rails_to_spawn = 2
+	local number_of_rails_to_spawn = 12
 
 	-- if edge_target.direction % 8 == 0 then -- Entrance is north/south
 	local rails = {}
 	for i = 1, number_of_rails_to_spawn do
-		rails[#rails + 1] = surface.create_entity {
+		local rail_pos = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge)
+		local rail = surface.create_entity {
 			name = "straight-rail",
-			position = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge),
+			position = rail_pos,
 			direction = edge_target.direction,
 		}
+		if not rail then
+			edge_util.fatal("FATAL: Failed to create source rail at " .. edge_util.gps_tag(rail_pos, surface))
+			return
+		end
+		rails[#rails + 1] = rail
 	end
 
+	local stop_pos = edge_util.edge_pos_to_world({ edge_x + 2, -23 }, edge)
 	local stop = surface.create_entity {
 		name = "ue_source_trainstop",
-		position = edge_util.edge_pos_to_world({ edge_x + 2, -3 }, edge),
+		position = stop_pos,
 		direction = edge_target.direction,
 	}
+	if not stop then
+		edge_util.fatal("FATAL: Failed to create source train stop at " .. edge_util.gps_tag(stop_pos, surface))
+		return
+	end
 	stop.backer_name = edge.id .. " " .. offset
+
+	local signal_pos = edge_util.edge_pos_to_world({ edge_x + 1.5, -0.5 }, edge)
 	local signal = surface.create_entity {
 		name = "rail-signal",
-		position = edge_util.edge_pos_to_world({ edge_x + 1.5, -0.5 }, edge),
+		position = signal_pos,
 		direction = (edge_target.direction + 8) % 16,
 	}
+	if not signal then
+		edge_util.fatal("FATAL: Failed to create source rail signal at " .. edge_util.gps_tag(signal_pos, surface))
+		return
+	end
 
 	if not edge.linked_trains then
 		edge.linked_trains = {}
@@ -144,32 +161,7 @@ local function create_train_destination_box(offset, edge, surface, update)
 
 	-- Parking length in number of rail tiles (each rail tile is 2x2)
 	-- local parking_length = update.data.parking_area_size + 2
-	local parking_length = constants.MAX_TRAIN_LENGTH * 4 + 2
-
-	-- Prepare the area with concrete. For some reason we can create rails on water but not trains
-	local tiles = {}
-	for i = 1, parking_length * 2 do
-		-- Make space for signal
-		tiles[#tiles + 1] = {
-			name = "refined-concrete",
-			position = edge_util.edge_pos_to_world({ edge_x - 2, i * -1 }, edge)
-		}
-		-- Make space for rails
-		tiles[#tiles + 1] = {
-			name = "refined-concrete",
-			position = edge_util.edge_pos_to_world({ edge_x - 1, i * -1 }, edge)
-		}
-		tiles[#tiles + 1] = {
-			name = "refined-concrete",
-			position = edge_util.edge_pos_to_world({ edge_x, i * -1 }, edge)
-		}
-		tiles[#tiles + 1] = {
-			name = "refined-concrete",
-			position = edge_util.edge_pos_to_world({ edge_x + 1, i * -1 }, edge)
-		}
-	end
-	surface.set_tiles(tiles)
-
+	local parking_length = constants.MAX_TRAIN_LENGTH * 4 + 2 + 5 -- +5 for train proxies
 	local rails = {}
 	for i = 1, parking_length do
 		-- Check if rail already exists - might happen if station was removed while train was on output
@@ -181,20 +173,30 @@ local function create_train_destination_box(offset, edge, surface, update)
 			rails[#rails + 1] = rail
 			-- Skip creating new rail
 		else
-			rails[#rails + 1] = surface.create_entity {
+			local rail_pos = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge)
+			local new_rail = surface.create_entity {
 				name = "straight-rail",
-				position = edge_util.edge_pos_to_world({ edge_x, 1 - i * 2 }, edge),
+				position = rail_pos,
 				direction = edge_target.direction,
 			}
+			if not new_rail then
+				edge_util.fatal("FATAL: Failed to create destination rail at " .. edge_util.gps_tag(rail_pos, surface))
+				return
+			end
+			rails[#rails + 1] = new_rail
 		end
 	end
 
 	local signal = surface.create_entity {
 		name = "rail-signal",
-		position = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge),
+		position = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 + 10 }, edge), -- +10 to move signal in front of train proxy spawn area
 		direction = edge_target.direction,
 	}
-	assert("FATAL: Failed to create train destination signal at " .. serpent.line(edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge)))
+	if not signal then
+		local pos = edge_util.edge_pos_to_world({ edge_x - 1.5, 0.5 - parking_length * 2 }, edge)
+		edge_util.fatal("FATAL: Failed to create train destination signal at " .. edge_util.gps_tag(pos, surface))
+		return
+	end
 
 	if not edge.linked_trains then
 		edge.linked_trains = {}

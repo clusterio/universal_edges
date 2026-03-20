@@ -14,20 +14,16 @@ local function create_fluid_box(offset, edge, surface)
 	else
 		pipe_type = "edge_pipe_horizontal"
 	end
-	local pipe
-	if surface.entity_prototype_collides(pipe_type, pipe_pos, false, edge_target.direction) then
-		-- Is the pipe already there?
-		pipe = surface.find_entity(pipe_type, pipe_pos)
-		if not pipe then
-			return false
-		end
-	end
-
+	local pipe = surface.find_entity(pipe_type, pipe_pos)
 	if not pipe then
 		pipe = surface.create_entity {
 			name = pipe_type,
 			position = pipe_pos,
 		}
+		if not pipe then
+			edge_util.fatal("FATAL: failed to create fluid pipe at " .. edge_util.gps_tag(pipe_pos, surface) .. " offset " .. offset .. " on edge " .. edge.id)
+			return false
+		end
 	end
 
 	if not edge.linked_fluids then
@@ -40,8 +36,6 @@ local function create_fluid_box(offset, edge, surface)
 	else
 		edge.linked_fluids[offset] = {
 			pipe = pipe,
-			start_index = nil,
-			flag_for_removal = nil,
 		}
 	end
 

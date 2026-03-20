@@ -6,29 +6,61 @@ local LuaTrain_deserialize = require("modules/universal_edges/universal_serializ
 ---@return LuaEntity | nil
 local function LuaTrainComplete_deserialize(train_data)
 	local first_locomotive
-	local front_stock
+	local front_stock -- tracks the first successfully spawned rolling stock, used as a reference for delayed carriages
 	for _, carriage in ipairs(train_data.carriages) do
 		local entity = LuaEntity_deserialize(carriage)
-		-- Store vehicle entity under player name to re-seat after cross-instance teleport
-		if carriage.driver_name then
-			storage.universal_edges.vehicle_drivers[carriage.driver_name] = entity
-		end
-		-- If entity could not be created, delay deserialization
+
 		if not entity then
+			-- Entity could not be created (no room), delay for on_tick retry
+			carriage.front_stock = front_stock
+			table.insert(storage.universal_edges.delayed_entities, carriage)
+		else
 			if not front_stock then
 				front_stock = entity
 			end
-			carriage.front_stock = front_stock -- the front_stock.unit_number is used as a reference point if the train gets reserialized before fully spawned
-			table.insert(storage.universal_edges.delayed_entities, carriage)
-		else
-			if entity.name == "locomotive" then -- If locomotive, deserialize train data to start the train in motion
-				LuaTrain_deserialize(entity, train_data.train)
-			elseif first_locomotive then -- each time a carriage is spawned, the game will swap the train to manual_mode
-				first_locomotive.train.manual_mode = train_data.train.manual_mode
+
+			-- Store vehicle entity under player name to re-seat after cross-instance teleport
+			if carriage.driver_name then
+				storage.universal_edges.vehicle_drivers[carriage.driver_name] = entity
+			end
+
+			if entity.type == "locomotive" and not first_locomotive then
+				first_locomotive = entity
 			end
 		end
 	end
-	return first_locomotive -- Return the first locomotive, at least 1 locomotive should spawn before deserialization is considered a success
+
+	-- Set train state once after all immediate spawns complete
+	if first_locomotive then
+		LuaTrain_deserialize(first_locomotive, train_data.train)
+	end
+
+	-- [gridworld plugin] Destroy train pathing proxy for the arriving train's destination
+	do
+		local proxies = storage.gridworld and storage.gridworld.train_proxies
+		if not proxies then goto continue end
+
+		local schedule = first_locomotive and first_locomotive.train and first_locomotive.train.schedule
+		if not schedule then goto continue end
+
+		local record = schedule.records and schedule.records[schedule.current]
+		local destination = record and record.station
+		if not destination or not proxies[destination] or #proxies[destination] == 0 then goto continue end
+
+		local loco = table.remove(proxies[destination])
+		if loco and loco.valid then
+			loco.destroy()
+		else
+			log("Failed to destroy train proxy for destination " .. destination .. " - invalid entity")
+		end
+		if #proxies[destination] == 0 then
+			proxies[destination] = nil
+		end
+
+		::continue::
+	end
+
+	return first_locomotive
 end
 
 return LuaTrainComplete_deserialize

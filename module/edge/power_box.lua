@@ -9,39 +9,32 @@ local function create_power_box(offset, edge, surface)
 	local edge_x = edge_util.offset_to_edge_x(offset, edge)
 
 	local eei_pos = edge_util.edge_pos_to_world({ edge_x, -1 }, edge)
-	local charge_sensor = surface.find_entity("accumulator", eei_pos)
-	local powerpole = surface.find_entity("substation", eei_pos)
-	local eei
-	if surface.entity_prototype_collides(eei_type, eei_pos, false) then
-		-- Is the eei already there?
-		eei = surface.find_entity(eei_type, eei_pos)
+
+	local eei = surface.find_entity(eei_type, eei_pos)
+	if not eei then
+		eei = surface.create_entity { name = eei_type, position = eei_pos }
 		if not eei then
+			edge_util.fatal("FATAL: failed to create EEI for power box at " .. edge_util.gps_tag(eei_pos, surface))
 			return false
 		end
 	end
 
-	if not eei then
-		eei = surface.create_entity {
-			name = eei_type,
-			position = eei_pos,
-		}
-		assert(eei, "FATAL: failed to create EEI for power box at " .. serpent.line(eei_pos))
-	end
-
+	local charge_sensor = surface.find_entity("accumulator", eei_pos)
 	if not charge_sensor then
-		charge_sensor = surface.create_entity {
-			name = "accumulator",
-			position = eei_pos,
-		}
-		assert(charge_sensor, "FATAL: failed to create charge sensor for power box at " .. serpent.line(eei_pos))
+		charge_sensor = surface.create_entity { name = "accumulator", position = eei_pos }
+		if not charge_sensor then
+			edge_util.fatal("FATAL: failed to create charge sensor for power box at " .. edge_util.gps_tag(eei_pos, surface))
+			return false
+		end
 	end
 
+	local powerpole = surface.find_entity("substation", eei_pos)
 	if not powerpole then
-		powerpole = surface.create_entity {
-			name = "substation",
-			position = eei_pos,
-		}
-		assert(powerpole, "FATAL: failed to create power pole for power box at " .. serpent.line(eei_pos))
+		powerpole = surface.create_entity { name = "substation", position = eei_pos }
+		if not powerpole then
+			edge_util.fatal("FATAL: failed to create power pole for power box at " .. edge_util.gps_tag(eei_pos, surface))
+			return false
+		end
 	end
 
 	if not edge.linked_power then

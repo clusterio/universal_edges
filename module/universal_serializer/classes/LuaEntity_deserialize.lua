@@ -24,10 +24,10 @@ local function entity_deserialize(serialized_entity)
 		force = entity_data.force,
 		--[[ target ]]
 		--[[ source ]]
-		raise_build = true,
 		create_build_effect_smoke = false,
 		spawn_decorations = true,
 		move_stuck_players = true,
+		raise_built = true
 	}
 	if player ~= nil then -- Prevent crash if player has never joined this server
 		properties.player = player
@@ -197,6 +197,8 @@ local function entity_deserialize(serialized_entity)
 		entity.color = entity_data.spidertron.color
 		-- Health
 		entity.health = entity_data.spidertron.health
+		-- Rotation
+		entity.torso_orientation = entity_data.spidertron.torso_orientation
 		-- Autopilot destinations
 		for _, pos in pairs(entity_data.spidertron.autopilot_destinations) do
 			entity.add_autopilot_destination(pos)

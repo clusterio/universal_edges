@@ -549,7 +549,6 @@ universal_edges.events = {
 	end,
 
 	[defines.events.on_tick] = function()
-		universal_serializer.events.on_tick()
 		pathfinder_events.on_tick()
 
 		local ticks_left = -game.tick % storage.universal_edges.config.ticks_per_edge
@@ -653,6 +652,13 @@ universal_edges.events = {
 	[defines.events.on_chunk_generated] = function(event)
 		barrier_manager.on_chunk_generated(event)
 	end,
+}
+
+universal_edges.on_nth_tick = {
+	[15] = function()
+		-- Attempt to spawn any entities that were delayed due to lack of space, such as trains and rolling stock
+		universal_serializer.events.on_nth_tick_15()
+	end
 }
 
 return universal_edges

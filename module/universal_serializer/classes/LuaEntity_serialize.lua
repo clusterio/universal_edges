@@ -161,6 +161,8 @@ local function entity_serialize(entity)
 		entity_data.spidertron.color = entity.color
 		-- Health
 		entity_data.spidertron.health = entity.health
+		-- Rotation
+		entity_data.spidertron.torso_orientation = entity.torso_orientation
 		-- Autopilot destinations
 		entity_data.spidertron.autopilot_destinations = {[1] = entity.autopilot_destination}
 		for _, destination in pairs(entity.autopilot_destinations) do
