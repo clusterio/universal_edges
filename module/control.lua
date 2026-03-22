@@ -75,10 +75,10 @@ local function setupGlobalData()
 	if not storage.universal_edges.entity_last_positions then
 		storage.universal_edges.entity_last_positions = {}
 	end
-	if not storage.universal_edges.barriers then
+	if not storage.universal_edges.barriers then -- used in barrier_manager to track barrier entities
 		storage.universal_edges.barriers = {}
 	end
-	if not storage.universal_edges.delayed_entities then
+	if not storage.universal_edges.delayed_entities then -- used in barrier_manager to track entities that have not yet spawned
 		storage.universal_edges.delayed_entities = {}
 	end
 	storage.universal_edges = storage.universal_edges
