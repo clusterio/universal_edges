@@ -14,11 +14,11 @@ const prometheus_train_pathfinder_runs = new lib.Counter(
 	"clusterio_plugin_universal_edges_train_pathfinder_runs",
 	"Number of times the pathfinder has run"
 );
-// const prometheus_train_layout_update_events = new lib.Counter(
-// 	"clusterio_plugin_universal_edges_train_layout_update_events",
-// 	"Number of train layout update events received",
-// 	{ labels: ["edge_id"] }
-// );
+const prometheus_train_layout_update_events = new lib.Counter(
+	"clusterio_plugin_universal_edges_train_layout_update_events",
+	"Number of train layout update events received",
+	{ labels: ["edge_id"] }
+);
 
 async function loadDatabase(config: lib.ControllerConfig, filename: string, logger: lib.Logger): Promise<Map<string, Edge>> {
 	let itemsPath = path.resolve(config.get("controller.database_directory"), filename);
@@ -208,7 +208,7 @@ export class ControllerPlugin extends BaseControllerPlugin {
 	}
 
 	async handleTrainLayoutUpdateEvent({ edgeId, data }: messages.TrainLayoutUpdate) {
-		// prometheus_train_layout_update_events.labels(edgeId).inc();
+		prometheus_train_layout_update_events.labels(edgeId).inc();
 		const edge = this.edgeDatastore.get(edgeId);
 		if (!edge) {
 			this.logger.warn(`Received TrainLayoutUpdate for non-existing edge ${edgeId}`);
