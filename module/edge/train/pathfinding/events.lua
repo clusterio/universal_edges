@@ -27,6 +27,8 @@ local function on_server_startup()
 					]]
 					link.rescan_penalties = true
 					link.penalty_map = nil
+					link.reachable_targets = nil
+					link.reachable_sources = nil
 					-- Update flow (Is destination station blocked by a train?)
 					link.set_flow = link.signal and link.signal.signal_state == defines.signal_state.open
 					train_transfers[#train_transfers + 1] = {

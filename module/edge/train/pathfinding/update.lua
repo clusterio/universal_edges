@@ -21,19 +21,18 @@ end
 ---@param old table
 ---@return boolean
 local function has_string_array_changed(new, old)
-	if old ~= nil then
-		if #new ~= #old then
-			-- Number of stations has changed
-			print("Number of stations has changed from " .. #old .. " to " .. #new)
+	if old == nil then
+		return #new > 0
+	end
+	if #new ~= #old then
+		-- Number of stations has changed
+		print("Number of stations has changed from " .. #old .. " to " .. #new)
+		return true
+	end
+	for index, station in pairs(new) do
+		if station ~= old[index] then
+			print("Station " .. station .. " has changed from" .. old[index])
 			return true
-		else
-			-- Perform more detailed string comparison
-			for index, station in pairs(new) do
-				if station ~= old[index] then
-					print("Station " .. station .. " has changed from" .. old[index])
-					return true
-				end
-			end
 		end
 	end
 	return false
@@ -138,7 +137,7 @@ local function update_connector_paths(edge, offset, link)
 	log("Reachable exits for offset " .. offset .. " " .. serpent.block(reachable_sources))
 
 	-- Check if reachability has changed - if so, send an update to the controller
-	if true or has_string_array_changed(reachable_targets, link.reachable_targets) or has_string_array_changed(reachable_sources, link.reachable_sources) then
+	if has_string_array_changed(reachable_targets, link.reachable_targets) or has_string_array_changed(reachable_sources, link.reachable_sources) then
 		-- log("Significant change detected, sending new stations and links")
 		clusterio_api.send_json("universal_edges:train_layout_update", {
 			edge_id = edge.id,
