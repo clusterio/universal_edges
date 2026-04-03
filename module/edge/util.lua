@@ -102,7 +102,7 @@ end
 ---@param surface LuaSurface
 ---@return string
 function edge_util.gps_tag(pos, surface)
-	return "[gps=" .. pos.x .. "," .. pos.y .. "," .. surface.name .. "]"
+	return "[gps=" .. (pos.x or pos[1]) .. "," .. (pos.y or pos[2]) .. "," .. surface.name .. "]"
 end
 
 ---@param msg string
