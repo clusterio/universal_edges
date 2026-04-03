@@ -57,6 +57,16 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		this.controller.handle(messages.TeleportPlayerToServer, this.handleTeleportPlayerToServer.bind(this));
 		this.controller.subscriptions.handle(messages.EdgeUpdate, this.handleEdgeConfigSubscription.bind(this));
 		this.edgeDatastore = await loadDatabase(this.controller.config, "edgeDatastore.json", this.logger);
+		// Remove edges whose instances no longer exist
+		this.edgeDatastore.forEach((edge, id) => {
+			const sourceExists = this.controller.instances.has(edge.source.instanceId);
+			const targetExists = this.controller.instances.has(edge.target.instanceId);
+			if (!sourceExists || !targetExists) {
+				this.logger.info(`Pruning edge ${id}: instance ${!sourceExists ? edge.source.instanceId : edge.target.instanceId} no longer exists`);
+				this.edgeDatastore.delete(id);
+				this.storageDirty = true;
+			}
+		});
 		// Set active status
 		this.edgeDatastore.forEach(edge => {
 			edge.active = this.isEdgeActive(edge);
