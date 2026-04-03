@@ -1,5 +1,6 @@
 local LuaEntity_serialize = require("modules/universal_edges/universal_serializer/classes/LuaEntity_serialize")
 local LuaTrain_serialize = require("modules/universal_edges/universal_serializer/classes/LuaTrain_serialize")
+local hooks = require("modules/universal_edges/universal_serializer/hooks")
 
 -- Serializes a complete LuaTrain object, including rolling stock
 ---@param LuaTrain LuaTrain
@@ -7,6 +8,8 @@ local LuaTrain_serialize = require("modules/universal_edges/universal_serializer
 ---@param edge UniversalEdge
 ---@return table
 local function LuaTrainComplete_serialize(LuaTrain, carriages, edge, offset)
+	local context = { LuaTrain = LuaTrain, carriages = carriages, edge = edge, offset = offset }
+	hooks.run("LuaTrainComplete", "pre_serialize", {}, context)
 	local train_data = {
 		train = LuaTrain_serialize(LuaTrain, edge, offset), -- metadata
 		carriages = {}, -- entities
@@ -36,6 +39,9 @@ local function LuaTrainComplete_serialize(LuaTrain, carriages, edge, offset)
 			table.remove(storage.universal_edges.delayed_entities, k)
 		end
 	end
+
+	train_data = hooks.run("LuaTrainComplete", "post_serialize", train_data, context)
+
 	return train_data
 end
 

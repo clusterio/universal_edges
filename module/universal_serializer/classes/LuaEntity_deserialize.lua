@@ -2,6 +2,7 @@ local clusterio_serialize = require("modules/clusterio/serialize")
 local LuaTrain_deserialize = require("modules/universal_edges/universal_serializer/classes/LuaTrain_deserialize")
 local LuaBurner_deserialize = require("modules/universal_edges/universal_serializer/classes/LuaBurner_deserialize")
 local LuaFluidBox_deserialize = require("modules/universal_edges/universal_serializer/classes/LuaFluidBox_deserialize")
+local hooks = require("modules/universal_edges/universal_serializer/hooks")
 
 
 -- Function to deserialize an entity from a string.
@@ -10,6 +11,8 @@ local LuaFluidBox_deserialize = require("modules/universal_edges/universal_seria
 local function entity_deserialize(serialized_entity)
 	-- local entity_data = load("return " .. serialized_entity)()
 	local entity_data = serialized_entity
+	local context = {}
+	entity_data = hooks.run("LuaEntity", "pre_deserialize", entity_data, context)
 
 	-- Check if player is valid before using it
 	local player = nil
@@ -261,6 +264,9 @@ local function entity_deserialize(serialized_entity)
 			end
 		end
 	end
+
+	context.entity = entity
+	hooks.run("LuaEntity", "post_deserialize", entity_data, context)
 
 	return entity
 end

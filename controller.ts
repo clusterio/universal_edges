@@ -57,6 +57,16 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		this.controller.handle(messages.TeleportPlayerToServer, this.handleTeleportPlayerToServer.bind(this));
 		this.controller.subscriptions.handle(messages.EdgeUpdate, this.handleEdgeConfigSubscription.bind(this));
 		this.edgeDatastore = await loadDatabase(this.controller.config, "edgeDatastore.json", this.logger);
+		// Remove edges whose instances no longer exist
+		this.edgeDatastore.forEach((edge, id) => {
+			const sourceExists = this.controller.instances.has(edge.source.instanceId);
+			const targetExists = this.controller.instances.has(edge.target.instanceId);
+			if (!sourceExists || !targetExists) {
+				this.logger.info(`Pruning edge ${id}: instance ${!sourceExists ? edge.source.instanceId : edge.target.instanceId} no longer exists`);
+				this.edgeDatastore.delete(id);
+				this.storageDirty = true;
+			}
+		});
 		// Set active status
 		this.edgeDatastore.forEach(edge => {
 			edge.active = this.isEdgeActive(edge);
@@ -68,6 +78,20 @@ export class ControllerPlugin extends BaseControllerPlugin {
 		const edges = [...this.edgeDatastore.values()].filter(edge => edge.source.instanceId === instance.id
 			|| edge.target.instanceId === instance.id
 		);
+
+		this.sendEdgeUpdates(edges);
+
+		// When an instance goes running, schedule a deferred re-send to handle
+		// race conditions where two instances start simultaneously and one misses
+		// the active=true update from the other's status change.
+		if (instance.status === "running") {
+			setTimeout(() => {
+				this.resendEdgeStates(instance.id);
+			}, 1000);
+		}
+	}
+
+	private sendEdgeUpdates(edges: Edge[]) {
 		// Set active status
 		edges.forEach(edge => {
 			let newStatus = this.isEdgeActive(edge);
@@ -101,12 +125,24 @@ export class ControllerPlugin extends BaseControllerPlugin {
 			if (this.controller.instances.get(instanceId)?.status === "running") {
 				const edgesToSend = instanceEdgeMap.get(instanceId)!;
 				this.logger.info(`Instance running ${instanceId} relevant edge count ${edgesToSend.length}`);
-				this.controller.sendTo({ instanceId }, new messages.EdgeUpdate(edgesToSend));
+				try {
+					this.controller.sendTo({ instanceId }, new messages.EdgeUpdate(edgesToSend));
+				} catch (err) {
+					this.logger.warn(`Failed to send edge update to instance ${instanceId}: ${err}`);
+				}
 			}
 		}
 
 		// Broadcast changes to control subscriptions
 		this.controller.subscriptions.broadcast(new messages.EdgeUpdate(edges));
+	}
+
+	private resendEdgeStates(instanceId: number) {
+		const edges = [...this.edgeDatastore.values()].filter(edge =>
+			edge.source.instanceId === instanceId || edge.target.instanceId === instanceId
+		);
+		if (edges.length === 0) { return; }
+		this.sendEdgeUpdates(edges);
 	}
 
 	async onControllerConfigFieldChanged(field: string, curr: unknown, prev: unknown) {
@@ -311,6 +347,13 @@ export class ControllerPlugin extends BaseControllerPlugin {
 				return;
 			}
 
+			if (!this.controller.instances.get(dest.source_instance_id)) {
+				this.logger.warn(
+					`Cannot send penalty map for ${dest.id}: instance ${dest.source_instance_id} does not exist. ` +
+					`The edge may have stale instance IDs — re-configure the edge to fix.`
+				);
+				return;
+			}
 			this.controller.sendTo({ instanceId: dest.source_instance_id }, new messages.EdgeLinkUpdate(edgeId, "update_train_penalty_map", {
 				offset: Number(offset),
 				penalty_map: Object.fromEntries(dest.reachable_targets.entries()),

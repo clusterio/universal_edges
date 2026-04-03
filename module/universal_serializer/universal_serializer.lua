@@ -1,4 +1,5 @@
 return {
+	hooks = require("modules/universal_edges/universal_serializer/hooks"),
 	events = {
 		on_nth_tick_15 = require("events/on_tick"),
 	},

@@ -2,11 +2,15 @@ local clusterio_serialize = require("modules/clusterio/serialize")
 local LuaTrain_serialize = require("modules/universal_edges/universal_serializer/classes/LuaTrain_serialize")
 local LuaBurner_serialize = require("modules/universal_edges/universal_serializer/classes/LuaBurner_serialize")
 local LuaFluidBox_serialize = require("modules/universal_edges/universal_serializer/classes/LuaFluidBox_serialize")
+local hooks = require("modules/universal_edges/universal_serializer/hooks")
 
 -- Function to serialize an entity to a string.
 ---@param entity LuaEntity
 ---@return table
 local function entity_serialize(entity)
+	local context = { entity = entity }
+	hooks.run("LuaEntity", "pre_serialize", {}, context)
+
 	local entity_data = {
 		surface = entity.surface.name,
 		name = entity.name,
@@ -45,24 +49,6 @@ local function entity_serialize(entity)
 	if entity.type == "entity-ghost" then
 		entity_data.ghost_name = entity.ghost_name
 		entity_data.item_requests = entity.item_requests
-	end
-	if entity.type == "logistic-container" then
-		-- entity_data.request_filters = entity.request_filters -- Request_filters is not a property
-		-- Read request slots individually
-		local slot_count = entity.request_slot_count
-		if slot_count > 0 then
-			local request_slots = {}
-			for i = 1, slot_count do
-				local item_stack = entity.get_request_slot(i)
-				if item_stack ~= nil then
-					request_slots[i] = item_stack
-				end
-			end
-			entity_data.request_slots = request_slots
-			entity_data.request_slot_count = slot_count
-			-- This line crashes when read on a storage chest (any entity without request slots)
-			entity_data.request_from_buffers = entity.request_from_buffers
-		end
 	end
 	if entity.type == "item-entity" and entity.name == "item-on-ground" then
 		entity_data.stack = {
@@ -212,6 +198,8 @@ local function entity_serialize(entity)
 			entity_data.inventories[i] = clusterio_serialize.serialize_inventory(entity.get_inventory(i))
 		end
 	end
+
+	entity_data = hooks.run("LuaEntity", "post_serialize", entity_data, context)
 
 	return entity_data
 end

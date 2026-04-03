@@ -18,7 +18,7 @@ function barrier_manager.create_edge_barriers(edge)
 	if not surface then return end
 	local surface_index = surface.index
 	-- Calculate barrier length (110% of edge length)
-	local barrier_length = math.ceil(edge.length * 1.10)
+	local barrier_length = math.ceil(edge.length * 1.20)
 	local num_barriers = math.ceil(barrier_length / BARRIER_SPACING)
 	-- Calculate starting position offset to center the barriers
 	local start_offset = (edge.length - barrier_length) / 2
