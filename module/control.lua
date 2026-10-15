@@ -36,6 +36,7 @@ control.on_init = startup.on_init
 control.events[clusterio_api.events.on_server_startup] = function()
 	startup.on_server_startup()
 	edges.on_server_startup()
+	players.away_all() -- crossing-arrival spec ruling 7: nobody is connected at a start, so everyone is away
 	train.migrate() -- box shape 2 (owner 2026-10-05): old boxes rebuilt once; not in edges.lua (train requires it via players)
 end
 
@@ -49,11 +50,14 @@ control.events[defines.events.on_surface_created] = edges.on_surface_created
 control.events[defines.events.on_player_changed_position] = players.guarded(players.on_moved, "ue.player")
 control.events[defines.events.on_player_left_game] = players.guarded(players.on_left, "ue.player")
 control.events[defines.events.on_player_joined_game] = players.guarded(players.on_joined, "ue.player")
+-- A respawn ends the arrival guard (crossing-arrival spec §5.1).
+control.events[defines.events.on_player_respawned] = players.guarded(players.on_respawned, "ue.player")
 -- §6.1: inventory_sync hands a joining player's character back; a waiting arrival places them again.
 control.events[defines.events.on_player_controller_changed] = players.guarded(players.on_controller, "ue.player")
 
 -- Vehicles crossing with their riders (SP3 spec §10): a driver change, and a spidertron remote's selection.
 control.events[defines.events.on_player_driving_changed_state] = players.guarded(vehicle.on_driving, "ue.vehicle")
+control.events[defines.events.on_cargo_pod_finished_descending] = players.guarded(players.on_pod_landed, "ue.player")
 control.events[defines.events.on_player_used_spidertron_remote] = players.guarded(vehicle.on_remote, "ue.vehicle")
 
 -- Raids and parties walking to a crossing (cross-border biters spec §6.1): their go_to_location ends.

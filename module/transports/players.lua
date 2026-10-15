@@ -60,9 +60,10 @@ function players.guarded(fn, op)
 	end
 end
 
---- ue.players.zones{ name, zone, place } (§7.1), at load only. zone(surface, x, y, current) → a key "<name>:…" or nil,
---- current being the player's key now; place(surface, key, x, y) → x, y, box: where a recorded point lands in this
---- instance, or nil when it doesn't.
+--- ue.players.zones{ name, zone, place, outside? } (§7.1), at load only. zone(surface, x, y, current) → a key
+--- "<name>:…" or nil, current being the player's key now; place(surface, key, x, y) → x, y, box: where a recorded point
+--- lands in this instance, or nil when it doesn't; outside(surface, x, y) → x, y, box or nil: where a body beyond every
+--- zone goes back in (crossing-arrival spec §5.2).
 function players.zones(spec)
 	if game then
 		error("register zone hooks while loading, not at runtime")
@@ -70,6 +71,9 @@ function players.zones(spec)
 	if type(spec) ~= "table" or type(spec.name) ~= "string" or type(spec.zone) ~= "function"
 		or type(spec.place) ~= "function" then
 		error("a zone hook needs a name, zone and place")
+	end
+	if spec.outside ~= nil and type(spec.outside) ~= "function" then
+		error("a zone hook's outside must be a function")
 	end
 	for _, h in ipairs(players.hooks) do
 		if h.name == spec.name then
@@ -162,10 +166,57 @@ function players.cross(name, key, fallback, surface, x, y, id, held)
 	return id
 end
 
+--- crossing-arrival spec §5.1: true from a leave (or a server start) until UE has placed the player after their next
+--- join; a tick once they've joined, so a lost reply can't stop their crossings for good.
+local function guard()
+	local s = state()
+	s.arriving = s.arriving or {} -- ponytail: created on first use, no schema bump (spec ruling 8)
+	return s.arriving
+end
+
+function players.arriving(name)
+	local a = guard()[name]
+	return a == true or (a ~= nil and game.tick <= a)
+end
+
+function players.settle(name)
+	guard()[name] = nil
+end
+
+--- A respawn ends the guard (crossing-arrival spec §5.1): the player has a new body, nothing to place.
+function players.respawned(name)
+	players.settle(name)
+end
+
+function players.on_respawned(event)
+	local p = game.get_player(event.player_index)
+	if p then
+		players.respawned(p.name)
+	end
+end
+
+--- Spec ruling 7: every player is away at a server start (none is connected then). names: a test's list; production
+--- passes nothing and gets game.players.
+function players.away_all(names)
+	local g = guard()
+	if names then
+		for _, name in ipairs(names) do
+			g[name] = true
+		end
+		return
+	end
+	for _, p in pairs(game.players) do
+		g[p.name] = true
+	end
+end
+
 --- §3.1, §4 step 4: a move. A new or changed zone crosses; the same zone is never prompted twice, and retries after
 --- RETRY ticks only when unanswered or answered none; no zone clears the crossing. A held rider crossing ignores
 --- moves until it is answered, or for RETRY ticks unanswered (a lost answer mustn't stop the rider's zones for good).
 function players.moved(name, surface_index, surface_name, x, y)
+	if players.arriving(name) then
+		return
+	end
 	local pending = state().pending[name]
 	if pending and pending.held and not pending.answered and game.tick - pending.tick <= players.RETRY then
 		return
@@ -234,16 +285,18 @@ bridge.on("universal_edges", "ue.player.none", function(p)
 end)
 
 --- §4 step 5: name left the game at (x, y). In a zone (its 0.5 band included), the leave point goes to the controller;
---- inside, nothing does. The crossing goes either way. Returns the trace sent, or nil.
+--- inside, nothing does; nor while they are arriving (a stale body, crossing-arrival spec §5.1). The crossing goes
+--- either way, and they are away from now on. Returns the trace sent, or nil.
 function players.leave(name, surface_index, surface_name, x, y)
 	local pending = state().pending[name]
 	state().pending[name] = nil
-	if not players.zone(surface_index, surface_name, x, y, pending and pending.key) then
-		return nil
+	local id
+	if not players.arriving(name) and players.zone(surface_index, surface_name, x, y, pending and pending.key) then
+		id = pending and pending.trace or trace.new_id()
+		send("ue.player.left", { player = name, surface = surface_name, x = x, y = y, trace = id })
+		emit("left", "info", id, { player = name, surface = surface_name, x = x, y = y })
 	end
-	local id = pending and pending.trace or trace.new_id()
-	send("ue.player.left", { player = name, surface = surface_name, x = x, y = y, trace = id })
-	emit("left", "info", id, { player = name, surface = surface_name, x = x, y = y })
+	guard()[name] = true -- crossing-arrival spec §5.1: away from now on, set after the check above
 	return id
 end
 
@@ -311,12 +364,63 @@ local function put(target, surface, x, y, box)
 	return target.teleport({ x, y }, surface), { x = x, y = y }, true
 end
 
+--- crossing-arrival spec §5.2: the first hook whose outside answers for (x, y): its key "<name>:outside" and where
+--- the body goes; nil when every hook says inside or has none. A bad result counts as none, as place's does (§7.1).
+function players.outside(surface_name, x, y)
+	for _, h in ipairs(players.hooks) do
+		if h.outside then
+			local px, py, box = call(h, "outside", surface_name, x, y)
+			if type(px) == "number" and type(py) == "number" and type(box) == "table" then
+				return h.name .. ":outside", px, py, box
+			end
+		end
+	end
+end
+
+--- crossing-arrival spec §5.2: ask the hooks' outside; put the body there and report it. False when none answers.
+local function bring_in(name, target, surface, p)
+	local key, px, py, box = players.outside(surface.name, p.x, p.y)
+	if not key then
+		return false
+	end
+	local moved, pos = put(target, surface, px, py, box)
+	emit("pulled_in", "info", nil, { player = name, key = key, x = p.x, y = p.y, placed_x = pos.x, placed_y = pos.y,
+		moved = moved })
+	return moved
+end
+
+--- crossing-arrival spec §5.3: a body that got out of a vehicle or a cargo pod beyond every zone goes inside, through
+--- the hooks' outside. A body in a zone is crossing and stays; an arriving player is placement's.
+function players.rescue(name, target)
+	if players.arriving(name) then
+		return false
+	end
+	local p, surface = target.position, target.surface
+	local pending = state().pending[name]
+	if players.zone(surface.index, surface.name, p.x, p.y, pending and pending.key) then
+		return false
+	end
+	return bring_in(name, target, surface, p)
+end
+
+function players.on_pod_landed(event)
+	local player = event.player_index and game.get_player(event.player_index)
+	if player and player.character then
+		players.rescue(player.name, player.character)
+	end
+end
+
 --- §6.3: a body standing in one of this instance's zones goes to the nearest point inside. Returns whether it did.
 function players.pull_in(name, target)
 	local p, surface = target.position, target.surface
 	local key = players.zone(surface.index, surface.name, p.x, p.y, nil)
 	if not key then
-		return false
+		-- crossing-arrival spec §5.2: beyond every zone, a hook's outside may still bring the body in; a seated
+		-- player is the vehicle's business
+		if target.object_name == "LuaPlayer" and target.physical_vehicle then
+			return false
+		end
+		return bring_in(name, target, surface, p)
 	end
 	local px, py, box
 	if hook_of(key) then
@@ -383,6 +487,7 @@ function players.place(name)
 	if not placed then
 		players.pull_in(name, target)
 	end
+	players.settle(name) -- placed: their crossings count again (spec §5.1)
 	if players.seat(name, target) then
 		s.placing[name] = nil
 	end
@@ -400,6 +505,10 @@ local place_task = scheduler.once({
 --- §6.1: name joined; the controller is asked for their arrival here.
 function players.joined(name)
 	state().placing[name] = nil
+	-- crossing-arrival spec §5.1: nil at a join means first-ever (startup and leave mark everyone else), so no guard
+	if guard()[name] ~= nil then
+		guard()[name] = game.tick + players.PLACING
+	end
 	send("ue.player.joined", { player = name })
 end
 
@@ -418,6 +527,9 @@ bridge.on("universal_edges", "ue.player.arrival", function(p)
 		return false
 	end
 	state().placing[p.player] = { entry = e, expires = game.tick + players.PLACING }
+	if type(guard()[p.player]) == "number" then
+		guard()[p.player] = game.tick + players.PLACING -- one clock (spec §5.1)
+	end
 	if e then
 		emit("arrival_fetched", "info", e.trace, { player = p.player, key = e.key, x = e.x, y = e.y,
 			left_x = e.left and e.left.x, left_y = e.left and e.left.y })

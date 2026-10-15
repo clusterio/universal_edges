@@ -515,6 +515,7 @@ local function seat(ep, c, e, trace)
 		send("trace", { op = "ue.player", phase = "seated", level = "info", tick = game.tick, trace = trace,
 			player = name, edge = ep.edge, unit_number = e.unit_number, seat = "driver" })
 		storage.universal_edges.players.placing[name] = nil -- seated: no later placing moves them (§6.1 step 4)
+		players.settle(name) -- the arrival guard ends too (crossing-arrival spec §5.1)
 	else
 		storage.universal_edges.waiting[e.unit_number] = { driver = name, expires = game.tick + players.WAIT,
 			trace = trace }

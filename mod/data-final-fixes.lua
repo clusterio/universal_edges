@@ -109,3 +109,19 @@ end
 if data.raw["airborne-pollutant"] and data.raw["airborne-pollutant"].spores then
 	data.raw.tree["ue-pollution-sink"].emissions_per_second.spores = -5000
 end
+
+-- Lightning ignores everything UE places (owner, 2026-10-15; small-things 13): the entities are indestructible, but
+-- every strike raised an alert on Fulgora. Last, so every ue- entity above exists, whatever its type.
+for _, planet in pairs(data.raw.planet) do
+	local lightning = planet.lightning_properties
+	if lightning then
+		lightning.exemption_rules = lightning.exemption_rules or {}
+		for type_name in pairs(defines.prototypes.entity) do
+			for name in pairs(data.raw[type_name] or {}) do
+				if string.sub(name, 1, 3) == "ue-" then
+					table.insert(lightning.exemption_rules, { type = "id", string = name })
+				end
+			end
+		end
+	end
+end

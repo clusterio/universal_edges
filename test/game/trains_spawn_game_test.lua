@@ -390,6 +390,8 @@ t.case("trains: a rider already online is seated at once, not stored (H1, H2, M4
 		-- set_driver-at-once branch, not the waiting-seat one the other rider's case covers.
 		-- M5: an arrival fetched before the train came; seated at once, its placing must go with it.
 		storage.universal_edges.players.placing["sp3b-rider2"] = { expires = game.tick + 3600 }
+		-- crossing-arrival spec §5.1: still guarded as arriving; the credit seat must settle the rider too.
+		local a = storage.universal_edges.players; a.arriving = a.arriving or {}; a.arriving["sp3b-rider2"] = true
 		offer(id, 1, body("LC", { extra = { { riders = { driver = "sp3b-rider2" } } } }))
 		ctx.expect(reply(id, 1) == "credited", "credited")
 		local loco = seams.trains(id, "t1")[1].carriages[1]
@@ -397,6 +399,7 @@ t.case("trains: a rider already online is seated at once, not stored (H1, H2, M4
 		ctx.expect(storage.universal_edges.waiting[loco.unit_number] == nil, "never waiting: it was already seated")
 		ctx.expect(storage.universal_edges.players.placing["sp3b-rider2"] == nil,
 			"seated at once, the rider has no placing left (M5)")
+		ctx.expect(not storage.universal_edges.players.arriving["sp3b-rider2"], "seated at once, the arrival guard ends (spec §5.1)")
 	end)
 	-- N1: the closing quote stops a prefix match against another rider's name.
 	ctx.expect_ipc("universal_edges:out", "\"player\":\"sp3b-rider2\"")

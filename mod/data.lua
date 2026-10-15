@@ -1,5 +1,7 @@
 -- ue-barrier (SP1 spec §9): a 20×20 invisible wall on the object and player layers. UE's scripts place it outside
 -- every live edge side; players can't see, select, mine, blueprint or damage it.
+-- trigger_target: a mech-armor flyer's mask is trigger_target only, so without it the barrier stops walkers but not
+-- flyers (crossing-arrival spec §3, spike 39).
 data:extend({
 	{
 		type = "simple-entity",
@@ -10,7 +12,7 @@ data:extend({
 			"placeable-neutral", "not-on-map", "not-blueprintable", "not-deconstructable", "not-upgradable",
 			"not-flammable", "no-automated-item-removal", "no-automated-item-insertion",
 		},
-		collision_mask = { layers = { object = true, player = true } },
+		collision_mask = { layers = { object = true, player = true, trigger_target = true } },
 		collision_box = { { -10, -10 }, { 10, 10 } },
 		selectable_in_game = false,
 	},

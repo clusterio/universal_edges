@@ -397,6 +397,7 @@ connectors.register_type({
 					-- Seated, so an arrival still placing them is done: inventory_sync handing their character back
 					-- would otherwise place them again, out of the seat (crossing spec §6.1 step 4).
 					storage.universal_edges.players.placing[name] = nil
+					players.settle(name) -- seated: the arrival guard ends too (crossing-arrival spec §5.1)
 				elseif name then
 					-- A character-less online rider (dead, respawning) is treated like an offline one: set_driver/
 					-- set_passenger would raise for them (F12), so the vehicle waits for them instead.
@@ -477,8 +478,13 @@ connectors.register_type({
 })
 
 --- on_player_driving_changed_state: a driver change clears a reject (M8), an occupied vehicle is watched, and a waiting
---- vehicle's driver sitting releases it (§10.2, §10.4).
+--- vehicle's driver sitting releases it (§10.2, §10.4). It also rescues a player who just got out beyond every zone
+--- (crossing-arrival spec §5.3).
 function vehicle.on_driving(event)
+	local player = event.player_index and game.get_player(event.player_index)
+	if player and player.character and not player.physical_vehicle then
+		players.rescue(player.name, player.character) -- crossing-arrival spec §5.3: out of a vehicle beyond every zone
+	end
 	local v = event.entity
 	if not (v and v.valid and vehicle.TYPES[v.type]) then
 		return

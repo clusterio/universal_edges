@@ -210,6 +210,8 @@ t.case("vehicles: a car with a driver and a passenger crosses; both are prompted
 		-- M5: bob's arrival was fetched before the car came. Seated at credit, his placing must go, or inventory_sync
 		-- handing his character back (spectator to character) would place him again, out of his seat.
 		S().players.placing.bob = { expires = game.tick + 3600 }
+		-- crossing-arrival spec §5.1: bob is still guarded as arriving; the credit seat must settle him too.
+		local a = S().players; a.arriving = a.arriving or {}; a.arriving.bob = true
 		car = spawn("car", 7310, 2998, 0, 0.3) -- local (10, -2): past the line
 		rider(car, "passenger")
 		carried(car, "ann", "bob")
@@ -231,6 +233,7 @@ t.case("vehicles: a car with a driver and a passenger crosses; both are prompted
 		ctx.expect(got.v.disabled_by_script, "frozen: its driver hasn't sat yet (D36)")
 		ctx.expect(got.v.get_passenger() ~= nil, "bob, already here, sits at once")
 		ctx.expect(S().players.placing.bob == nil, "seated at credit, bob has no placing left (M5)")
+		ctx.expect(not players.arriving("bob"), "seated at credit, bob's arrival guard ends (spec §5.1)")
 		local w = S().waiting[got.v.unit_number]
 		ctx.expect(w and w.driver == "ann", "the car waits for ann, its driver")
 		ctx.expect(w and w.trace == got.trace, "the waiting seat keeps the crossing's trace for its seated line (M12)")
@@ -383,7 +386,7 @@ t.case("vehicles: a reject is not re-captured until the driver changes (M8); bus
 			ctx.expect(restored["sp3-v4-x"] == "reject", "the extension's restored hook got reject: " ..
 				tostring(restored["sp3-v4-x"]))
 			reject_edge["sp3-v4-y"] = nil
-			vehicle.on_driving({ entity = car, player_index = 0 })
+			vehicle.on_driving({ entity = car })
 			for _, w in ipairs(walls) do
 				w.destroy()
 			end
