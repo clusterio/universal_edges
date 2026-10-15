@@ -1,11 +1,9 @@
 {
 	"name": "universal_edges",
-	"version": "1.0.0",
-	"title": "Clusterio universal edges",
-	"author": "Danielv123",
-	"factorio_version": "2.0",
-	"dependencies": [
-		"base >= 2.0"
-	],
-	"description": "Adds entities required for the clusterio universal edges plugin"
+	"version": "2.1.1",
+	"title": "Universal Edges",
+	"author": "clusterio-v2",
+	"factorio_version": "2.1",
+	"dependencies": ["base >= 2.1.0"],
+	"description": "Prototypes for the Universal Edges v2 Clusterio plugin: world barriers, the link belt, interface and pipe of its transports, and gridworld's border (the pollution sink, the oracle)."
 }

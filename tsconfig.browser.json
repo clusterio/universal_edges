@@ -1,11 +1,13 @@
 {
-	"extends": "../../tsconfig.browser.json",
-	"references": [
-		{ "path": "../../packages/lib/tsconfig.browser.json" },
-		{ "path": "../../packages/web_ui/tsconfig.browser.json" },
-	],
-	"include": [ "web/**/*.tsx", "web/**/*.ts", "src/**/*.ts", "messages.ts", "package.json" ],
+	"extends": "./tsconfig.base.json",
 	"compilerOptions": {
-		"outDir": "dist/browser",
-	}
+		"lib": ["dom", "es2023"],
+		"module": "es2022",
+		"moduleResolution": "bundler",
+		"target": "es2022",
+		"jsx": "react-jsx",
+		"noEmitOnError": true,
+		"outDir": "dist/browser"
+	},
+	"include": ["web/**/*.tsx", "web/**/*.ts", "index.ts", "messages.ts", "edges/contracts.ts", "routing/contracts.ts", "schedules/contracts.ts", "radar/contracts.ts", "package.json"]
 }
