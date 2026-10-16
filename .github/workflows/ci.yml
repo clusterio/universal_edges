@@ -12,13 +12,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22.x, 24.x]
+        node-version: [22.x, 24.x, 26.x]
     steps:
-    # Clusterio from source: the plugin needs newer than 2.0.0-alpha.27. Keep in step with the dev tool's pin.
+    # Clusterio 2.0 from source: the plugin builds inside Clusterio's pnpm workspace.
     - uses: actions/checkout@v7
       with:
         repository: clusterio/clusterio
-        ref: 2efb53aab14787710fa8c1d51d6ee4fe9ee8a9f0
+        ref: v2.0.2
     - uses: actions/checkout@v7
       with:
         path: external_plugins/universal_edges
