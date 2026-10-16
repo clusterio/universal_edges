@@ -36,7 +36,7 @@ end
 players.v_of = v_of
 
 --- True while player isn't standing in the world in their character: remote view (panning moves player.position and
---- fires on_player_changed_position without the body moving), or a spectator (inventory_sync's while a joining player's
+--- fires on_player_changed_position without the body moving), or a spectator (player_sync's while a joining player's
 --- inventory downloads, playtest 2 #6c), god, ghost or editor. Takes anything with a controller_type field, so a game
 --- test (no connected player exists in one) can drive it with made-up facts.
 local function off_body(player)
@@ -541,7 +541,7 @@ bridge.on("universal_edges", "ue.player.arrival", function(p)
 	return true
 end)
 
---- §6.1: name's character handed back from old_type. Only from spectator or god (inventory_sync's download ending)
+--- §6.1: name's character handed back from old_type. Only from spectator or god (player_sync's download ending)
 --- while an arrival waits: a respawn, the editor or remote view never moves them.
 function players.body(name, old_type)
 	if old_type ~= defines.controllers.spectator and old_type ~= defines.controllers.god then

@@ -207,7 +207,7 @@ t.case("vehicles: a car with a driver and a passenger crosses; both are prompted
 	ctx.at(1930, function()
 		local bob = game.surfaces.nauvis.create_entity({ name = "character", position = { 7312, 1985 }, force = "player" })
 		S().players.stand_in = { bob = bob.unit_number } -- bob is online on side b before the car comes
-		-- M5: bob's arrival was fetched before the car came. Seated at credit, his placing must go, or inventory_sync
+		-- M5: bob's arrival was fetched before the car came. Seated at credit, his placing must go, or player_sync
 		-- handing his character back (spectator to character) would place him again, out of his seat.
 		S().players.placing.bob = { expires = game.tick + 3600 }
 		-- crossing-arrival spec §5.1: bob is still guarded as arriving; the credit seat must settle him too.

@@ -5,7 +5,7 @@ const { merge } = require("webpack-merge");
 
 const common = require("@clusterio/web_ui/webpack.common");
 
-// The universal_edges web bundle (SP1 spec §7.4), as plugins/inventory_sync/webpack.config.cjs.
+// The universal_edges web bundle (SP1 spec §7.4), as plugins/player_sync/webpack.config.cjs.
 module.exports = (env = {}, argv = {}) => merge(common(env, argv), {
 	context: __dirname,
 	entry: "./web/index.tsx",

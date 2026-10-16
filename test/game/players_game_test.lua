@@ -177,7 +177,7 @@ t.case("players: placed again only when the character comes back from spectator 
 	end)
 	ctx.at(1605, function()
 		ctx.expect(ivy.position.x == 7038, "a respawn or the editor never moves them back")
-		ue_rt.player_body("ivy", defines.controllers.spectator) -- inventory_sync handing the character back
+		ue_rt.player_body("ivy", defines.controllers.spectator) -- player_sync handing the character back
 	end)
 	ctx.at(1607, function()
 		ctx.expect(math.abs(ivy.position.x - 7010.5) <= 8, "spectator → character: placed again")

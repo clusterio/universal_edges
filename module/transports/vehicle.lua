@@ -394,7 +394,7 @@ connectors.register_type({
 					-- M4: seated straight away logs the same as a rider seated later (players.seat, above)
 					send("trace", { op = "ue.player", phase = "seated", level = "info", tick = game.tick,
 						trace = meta.trace, player = name, edge = ep.edge, unit_number = v.unit_number, seat = role })
-					-- Seated, so an arrival still placing them is done: inventory_sync handing their character back
+					-- Seated, so an arrival still placing them is done: player_sync handing their character back
 					-- would otherwise place them again, out of the seat (crossing spec §6.1 step 4).
 					storage.universal_edges.players.placing[name] = nil
 					players.settle(name) -- seated: the arrival guard ends too (crossing-arrival spec §5.1)

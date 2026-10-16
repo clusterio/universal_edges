@@ -52,7 +52,7 @@ control.events[defines.events.on_player_left_game] = players.guarded(players.on_
 control.events[defines.events.on_player_joined_game] = players.guarded(players.on_joined, "ue.player")
 -- A respawn ends the arrival guard (crossing-arrival spec §5.1).
 control.events[defines.events.on_player_respawned] = players.guarded(players.on_respawned, "ue.player")
--- §6.1: inventory_sync hands a joining player's character back; a waiting arrival places them again.
+-- §6.1: player_sync hands a joining player's character back; a waiting arrival places them again.
 control.events[defines.events.on_player_controller_changed] = players.guarded(players.on_controller, "ue.player")
 
 -- Vehicles crossing with their riders (SP3 spec §10): a driver change, and a spidertron remote's selection.
