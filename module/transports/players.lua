@@ -37,10 +37,12 @@ players.v_of = v_of
 
 --- True while player isn't standing in the world in their character: remote view (panning moves player.position and
 --- fires on_player_changed_position without the body moving), or a spectator (player_sync's while a joining player's
---- inventory downloads, playtest 2 #6c), god, ghost or editor. Takes anything with a controller_type field, so a game
---- test (no connected player exists in one) can drive it with made-up facts.
+--- inventory downloads, playtest 2 #6c), god, ghost or editor; or riding a cargo pod, whose climb carries the body
+--- about 204 tiles north and 70 east of the silo before the surface switch (spike 49, small-things 14; a pod isn't a
+--- vehicle). Takes anything with a controller_type field, so a game test (no connected player exists in one) can drive
+--- it with made-up facts.
 local function off_body(player)
-	return player.controller_type ~= defines.controllers.character
+	return player.controller_type ~= defines.controllers.character or player.cargo_pod ~= nil
 end
 players.off_body = off_body
 

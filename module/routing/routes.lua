@@ -576,10 +576,23 @@ hooks.extend{
 		if #hops == 0 and routes.is_local(data.dest, tr.front_stock.surface_index) then
 			local sched = tr.get_schedule()
 			-- D43: release first, then path again: UE's go_to_station ran while our reservation made the stop look full
-			if reservations.drop(data.trace, "released", "arrived") then
+			local stop = r.reserved[data.trace]
+			local held = reservations.drop(data.trace, "released", "arrived")
+			local old
+			if held then
+				-- the train is new on this tile; vanilla keeps a train heading for a stop when its limit drops. The slot
+				-- is taken inside go_to_station and the limit put back in this handler, nothing runs between (spike 48).
+				if stop.valid and stop.trains_count >= stop.trains_limit then
+					old = stop.trains_limit
+					stop.trains_limit = stop.trains_count + 1
+				end
 				sched.go_to_station(sched.current)
+				if old then
+					stop.trains_limit = old
+				end
 			end
-			base.emit("ue.route", "arrived", "info", data.trace, { dest = data.dest, edge = ep.edge, cid = ep.cid })
+			base.emit("ue.route", "arrived", held and "info" or "warn", data.trace,
+				{ dest = data.dest, edge = ep.edge, cid = ep.cid, raised = old and true or nil })
 			base.send("ue.route.arrived", { trace = data.trace })
 			return
 		end

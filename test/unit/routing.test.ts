@@ -210,6 +210,67 @@ test("reservations count against free slots", () => {
 	assert.equal(w.reply(w.ask(4, "r3", "R WEST")).payload.reason, "destination_full");
 });
 
+test("a booking holds when the limit drops: the re-ask keeps the stop, the next route is turned away", () => {
+	const w = world({ stations1: [station(11, "R WEST", { limit: 2 })] });
+	assert.deepEqual(w.ask(4, "r1", "R WEST").find(m => m.kind === "ue.route.reserve"), reserve(1, "r1", 11));
+	w.report(
+		1, [["c:e21/w", "s:11", 100]], [station(11, "R WEST", { limit: 0, script: 1 })], [conn("e21/w", "inbound")],
+	);
+	const out = w.ask(3, "r1", "R WEST", { via: "e43/w" });
+	assert.equal(w.reply(out).payload.ok, true);
+	assert.equal(w.logs.at(-1)?.phase, "assigned");
+	assert.equal(out.find(m => m.kind === "ue.route.cancel"), undefined);
+	assert.equal(w.reply(w.ask(4, "r2", "R WEST")).payload.reason, "destination_full");
+	const better = world({
+		stations1: [station(11, "R WEST", { limit: 2 })], stations2: [station(21, "R WEST", { limit: 1, count: 1 })],
+	});
+	better.ask(4, "r1", "R WEST");
+	better.report(
+		1, [["c:e21/w", "s:11", 100]], [station(11, "R WEST", { limit: 0, script: 1 })], [conn("e21/w", "inbound")],
+	);
+	better.report(
+		2, [["c:e32/w", "c:e21/w", 200], ["c:e32/w", "s:21", 50]], [station(21, "R WEST", { priority: 60 })],
+		[conn("e32/w", "inbound"), conn("e21/w", "outbound")],
+	);
+	const moved = better.ask(3, "r1", "R WEST", { via: "e43/w" });
+	assert.deepEqual(moved.find(m => m.kind === "ue.route.reserve"), reserve(2, "r1", 21));
+	assert.equal(better.logs.at(-1)?.phase, "rerouted");
+});
+
+/** Limit-1 stop on tile 1 with route r1 booked to it; row is what the tile reports for it before r1 arrives. */
+function arrival(row: object) {
+	const w = world({ stations1: [station(11, "R WEST", { limit: 1 })] });
+	assert.deepEqual(w.ask(4, "r1", "R WEST").find(m => m.kind === "ue.route.reserve"), reserve(1, "r1", 11));
+	const rows = (extra: object) => w.report(
+		1, [["c:e21/w", "s:11", 100]], [station(11, "R WEST", { limit: 1, ...extra })], [conn("e21/w", "inbound")],
+	);
+	rows(row);
+	w.router.receive(1, "ue.route.arrived", { trace: "r1" });
+	return { w, rows };
+}
+const isFull = (w: ReturnType<typeof world>) => w.reply(w.ask(4, "r2", "R WEST")).payload.reason === "destination_full";
+
+test("an arrival frees no slot before the tile's next row (the stop's script reservation became a train)", () => {
+	const { w, rows } = arrival({ count: 1, script: 1 });
+	assert.ok(isFull(w), "stale row: arrival applied at once");
+	rows({ count: 1, script: 0 });
+	assert.ok(isFull(w), "the row that shows the train heading there");
+	rows({ count: 0, script: 0 });
+	assert.deepEqual(w.ask(4, "r2", "R WEST").find(m => m.kind === "ue.route.reserve"), reserve(1, "r2", 11));
+});
+
+test("an arrival whose reservation the row never showed still holds the slot", () => {
+	const { w } = arrival({ count: 0, script: 0 });
+	assert.ok(isFull(w));
+});
+
+test("arrived from a tile that isn't the stop's leaves its free slots as they were", () => {
+	const w = world({ stations1: [station(11, "R WEST", { limit: 1 })] });
+	w.ask(4, "r1", "R WEST");
+	w.router.receive(2, "ue.route.arrived", { trace: "r1" });
+	assert.deepEqual(w.ask(4, "r2", "R WEST").find(m => m.kind === "ue.route.reserve"), reserve(1, "r2", 11));
+});
+
 test("a stop gone from a report: the next request fails and its reservation is cancelled (failed)", () => {
 	const w = world();
 	assert.deepEqual(w.ask(4, "r1", "R WEST").find(m => m.kind === "ue.route.reserve"), reserve(1, "r1", 11));
@@ -226,8 +287,8 @@ test("the reservation lifecycle: re-routed, arrived on the stop's tile, lost (D4
 	});
 	assert.deepEqual(w.ask(4, "r1", "R WEST").find(m => m.kind === "ue.route.reserve"), reserve(1, "r1", 11));
 	w.report(
-		1, [["c:e21/w", "s:11", 100]], [station(11, "R WEST", { priority: 60, limit: 1, count: 1 })],
-		[conn("e21/w", "inbound")],
+		1, [["c:e21/w", "s:11", 100]], [station(11, "R WEST", { priority: 40, limit: 1, count: 1 })],
+		[conn("e21/w", "inbound")], // a booking only moves to a better stop
 	);
 	const out = w.ask(3, "r1", "R WEST", { via: "e43/w" });
 	assert.deepEqual(out.find(m => m.kind === "ue.route.cancel"), cancelled(1, "r1", "rerouted"));

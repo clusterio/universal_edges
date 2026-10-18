@@ -263,6 +263,8 @@ t.case("players: off_body gates every controller but the character (§3.1)", fun
 			ctx.expect(players.off_body({ controller_type = defines.controllers[name] }) == true, name .. " gates")
 		end
 		ctx.expect(players.off_body({ controller_type = defines.controllers.character }) == false, "a character doesn't")
+		ctx.expect(players.off_body({ controller_type = defines.controllers.character, cargo_pod = {} }) == true,
+			"a character riding a cargo pod gates (small-things 14)")
 	end)
 end)
 

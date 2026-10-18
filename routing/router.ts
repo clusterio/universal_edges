@@ -193,8 +193,13 @@ export class Router {
 		const named = this.names().get(nameKey(q.surface, q.dest)) ?? [];
 		const targets = new Set(named.map(n => `${n.tile}|s:${n.stop.unit}`));
 		const { dist, prev } = shortest(this.tiles, linkMap(this.port.edges()), traffic, origins, targets);
-		const choice = choose(named, dist, prev, (t, s) => this.free(t, s, held), tile);
 		const known = this.routes.get(q.trace);
+		const booked = known?.stop;
+		// a booking holds for the whole trip, as a vanilla train's does when a stop's limit drops
+		const choice = choose(named, dist, prev, (t, s) => {
+			const free = this.free(t, s, held);
+			return booked?.tile === t && booked.unit === s.unit ? Math.max(1, free) : free;
+		}, tile);
 		const route: Route = known ?? { trace: q.trace, dest: q.dest, tile, hops: [], seen: now };
 		route.tile = tile;
 		route.dest = q.dest;
@@ -255,6 +260,13 @@ export class Router {
 		}
 		if (lost !== undefined || route.stop?.tile !== tile) {
 			this.cancel(route, "lost");
+		} else if (route.stop) {
+			// the tile turned its reservation into a train heading here (script -1, count same); apply that now, as the
+			// next row (which replaces this object, and can't come before this message) may be a poll away
+			const row = this.tiles.get(tile)?.stations.get(route.stop.unit);
+			if (row) {
+				row.script -= 1;
+			}
 		}
 		this.routes.delete(trace);
 	}

@@ -667,6 +667,7 @@ t.case("routing: at the destination tile the reservation is released, the train 
 		ctx.expect(#queued("ue.route.arrived", function(p) return p.trace == "rt6h.1" end) == 1, "arrived, to the controller")
 		ctx.expect(#traced("ue.reservation", "released", "rt6h.1") == 1 and #traced("ue.route", "arrived", "rt6h.1") == 1,
 			"released and arrived, logged")
+		ctx.expect(traced("ue.route", "arrived", "rt6h.1")[1].level == "info", "a held reservation: arrived is info")
 	end)
 	ctx.at(2345, function()
 		local tr = seams.trains(id, "t1")[1]
@@ -674,6 +675,69 @@ t.case("routing: at the destination tile the reservation is released, the train 
 			"heading for the stop it reserved, not destination_full: " .. tr.state)
 	end)
 end)
+
+-- An arrival with no reservation held (it was cancelled, or never reached this tile) is a warning. Row 80200, ticks
+-- 3700-3740 (free: no other rig uses the row).
+t.case("routing: arriving at the end of the route with no reservation held logs arrived as a warning", function(ctx)
+	local id = "rt-noresv"
+	rig(ctx, 3700, id, 80200, { conn("t1", "ba", 4) }, { t1 = { rails = 60, station = "RT6 NORESV" } })
+	ctx.at(3740, function()
+		offer(id, 1, { { station = "RT6 NORESV" } }, { router = { trace = "rt6w.1", dest = "RT6 NORESV", hops = {} } }, "LC")
+		ctx.expect(reply(id, 1) == "credited", "credited")
+		ctx.expect(#queued("ue.route.arrived", function(p) return p.trace == "rt6w.1" end) == 1, "arrived, to the controller")
+		local line = traced("ue.route", "arrived", "rt6w.1")[1]
+		ctx.expect(line and line.level == "warn", "no booking held: arrived is warn")
+	end)
+end)
+
+-- A booking holds for the whole trip (ILLISIS/universal_edges#2 part 2b, spike 48): the arriving train takes its stop's slot
+-- over the limit, and the limit is back at once. Rows 80600-81400, ticks 3740-3820 (free). A first train, unrouted, is
+-- already heading for the stop (trains_count 1, limit 1); the booked one materializes behind it.
+local function keep_case(label, id, y, name, trace, full, circuit)
+	t.case("routing: " .. label, function(ctx)
+		rig(ctx, 3740, id, y, { conn("t1", "ba", 4) }, { t1 = { rails = 60, station = name } })
+		local stop
+		ctx.at(3742, function()
+			stop = stop_named(name)
+			if circuit then
+				circuit_limit(stop, stop.position.x, stop.position.y + 3, 1)
+			else
+				stop.trains_limit = 1
+			end
+		end)
+		ctx.at(3780, function()
+			if full then
+				offer(id, 1, { { station = name } }, nil, "LC")
+				ctx.expect(reply(id, 1) == "credited", "the first train: " .. tostring(reply(id, 1)))
+			end
+		end)
+		ctx.at(3810, function()
+			ctx.expect(not full or stop.trains_count == 1, "a train already heading there: " .. stop.trains_count)
+			deliver("ue.route.reserve", { trace = trace, unit = stop.unit_number })
+			local seq = full and 2 or 1
+			offer(id, seq, { { station = name } }, { router = { trace = trace, dest = name, hops = {} } }, "LC")
+			ctx.expect(reply(id, seq) == "credited", "credited: " .. tostring(reply(id, seq)))
+			local line = traced("ue.route", "arrived", trace)[1]
+			ctx.expect(line and (line.raised == true) == full, "raised only when the stop was full")
+			ctx.expect(stop.trains_limit == 1, "the limit is back: " .. stop.trains_limit)
+			local heading
+			for _, tr in ipairs(seams.trains(id, "t1")) do
+				heading = heading or (tr.path_end_stop == stop and tr.state ~= defines.train_state.destination_full)
+			end
+			ctx.expect(full == false or heading, "the booked train is heading for the stop, not destination_full")
+		end)
+		ctx.at(3815, function()
+			ctx.expect(stop.trains_limit == 1, "the limit stays")
+			for _, tr in ipairs(seams.trains(id, "t1")) do
+				ctx.expect(tr.state ~= defines.train_state.destination_full, "no train in destination_full")
+			end
+		end)
+	end)
+end
+keep_case("a full stop: the booked train arriving over the limit is not turned away, the limit is restored", "rt-keep",
+	80600, "RT6 KEEP", "rtk.1", true, false)
+keep_case("the same with a circuit-controlled limit", "rt-keepc", 81000, "RT6 KEEPC", "rtk.2", true, true)
+keep_case("a stop with a free slot: no raise", "rt-keepf", 81400, "RT6 KEEPF", "rtk.3", false, false)
 
 t.case("routing: the route follows the train through every join (new train ids); a reply after assembly applies to it", function(ctx)
 	local id = "rt-joins"
