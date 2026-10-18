@@ -64,7 +64,7 @@ export function target(
 	if (!address || found.gamePort === undefined) {
 		return { ok: false, reason: "no_address" };
 	}
-	return { ok: true, address: `${address}:${found.gamePort}`, name: found.name };
+	return { ok: true, address: `${address}:${found.gamePort}`, name: found.name, instanceId: id };
 }
 
 /**
@@ -103,7 +103,9 @@ export function playerForwarding(context: InstancePluginContext) {
 			const request = new PlayerCrossRequest(player, p.keys, p.surface, p.x, p.y, trace);
 			instance.sendTo("controller", request).then(r => {
 				if (r.ok) {
-					bridge!.send("ue.player.prompt", { player, address: r.address ?? "", name: r.name ?? "", trace });
+					bridge!.send("ue.player.prompt", {
+						player, address: r.address ?? "", name: r.name ?? "", instance_id: r.instanceId, trace,
+					});
 				} else {
 					bridge!.send("ue.player.none", { player, reason: r.reason ?? "refused", trace });
 				}

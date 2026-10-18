@@ -416,6 +416,8 @@ export const PlayerTargetSchema = Type.Object({
 	address: Type.Optional(Type.String()),
 	name: Type.Optional(Type.String()),
 	reason: Type.Optional(Type.String()),
+	/** The destination's instance id, for player_sync's set_destination (prefetch spec §9) */
+	instanceId: Type.Optional(Type.Integer()),
 });
 export type PlayerTarget = Static<typeof PlayerTargetSchema>;
 

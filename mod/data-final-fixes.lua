@@ -47,17 +47,21 @@ end
 data:extend(copies)
 
 -- The oracle (cross-border biters spec §6.3; spikes 25, 27, 28; spike 34 O5): a hidden copy of an enemy spawner that
--- spawns only "<name>-unit", an invisible copy of the planet's smallest unit that does no damage (spike 28 H1) and, like
--- its spawner, collides with nothing (plan ruling R14), so it names vanilla's target without touching anything. UE places
--- one outside each live side and makes each unit indestructible as it spawns. In data-final-fixes, beside Gleba's copy
--- (plan Task 13), whose prototypes Space Age defines.
+-- spawns only "<name>-unit", an invisible copy of the planet's smallest unit that does no damage (spike 28 H1). The spawner
+-- collides with nothing (plan ruling R14); the unit keeps its vanilla collision mask (owner, 2026-10-18): with no
+-- collision and no buildable_entities, together with gridworld removing units as they spawn outside the tile, 2.1.22
+-- keeps state a save doesn't carry, so the next expansion party gathers elsewhere on a joining client and it desyncs
+-- (heavy mode fails on a base-game repro; on the dev save 6 of 8 reloads split, 0 of 8 with the vanilla mask; a
+-- narrower mask or a layer of its own still split). UE places one outside each live side and makes each unit
+-- indestructible as it spawns. In data-final-fixes, beside Gleba's copy
+-- (plan Task 13), whose prototypes Space Age defines. The control script places it on force ue-oracle, not enemy: the
+-- expansion planner counts an enemy oracle as a base (spike 42).
 local function oracle(spawner, unit, name)
 	local EMPTY = { filename = "__core__/graphics/empty.png", width = 1, height = 1, frame_count = 1, direction_count = 1 }
 	local u = table.deepcopy(data.raw.unit[unit])
 	u.name, u.hidden = name .. "-unit", true
 	u.factoriopedia_simulation, u.corpse, u.dying_explosion, u.water_reflection = nil, nil, nil, nil
 	u.run_animation, u.attack_parameters.animation = table.deepcopy(EMPTY), table.deepcopy(EMPTY)
-	u.collision_mask = { layers = {} }
 	u.selectable_in_game = false
 	-- no bases from oracle units: the copy kept small-biter's buildable_entities, so vanilla formed expansion parties at
 	-- oracles and UE then destroyed their members (spikes 37 and 38; owner, 2026-10-15)

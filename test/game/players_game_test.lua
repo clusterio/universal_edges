@@ -265,3 +265,32 @@ t.case("players: off_body gates every controller but the character (§3.1)", fun
 		ctx.expect(players.off_body({ controller_type = defines.controllers.character }) == false, "a character doesn't")
 	end)
 end)
+
+-- A stand-in for player_sync's interface (prefetch spec §9): the game-test save has this repo's plugins, not
+-- player_sync. Registered at load, as an interface must be; nothing else here calls it (no player is connected in a
+-- game test, so the prompt handler never reaches connect_to_server).
+local ps_calls, ps_raise = {}, false
+remote.add_interface("player_sync", {
+	set_destination = function(name, instance_id)
+		if ps_raise then
+			error("player_sync stand-in: raising")
+		end
+		ps_calls[#ps_calls + 1] = { name = name, instance_id = instance_id }
+	end,
+})
+
+t.case("players: set_destination tells player_sync where the player is going; a raising interface or an id that " ..
+	"isn't a number never raises out of it (prefetch spec §9)", function(ctx)
+	ctx.at(1700, function()
+		players.set_destination("ann", 7)
+		ctx.expect(#ps_calls == 1 and ps_calls[1].name == "ann" and ps_calls[1].instance_id == 7,
+			"the interface got the name and the id")
+		ps_raise = true
+		local ok = pcall(players.set_destination, "ann", 8)
+		ps_raise = false
+		ctx.expect(ok, "a raising interface doesn't raise out of it")
+		players.set_destination("ann", nil)
+		players.set_destination("ann", "7")
+		ctx.expect(#ps_calls == 1, "no id, or one that isn't a number: nothing is called")
+	end)
+end)

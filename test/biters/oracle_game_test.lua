@@ -39,6 +39,9 @@ t.case("oracle: placed indestructible at the east side's (80, -3.5); its units l
 	ctx.at(60, function()
 		local o = storage.universal_edges.biters.oracles[ID .. "-x"]
 		ctx.expect(o and o.valid and o.name == "ue-oracle" and not o.destructible, "the east side's oracle, indestructible")
+		local f = game.forces["ue-oracle"]
+		ctx.expect(o and f and o.force == f and f.ai_controllable, "on force ue-oracle, AI-controllable (spike 42)")
+		ctx.expect(f and f.get_cease_fire("enemy") and game.forces.enemy.get_cease_fire(f), "at cease-fire with enemy both ways")
 		ctx.expect(o and math.abs(o.position.x - 67.5) <= 1 and math.abs(o.position.y - 16) <= 1, "at (67.5, 16)")
 		ctx.expect(prototypes.entity["ue-oracle-unit"].selectable_in_game == false, "its units can't be selected (I2)")
 	end)
@@ -158,4 +161,24 @@ t.case("oracle: its units form no expansion party (spikes 37 and 38)", function(
 		end)
 	end
 	ask(300)
+end)
+
+t.case("oracle: its unit keeps the vanilla unit's collision mask, its spawner collides with nothing (owner, 2026-10-18: a "
+	.. "collision-less unit that builds no bases desynced joining clients)", function(ctx)
+	ctx.at(5, function()
+		local function layers(name)
+			local out = {}
+			for k in pairs(prototypes.entity[name].collision_mask.layers) do
+				out[#out + 1] = k
+			end
+			table.sort(out)
+			return table.concat(out, ",")
+		end
+		for unit, vanilla in pairs({ ["ue-oracle-unit"] = "small-biter", ["ue-oracle-gleba-unit"] = "small-wriggler-pentapod" }) do
+			if prototypes.entity[unit] then
+				ctx.expect(layers(unit) ~= "" and layers(unit) == layers(vanilla), unit .. " mask " .. layers(unit))
+			end
+		end
+		ctx.expect(layers("ue-oracle") == "", "ue-oracle mask " .. layers("ue-oracle"))
+	end)
 end)

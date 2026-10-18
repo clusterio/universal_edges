@@ -31,7 +31,8 @@ test("another prefix goes to its registered resolver with the key and surface; a
 test("target: a running instance at its host's public address; why not otherwise", () => {
 	const inst = (s: string, port?: number) => () => ({ name: "b", host: 3, status: s, gamePort: port });
 	const host = () => ({ publicAddress: "h.example" });
-	assert.deepEqual(target(2, inst("running", 34197), host), { ok: true, address: "h.example:34197", name: "b" });
+	assert.deepEqual(target(2, inst("running", 34197), host),
+		{ ok: true, address: "h.example:34197", name: "b", instanceId: 2 });
 	assert.deepEqual(target(2, inst("stopped", 34197), host), { ok: false, reason: "not_running" });
 	assert.deepEqual(target(2, () => undefined, host), { ok: false, reason: "no_instance" });
 	assert.deepEqual(target(2, inst("running"), host), { ok: false, reason: "no_address" });
@@ -44,10 +45,10 @@ test("resolveKeys: the first key that leads to a running instance is chosen; els
 	const corner = (tile: boolean) => (p: string) => (p === "zone" ? () => (tile ? 9 : "no_tile") : undefined);
 	const keys = ["zone:se", "edge:e1"];
 	assert.deepEqual(resolveKeys(keys, 1, "nauvis", edges, corner(false), facts, host),
-		{ result: { ok: true, address: "h.example:34197", name: "i2" }, to: 2, key: "edge:e1" },
+		{ result: { ok: true, address: "h.example:34197", name: "i2", instanceId: 2 }, to: 2, key: "edge:e1" },
 		"the corner has no tile: the edge, the fallback, is chosen");
 	assert.deepEqual(resolveKeys(keys, 1, "nauvis", edges, corner(true), facts, host),
-		{ result: { ok: true, address: "h.example:34197", name: "i9" }, to: 9, key: "zone:se" },
+		{ result: { ok: true, address: "h.example:34197", name: "i9", instanceId: 9 }, to: 9, key: "zone:se" },
 		"both work: the first, the corner, is chosen");
 	assert.deepEqual(resolveKeys(["zone:se", "edge:nope"], 1, "nauvis", edges, corner(false), facts, host),
 		{ result: { ok: false, reason: "unknown_edge" } }, "all fail: the last reason");

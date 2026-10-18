@@ -268,6 +268,19 @@ local function arrive(ep, group, body, id)
 	end
 end
 
+--- The oracle's force: not "enemy", whose expansion planner counts an oracle as a base and cuts expansion to a quarter
+--- (spike 42). AI-controllable, or its group never forms; at cease-fire with enemy, so neither attacks the other.
+local function oracle_force()
+	local f = game.forces["ue-oracle"]
+	if not f then
+		f = game.create_force("ue-oracle")
+		f.ai_controllable = true
+		f.set_cease_fire("enemy", true)
+		game.forces.enemy.set_cease_fire(f, true)
+	end
+	return f
+end
+
 --- Spec §6.3: the oracle of ep's side, in the first outside row at local (oracle_x, ORACLE_Y), on a surface whose
 --- pollutant has an oracle, once its chunk is generated, while raids are on. The endpoint's build and every poll try again.
 local function place(ep)
@@ -281,7 +294,7 @@ local function place(ep)
 	if not surface.is_chunk_generated({ math.floor(x / 32), math.floor(y / 32) }) then
 		return
 	end
-	local e = surface.create_entity({ name = name, position = { x, y }, force = "enemy" })
+	local e = surface.create_entity({ name = name, position = { x, y }, force = oracle_force() })
 	if e then
 		e.destructible = false
 		oracles[ep.edge] = e

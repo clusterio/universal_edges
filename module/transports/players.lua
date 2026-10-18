@@ -241,6 +241,14 @@ function players.on_moved(event)
 	players.moved(player.name, surface.index, surface.name, p.x, p.y)
 end
 
+--- player_sync prefetch: tell player_sync where the player is going. Records only; sent after the leave.
+function players.set_destination(name, instance_id)
+	local ps = remote.interfaces.player_sync
+	if type(instance_id) == "number" and ps and ps.set_destination then
+		pcall(remote.call, "player_sync", "set_destination", name, instance_id)
+	end
+end
+
 --- §4 step 3: offer the server, unless the reply is stale or the player has gone.
 bridge.on("universal_edges", "ue.player.prompt", function(p)
 	if type(p.player) ~= "string" or type(p.address) ~= "string" or type(p.name) ~= "string"
@@ -266,6 +274,7 @@ bridge.on("universal_edges", "ue.player.prompt", function(p)
 	-- v1: the cursor goes to the inventory, which inventory sync carries. Only with a prompt: a crossing answered none
 	-- (a zone with no destination at the world's rim, retried every RETRY ticks there) leaves the cursor alone.
 	player.clear_cursor()
+	players.set_destination(p.player, p.instance_id) -- pcall inside: a raise here would skip the connect
 	player.connect_to_server({ address = p.address, name = p.name, description = "Universal Edges: across this border" })
 	emit("prompt", "info", p.trace, { player = p.player, key = pending.key })
 	return true
