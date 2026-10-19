@@ -5,6 +5,7 @@ import { PingEvent, RuntimeEvent } from "./messages.js";
 import { startEdges } from "./edges/controller.js";
 import { startRouting } from "./routing/controller.js";
 import { startRadar } from "./radar/controller.js";
+import { startPower } from "./power/controller.js";
 import { startSchedules } from "./schedules/controller.js";
 import { RuntimeTracker, lifecycle, loadDataFile, saveDataFile, type Migration } from "./runtime/index.js";
 
@@ -27,6 +28,8 @@ export default async function loadControllerPlugin(context: ControllerPluginCont
 	await startSchedules(context);
 	// The radar sync (radar-sync spec §3): the hub of every tile's radar networks.
 	const radar = startRadar(context);
+	// The power hub (power hub spec §8): linked tiles share power as one network.
+	startPower(context);
 
 	// A hello after each start's handshake, heartbeats every 600 ticks. A tick that went back is a rollback.
 	controller.handle(RuntimeEvent, async (event: RuntimeEvent, src: lib.Address) => {

@@ -7,6 +7,7 @@ import {
 import { PingEvent, RuntimeEvent } from "./messages.js";
 import { RouteDownEvent, RouteUpEvent } from "./routing/contracts.js";
 import { RadarDownEvent, RadarUpEvent } from "./radar/contracts.js";
+import { PowerDownEvent, PowerUpEvent } from "./power/contracts.js";
 import { SchedDownEvent, SchedUpEvent } from "./schedules/contracts.js";
 
 declare module "@clusterio/lib" {
@@ -45,6 +46,8 @@ export const plugin: lib.PluginDeclaration = {
 		RouteDownEvent,
 		RadarUpEvent,
 		RadarDownEvent,
+		PowerUpEvent,
+		PowerDownEvent,
 		SchedUpEvent,
 		SchedDownEvent,
 	],

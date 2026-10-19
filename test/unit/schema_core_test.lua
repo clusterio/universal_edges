@@ -55,7 +55,7 @@ t.test("a fresh state reaches schema 11 through migrations 1 to 11, in its final
 	t.expect_eq(state.frozen, nil)
 	t.expect_same(state.biters, { walking = {}, oracles = {}, targets = {} })
 	t.expect_same(state.radar, { hosts = {} })
-	t.expect_same(state.power_debt, {})
+	t.expect_eq(state.power_debt, nil)
 	t.expect_same(state.edges, {})
 	t.expect_same(state.eps, {})
 	t.expect_eq(state.stream_trace, false)
@@ -116,14 +116,14 @@ t.test("migration 7 moves the router prototype's storage.router into routing, or
 	t.expect_eq(fresh.strip, true)
 end)
 
-t.test("migration 8 adds the power link's debt set and keeps everything else (spike 22)", function()
+t.test("migration 8 is a no-op since the power hub took the debt drain out (power hub spec §9)", function()
 	storage = {}
 	local seven = core.run({ schema = 0 }, { schema[1], schema[2], schema[3], schema[4], schema[5], schema[6], schema[7] })
 	seven.edges.e1 = { id = "e1", eps = {} }
 	local after = core.run(seven, { schema[1], schema[2], schema[3], schema[4], schema[5], schema[6], schema[7], schema[8] })
 	storage = nil
 	t.expect_eq(after.schema, 8)
-	t.expect_same(after.power_debt, {})
+	t.expect_eq(after.power_debt, nil)
 	t.expect_eq(after.edges.e1.id, "e1")
 end)
 

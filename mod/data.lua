@@ -65,9 +65,12 @@ pipe.fluid_box.pipe_connections[2] = nil
 
 data:extend({
 	belt,
-	interface("ue-link-interface", "tertiary", "10MJ"), -- §8.2: tertiary, as v1's ue_eei_tertiary; resized at runtime
-	-- Test-only (plan ruling 6): the power game test's and E2E's generator and sink. Nothing in UE places them.
-	interface("ue-test-power-source", "primary-output", "100GJ"),
+	-- power hub spec §5: dynamic, so the hub can set each link's class and cap at runtime; a new one starts in
+	-- tertiary_input_output, today's tertiary behaviour (spike 45 P1); resized at runtime
+	interface("ue-link-interface", "dynamic", "10MJ"),
+	-- Test-only (plan ruling 6; power hub plan ruling 13): the game tests', E2Es' and bench's generator, of any class
+	-- (electric_interface_mode), and sink. Nothing in UE places them.
+	interface("ue-test-power-source", "dynamic", "100GJ"),
 	interface("ue-test-power-sink", "secondary-input", "100GJ"),
 	pipe,
 })

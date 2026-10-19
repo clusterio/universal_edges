@@ -8,6 +8,6 @@
 		"forceConsistentCasingInFileNames": true,
 		"outDir": "dist/node"
 	},
-	"include": ["./*.ts", "./runtime/**/*.ts", "./edges/**/*.ts", "./routing/**/*.ts", "./schedules/**/*.ts", "./radar/**/*.ts", "./test/unit/**/*.ts"],
+	"include": ["./*.ts", "./runtime/**/*.ts", "./edges/**/*.ts", "./routing/**/*.ts", "./schedules/**/*.ts", "./radar/**/*.ts", "./power/**/*.ts", "./test/unit/**/*.ts"],
 	"exclude": ["./dist/*"]
 }

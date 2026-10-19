@@ -5,6 +5,7 @@ import { edgeForwarding } from "./edges/lanes.js";
 import { playerForwarding } from "./edges/players.js";
 import { routingForwarding } from "./routing/instance.js";
 import { radarForwarding } from "./radar/instance.js";
+import { powerForwarding } from "./power/instance.js";
 import { schedulesForwarding } from "./schedules/instance.js";
 import { Heartbeat, Hello, PingOut, Stats, newBootId, on, openBridge, type PingInPayload } from "./runtime/index.js";
 
@@ -28,12 +29,14 @@ export default async function loadInstancePlugin(context: InstancePluginContext)
 	const routing = routingForwarding(context);
 	const schedules = schedulesForwarding(context);
 	const radar = radarForwarding(context);
+	const power = powerForwarding(context);
 	const bridge = openBridge(context, {
 		...edges.handlers,
 		...players.handlers,
 		...routing.handlers,
 		...schedules.handlers,
 		...radar.handlers,
+		...power.handlers,
 		"runtime.hello": on(Hello, hello => {
 			instance.sendTo("controller", new RuntimeEvent("hello", hello.boot_id, hello.tick));
 		}),
@@ -65,6 +68,7 @@ export default async function loadInstancePlugin(context: InstancePluginContext)
 	routing.attach(bridge);
 	schedules.attach(bridge);
 	radar.attach(bridge);
+	power.attach(bridge);
 
 	// The startup handshake (spec §7.5): a fresh boot id for this Factorio run; then messages to Lua may flow.
 	instance.hooks.start.attach(plugin.name, async () => {

@@ -72,11 +72,9 @@ return {
 		}
 		storage.router = nil
 	end,
-	-- 8 (power link, spike 22): the power endpoints with a send's debt still to pay out of their pool, ep.key → endpoint.
-	-- In storage, as circuit_writing is: the drain task runs in every Lua state.
-	function(state)
-		state.power_debt = {}
-	end,
+	-- 8 (power link, spike 22): made the power link's debt set; a no-op since the power hub took the debt drain out
+	-- (power hub spec §9). Kept so the later steps keep their numbers; a live world drops the set at deploy.
+	function() end,
 	-- 9 (train group sync, sync spec §4): the cluster's groups and interrupts as this tile last heard them
 	-- (cache[kind][name] = { v, content }); what this tile last applied, reported or read of each name it holds
 	-- (hash[kind][name] = { h, t }: the canonical content and the tick it was recorded, plan ruling 3); the names whose

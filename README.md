@@ -19,7 +19,7 @@ pnpm build
 pnpm run -r --if-present prepare
 ```
 
-`prepare` compiles the plugin, bundles its web page and zips its mod to `dist/universal_edges_<mod version>.zip`, the version in `mod/info.json` (2.1.1). Add the plugin to the controller's plugin list with `npx clusteriocontroller plugin add ./external_plugins/universal_edges` and to each host's with `npx clusteriohost plugin add ./external_plugins/universal_edges`, from the checkout (a path needs the `./`). Upload the mod with `npx clusterioctl mod upload external_plugins/universal_edges/dist/universal_edges_<mod version>.zip`, and add it to the instances' mod pack with `npx clusterioctl mod-pack edit <pack> --add-mods universal_edges:<mod version>`.
+`prepare` compiles the plugin, bundles its web page and zips its mod to `dist/universal_edges_<mod version>.zip`, the version in `mod/info.json` (2.1.2). Add the plugin to the controller's plugin list with `npx clusteriocontroller plugin add ./external_plugins/universal_edges` and to each host's with `npx clusteriohost plugin add ./external_plugins/universal_edges`, from the checkout (a path needs the `./`). Upload the mod with `npx clusterioctl mod upload external_plugins/universal_edges/dist/universal_edges_<mod version>.zip`, and add it to the instances' mod pack with `npx clusterioctl mod-pack edit <pack> --add-mods universal_edges:<mod version>`.
 
 ## Test and lint
 
