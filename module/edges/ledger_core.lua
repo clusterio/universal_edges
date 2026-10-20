@@ -275,12 +275,14 @@ kinds.stream = {
 }
 
 -- Ordered lanes (SP3 spec §7.3, D31) -----------------------------------------------------------------------------------
--- Stream conservation, plus order. The source keeps runs, a FIFO of { k, n, e } (e = sent[k] at the run's end) since the
--- last ack, and every o.offer carries them all. The destination credits each run's part above recv[k], in order, so a
+-- Stream conservation, plus order. The source keeps runs, a FIFO of { k, n, e, g } (e = sent[k] at the run's end; g = one
+-- gap per stack for the transport, never part of any total, credited only with a whole run) since the last ack, and
+-- every o.offer carries them all. The destination credits each run's part above recv[k], in order, so a
 -- late, repeated or reordered offer only re-covers what it has; a start above recv[k] (only after a destination
 -- restore) is credited at that run's place, out of order but exact. Acks, finals and refunds are stream's.
 
---- A run list: an array of at most RUN_CAP runs, { key, whole n } from a transport, or { key, n, e ≥ n } off the wire.
+--- A run list: an array of at most RUN_CAP runs, { key, whole n, g? } from a transport, or { key, n, e ≥ n, g? } off the
+--- wire. g, when present, is an array of at most n numbers ≥ 0 (belt spacing spec §6).
 local function valid_runs(runs, wire)
 	if type(runs) ~= "table" or #runs > core.RUN_CAP then
 		return false
@@ -297,6 +299,18 @@ local function valid_runs(runs, wire)
 			or (wire and not (whole(r[3]) and r[3] >= r[2])) then
 			return false
 		end
+		local g = r[wire and 4 or 3]
+		if g ~= nil then
+			if type(g) ~= "table" or #g > r[2] then
+				return false
+			end
+			for i = 1, #g do
+				local x = g[i]
+				if type(x) ~= "number" or not (x >= 0 and x < math.huge) then
+					return false
+				end
+			end
+		end
 	end
 	return true
 end
@@ -310,14 +324,14 @@ kinds.ordered = {
 		return lane
 	end,
 
-	--- ep:send: sent += each run, in order; a run whose key repeats the last run's extends it. A bad list, a total past
-	--- MAX_TOTAL, or more than RUN_CAP unacknowledged runs changes nothing and errors (T1).
+	--- ep:send: sent += each run, in order; each run is appended as it comes: runs never change after their send (belt
+	--- spacing spec §6). A bad list, a total past MAX_TOTAL, or more than RUN_CAP unacknowledged runs changes nothing
+	--- and errors (T1).
 	capture = function(lane, runs)
 		if not valid_runs(runs, false) then
-			error("an ordered send needs an array of at most " .. core.RUN_CAP .. " runs { key, whole amount }")
+			error("an ordered send needs an array of at most " .. core.RUN_CAP .. " runs { key, whole amount, gaps? }")
 		end
 		local add, count = {}, #lane.runs
-		local last = lane.runs[count] and lane.runs[count][1]
 		for _, r in ipairs(runs) do
 			local k, n = r[1], r[2]
 			if n > 0 then
@@ -325,9 +339,7 @@ kinds.ordered = {
 				if (lane.sent[k] or 0) + add[k] > core.MAX_TOTAL then
 					error("the stream total of " .. k .. " would pass " .. core.MAX_TOTAL)
 				end
-				if k ~= last then
-					count, last = count + 1, k
-				end
+				count = count + 1
 			end
 		end
 		if count > core.RUN_CAP then
@@ -339,12 +351,7 @@ kinds.ordered = {
 				local e = (lane.sent[k] or 0) + n
 				lane.sent[k] = e
 				mark(lane, k)
-				local tail = lane.runs[#lane.runs]
-				if tail and tail[1] == k then
-					tail[2], tail[3] = tail[2] + n, e
-				else
-					lane.runs[#lane.runs + 1] = { k, n, e }
-				end
+				lane.runs[#lane.runs + 1] = { k, n, e, r[3] }
 			end
 		end
 	end,
@@ -356,16 +363,16 @@ kinds.ordered = {
 	visit = {
 		--- Every run since the last ack, then each pending key with no run left (after an activation, or an ack that
 		--- went down) as a zero-length run { k, 0, sent[k] }: RUN_CAP runs to an o.offer. Then the backoff doubles.
-		--- perf item 3: only the tail run is copied — a later capture extends it in place, but every other run, once
-		--- offered, stays immutable (an ack only re-slots lane.runs itself, it never edits a run table), so sharing
-		--- them costs nothing. list becomes the one offer's own runs directly when it holds RUN_CAP or fewer.
+		--- perf item 3: every run is shared, none copied — a run never changes after its send (an ack only re-slots
+		--- lane.runs itself, it never edits a run table). list becomes the one offer's own runs directly when it holds
+		--- RUN_CAP or fewer.
 		tx = function(lane, ctx)
 			if lane.npending == 0 or ctx.tick < lane.next_send then
 				return nil
 			end
-			local list, seen, n = {}, {}, #lane.runs
+			local list, seen = {}, {}
 			for i, r in ipairs(lane.runs) do
-				list[i] = i == n and { r[1], r[2], r[3] } or r
+				list[i] = r
 				seen[r[1]] = true
 			end
 			for k in pairs(lane.pending) do
@@ -409,7 +416,7 @@ kinds.ordered = {
 				local k, e = r[1], r[3]
 				local c = cur[k] or lane.recv[k] or 0
 				if e > c then
-					list[#list + 1] = { k, e - c }
+					list[#list + 1] = { k, e - c, e - c == r[2] and r[4] or nil }
 					total = total + e - c
 					cur[k] = e
 				end

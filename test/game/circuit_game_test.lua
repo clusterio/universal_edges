@@ -766,7 +766,7 @@ t.case("circuit: a failed endpoint's rebuild keeps its injectors and slot maps (
 	end
 	--- Wait from offset `from` for power endpoint p1 to poll again (last_poll > polled), then done(). The power poll
 	--- (power.lua schedule) walks per_tick = 4 endpoints a tick, a walk starting every interval = 60 ticks, and a visit
-	--- polls an endpoint only if tick - last_poll >= 60. A visit just after p1's last poll can be too soon and skip to the
+	--- polls an endpoint only if tick - last_poll >= 3/4 of 60. A visit just after p1's last poll can be too soon and skip to the
 	--- next walk: worst case 2 * 60 ticks, plus that walk's length, ceil(N / 4), N = the power endpoints live now.
 	--- Bound = 2 * 60 + ceil(N / 4) ticks after `from`.
 	local function power_polled(p1, polled, from, done)

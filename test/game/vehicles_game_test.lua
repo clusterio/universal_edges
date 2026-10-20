@@ -612,31 +612,24 @@ end)
 
 t.case("vehicles: a body naming an item this server lacks is rejected, and the source keeps it (I1)", function(ctx)
 	local car
-	ctx.at(3650, function()
+	ctx.at(3000, function()
+		ctx.expect(3001 + walk_bound() <= 3850, "I1's wait ends by 3850: walk_bound() = " .. walk_bound())
 		ground(9600, 2990, 9640, 3010)
 		ground(9600, 1980, 9640, 2010)
 		loop.edge("sp3-v7", L, {}, EDGE(9600))
 		corrupt_item["sp3-v7-y"] = true
 		car = spawn("car", 9610, 2998, 0, 0.3) -- fuelled with coal (spawn()): the item corrupt_item renames
 	end)
-	-- N2: a fixed-tick check can't tell "still crossing" from "credited and the source destroyed" apart this early,
-	-- and a fixed margin shrinks as later tasks add edges to the same walk. Sample every tick for a terminal fact
-	-- instead: M8's own reject state (rejected, unfrozen) at the source.
-	local resolved = false
-	for k = 3652, 3840 do
-		ctx.at(k, function()
-			if resolved then
-				return
-			end
-			if car.valid and S().rejected[car.unit_number] and not car.disabled_by_script then
-				resolved = true
-				ctx.expect(car.valid, "the source keeps its car: not destroyed")
-				ctx.expect(spawned("sp3-v7-y", "car") == nil, "nothing was credited on the far side")
-			elseif k == 3840 then
-				ctx.expect(false, "no terminal reject state (rejected, unfrozen) by tick " .. k)
-			end
-		end)
-	end
+	-- N2: a fixed-tick check can't tell "still crossing" from "credited and the source destroyed" apart this early, and
+	-- a fixed margin shrinks as later tasks add edges to the same walk. Wait for a terminal fact instead, within the
+	-- file's own walk bound: M8's own reject state (rejected, unfrozen) at the source. Cases end by tick 3850 (the
+	-- startup raises at 3900 reset every side).
+	wait_for(ctx, 3001, function()
+		return car and car.valid and S().rejected[car.unit_number] and not car.disabled_by_script
+	end, "a terminal reject state (rejected, unfrozen)", function()
+		ctx.expect(car.valid, "the source keeps its car: not destroyed")
+		ctx.expect(spawned("sp3-v7-y", "car") == nil, "nothing was credited on the far side")
+	end)
 end)
 
 t.case("vehicles: a raise during restore on credit is a reject, not a failed v endpoint; the source keeps its car " ..

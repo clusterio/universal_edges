@@ -389,7 +389,7 @@ local function poll(ep, tick)
 		return
 	end
 	local g = d.guard
-	if not g or tick - g.tick >= circuit.P then
+	if not g or tick - g.tick >= circuit.P * 3 / 4 then -- follows lanes.lua's 3/4 poll rule (plan Task 3 ruling)
 		circuit.compute(sibs, n, tick) -- 5: b′ for every link of this side, once a period (K15)
 		g = d.guard
 	end

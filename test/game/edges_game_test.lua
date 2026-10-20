@@ -328,14 +328,21 @@ t.case("edges (S1): a side whose surface appears after its record takes it — i
 	ctx.expect_ipc("universal_edges:out", '"phase":"surface_found"')
 end)
 
--- S3 (surfaces spec §11, U8): UE's link belt and pipe are deep copies of vanilla's, which Space Age gives heating_energy;
--- on Aquilo, where entities need heat, they would freeze. A vanilla belt beside them shows the case can see freezing.
+-- S3 (surfaces spec §11, U8): every UE belt (one per tier) and the pipe are deep copies of vanilla's, which Space Age
+-- gives heating_energy; on Aquilo, where entities need heat, they would freeze. A vanilla belt beside them shows the
+-- case can see freezing.
 -- Aquilo exists from tick 100 (gridworld's tile config makes every planet); x 2996-3007, y 2996-3003 is this case's.
 t.case("S3: the link belt and pipe carry no heating, so a link belt doesn't freeze on Aquilo", function(ctx)
 	local link, control
 	ctx.at(700, function()
-		local belt, pipe = prototypes.entity["ue-link-belt"], prototypes.entity["ue-link-pipe"]
-		ctx.expect(belt.heating_energy == 0, "ue-link-belt: no heating, got " .. belt.heating_energy)
+		local pipe, ue_belts = prototypes.entity["ue-link-pipe"], 0
+		for name, belt in pairs(prototypes.get_entity_filtered({ { filter = "type", type = "transport-belt" } })) do
+			if string.sub(name, 1, 12) == "ue-link-belt" then
+				ue_belts = ue_belts + 1
+				ctx.expect(belt.heating_energy == 0, name .. ": no heating, got " .. belt.heating_energy)
+			end
+		end
+		ctx.expect(ue_belts >= 4, "a UE belt per tier: " .. ue_belts)
 		ctx.expect(pipe.heating_energy == 0, "ue-link-pipe: no heating, got " .. pipe.heating_energy)
 		local planet = game.planets.aquilo
 		local surface = planet.surface or planet.create_surface()

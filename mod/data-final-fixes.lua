@@ -1,11 +1,20 @@
--- SP3a (spec §5.4): the link belt runs at the fastest transport-belt loaded, so no tier outruns its stubs.
-local fastest = 0
+-- Belt spacing spec §3: a UE belt per transport-belt tier, so each side's stubs match its border belt (G2). ue-link-belt
+-- (data.lua) is the yellow tier's; every other transport belt loaded gets ue-link-belt-<name>, a copy with its own speed
+-- and graphics and ue-link-belt's changes. Made here, before the lightning exemptions below, which take them by their
+-- ue- prefix. Space Age gives belts heating_energy in its data-updates, after data.lua's copy and before these, and
+-- turbo defines its own: none of them heats (surfaces spec S3).
+local link = data.raw["transport-belt"]["ue-link-belt"]
+local tiers = {} -- collected first: data:extend inside pairs() would add keys mid-traversal
 for name, p in pairs(data.raw["transport-belt"]) do
-	if name ~= "ue-link-belt" and p.speed > fastest then
-		fastest = p.speed
+	if name ~= "transport-belt" and string.sub(name, 1, 3) ~= "ue-" then
+		local b = table.deepcopy(p)
+		b.name, b.hidden, b.minable, b.flags = "ue-link-belt-" .. name, true, nil, table.deepcopy(link.flags)
+		b.next_upgrade, b.fast_replaceable_group, b.heating_energy = nil, nil, nil
+		tiers[#tiers + 1] = b
 	end
 end
-data.raw["transport-belt"]["ue-link-belt"].speed = fastest
+data:extend(tiers)
+link.heating_energy = nil
 
 -- SP3b (SP3 spec §5.4, D11): the train boxes' entities. They are copied here, after every mod's data stage, because
 -- elevated-rails sets rail-signal's elevated_picture_set in its data stage (elevated-rails.lua:391). [probe]

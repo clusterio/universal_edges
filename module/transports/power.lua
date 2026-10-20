@@ -432,8 +432,9 @@ connectors.register_type({
 		end
 		-- §6.3 step 4: this second's amount, once per poll and nothing carried over (plan review B1), at most the pool's
 		-- energy plus this link's buffer less what it owes already.
-		-- ponytail: n is a second's worth for a poll every 60 ticks; scale it by the ticks since the last poll if a
-		-- type's walk ever stretches polls past that (over about 240 power endpoints on one tile at per_tick 4).
+		-- ponytail: n is a second's worth for a poll every 60 ticks; a poll after a wake can come at 45 ticks (the 3/4
+		-- rule, edges/lanes.lua), but ep:idle gates the extra send so energy is conserved. Scale it by the ticks since the
+		-- last poll if a type's walk ever stretches polls past 60 (over about 240 power endpoints on one tile at per_tick 4).
 		local dir = out_dir(ep)
 		local x = math.min(d.n, math.floor((g.a + 1000 * d.b - owe) / 1000))
 		if x > 0 and ep:idle(dir) and ep:can_send(dir) then

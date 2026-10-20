@@ -280,8 +280,8 @@ t.case("belts: a sushi lane arrives in exact order behind items already on the s
 end)
 
 -- Important 3: the first sushi case's 100-tile dead end never fills in 300 items, so every placement starts on an
--- empty stub (core.first_slot(-1)) and the "behind the back-most item" branch (belt.lua's place, first_slot(last)
--- with last ~= -1) never runs under an order check. A short dead end backs the destination's own belt up behind the
+-- empty stub (back_of = -1) and the "behind the back-most item" branch (belt.lua's place, back >= 0)
+-- never runs under an order check. A short dead end backs the destination's own belt up behind the
 -- stubs instead, so later placements must find room behind items a previous poll already put down and left in place.
 local SUSHI2 = { "iron-plate", "copper-plate", "coal", "iron-gear-wheel", "steel-plate" }
 local N2 = 60
@@ -297,8 +297,9 @@ t.case("belts: a sushi lane places behind items already on the stubs, in order, 
 	-- too), reached well before the 3100 saturation check. A scan that understates the true back-most position (the
 	-- outer-vs-inner mutation Finding 3 named) still only ever lands inside already-occupied territory — insert_at
 	-- rejects it and the poll places nothing that round — so it converges to the same 44 eventually, but slower: a
-	-- real, measured 44 vs 35 at this tick (recorded below), not a theoretical gap.
-	ctx.at(2306, function()
+	-- real, measured 44 vs 35 at this tick (recorded below), not a theoretical gap. The destination now holds each
+	-- delivery HOLD = 128 ticks (belt spacing spec §7), so the same count arrives four polls later: 2050 + 12 * 32 = 2434.
+	ctx.at(2434, function()
 		ctx.expect(#arrived("sp3-sushi2", 1) >= 40, "the chain keeps filling even while partly backed up; got "
 			.. #arrived("sp3-sushi2", 1))
 	end)
@@ -325,9 +326,9 @@ end)
 
 t.case("belts: a blocked destination backs the source up within the window", function(ctx)
 	ctx.at(2020, function()
-		row("sp3-block", 5540, "turbo-transport-belt", 6, true, always("iron-plate"), always("copper-plate"))
+		row("sp3-block", 5540, "turbo-transport-belt", 6, true, always("iron-plate"), always("copper-plate"), 4)
 	end)
-	ctx.at(3300, function() -- about 490 items a lane fill it at 30 a second
+	ctx.at(3300, function() -- W = 700 a lane in stacks of 4 fills it at 120 items a second
 		local src, dst = ep("sp3-block-x").data, ep("sp3-block-y").data
 		for lane = 1, 2 do
 			local held = core.buffered(dst.buf[lane])
@@ -472,11 +473,12 @@ end)
 
 -- The two belt-flip cases below wait for the poll instead of sampling at a fixed tick, so they don't depend on its
 -- phase (which shifts whenever any case adds belt endpoints). The belt poll (belt.lua schedule) walks per_tick = 4
--- endpoints a tick, a walk starting every interval = 32 ticks, from a persistent cursor; lanes.visit polls an
--- endpoint only if tick - last_poll >= 32. An endpoint that changed just after its poll is visited in the next walk,
--- but at a slightly earlier offset in the walk it can be too soon (< 32 since last_poll) and so skip to the walk after:
--- worst case 2 * 32 ticks, plus the last walk's length, ceil(N / 4) ticks, N = the belt endpoints in the save when the
--- flip happens. Teardown and the new proposal run synchronously inside loop.connectors, so they add nothing.
+-- endpoints a tick, a walk starting every interval = 32 ticks, from a persistent cursor; lanes.visit polls an endpoint
+-- only if tick - last_poll >= 3/4 of 32 (plan Task 3 ruling). An endpoint that changed just after its poll is visited
+-- in the next walk, but at a slightly earlier offset in the walk it can be too soon (< 24 since last_poll) and so skip
+-- to the walk after: worst case 2 * 32 ticks, plus the last walk's length, ceil(N / 4) ticks, N = the belt endpoints in
+-- the save when the flip happens. Teardown and the new proposal run synchronously inside loop.connectors, so they add
+-- nothing.
 -- Bound = 2 * 32 + ceil(N / 4) ticks after the rotate.
 local function poll_bound()
 	local n = 0
@@ -596,5 +598,348 @@ t.case("belts: flipping a border underground belt (its belt_to_ground_type) also
 		end
 		ctx.expect(mine ~= nil, "a new proposal in the opposite direction (ba), from the same, now-flipped entity")
 		end)
+	end)
+end)
+
+-- Belt spacing spec §9 (plan R8): stacks fed at known ticks, timed by the first tick each shows on each side's border
+-- belt (by unique_id). timed[id] feeds a row's left lane one iron plate at a time, gaps[i] ticks apart; seen[key] keeps,
+-- in order, the first tick each item appears on one transport line.
+local GAPS_Y = { 10, 45, 12, 80, 10, 33, 150, 11, 60, 20 } -- ticks at yellow: 10 is 0.31 tiles, 150 is 4.7
+local GAPS_T = { 3, 11, 3, 20, 4, 9, 37, 3, 15, 5 } -- ticks at turbo: 3 is 0.375 tiles, 37 is 4.6
+local timed, seen = {}, {}
+
+ue.runtime.scheduler.periodic({ name = "sp3-test.timed", interval = 1, fn = function()
+	for _, f in pairs(timed) do
+		if f.fed <= #f.gaps and game.tick >= f.next and f.line.valid
+			and f.line.insert_at_back({ name = "iron-plate", count = 1 }, 1) then
+			f.fed = f.fed + 1
+			f.next = game.tick + (f.gaps[f.fed] or 0)
+		end
+	end
+	for _, w in pairs(seen) do
+		if w.line.valid then
+			for _, e in ipairs(w.line.get_detailed_contents()) do
+				if not w.ids[e.unique_id] then
+					w.ids[e.unique_id] = true
+					w.ticks[#w.ticks + 1] = game.tick
+				end
+			end
+		end
+	end
+end })
+
+--- Inside a step: a free-flowing row (layouts.belt_row, 8 tiles into a loader) whose left lane is fed at `gaps` from
+--- 120 ticks on (the link built and its window announced by then), both border belts' left lanes timed.
+local function timed_row(id, x0, tier, gaps, tier_b)
+	local r = layouts.belt_row(loop, id, x0, tier, 8, false, tier_b)
+	rows[id] = r
+	timed[id] = { line = r.feed.get_transport_line(LANES[1]), gaps = gaps, fed = 0, next = game.tick + 120 }
+	seen[id .. "/a"] = { line = r.feeds[1].get_transport_line(LANES[1]), ids = {}, ticks = {} }
+	seen[id .. "/b"] = { line = r.belts[1].get_transport_line(LANES[1]), ids = {}, ticks = {} }
+end
+
+--- §9: every stack crossed, the feed kept its gaps, and after the first stack each gap at the destination's border is
+--- the source's within 1 tick.
+local function expect_spacing(ctx, id, gaps)
+	local src, dst = seen[id .. "/a"].ticks, seen[id .. "/b"].ticks
+	ctx.expect(#src == #gaps + 1 and #dst == #gaps + 1, id .. ": " .. #src .. " stacks at the source's border and "
+		.. #dst .. " at the destination's, of " .. (#gaps + 1))
+	for i = 2, math.min(#src, #dst) do
+		local a, b = src[i] - src[i - 1], dst[i] - dst[i - 1]
+		ctx.expect(a == gaps[i - 1], id .. ": the feed's gap " .. (i - 1) .. " is " .. a .. ", not " .. gaps[i - 1])
+		ctx.expect(math.abs(b - a) <= 1, id .. ": gap " .. (i - 1) .. " is " .. b .. " ticks at the destination, "
+			.. a .. " at the source")
+	end
+	timed[id], seen[id .. "/a"], seen[id .. "/b"] = nil, nil, nil
+end
+
+-- Ground x 6000-6036, ticks 2100-3150: yellow's last stack is fed by 2651 and crosses by about 3004.
+t.case("belts: spacing - stacks fed at irregular gaps reach the destination's border with the same gaps, yellow and "
+	.. "turbo (belt spacing spec §9 test 1)", function(ctx)
+	ctx.at(2100, function()
+		timed_row("sp3-gap-y", 6000, "transport-belt", GAPS_Y)
+		timed_row("sp3-gap-t", 6020, "turbo-transport-belt", GAPS_T)
+	end)
+	ctx.at(3150, function()
+		expect_spacing(ctx, "sp3-gap-y", GAPS_Y)
+		expect_spacing(ctx, "sp3-gap-t", GAPS_T)
+		for _, id in ipairs({ "sp3-gap-y", "sp3-gap-t" }) do
+			local st = ep(id .. "-y").data.stats
+			ctx.expect((st.late or 0) == 0 and (st.reanchored or 0) == 0, id .. ": late " .. tostring(st.late)
+				.. " and reanchored " .. tostring(st.reanchored) .. " at the destination, both 0")
+		end
+	end)
+end)
+
+-- A late stack onto an empty UE belt: core.place_at gives dist 0, so belt.lua inserts at position 0 on stub 1, whose
+-- downstream neighbour is the player's border belt. Proves insert_at takes it (else the lane would stall for good).
+-- Ground x 6440-6460, ticks 3200-3400.
+t.case("belts: a stack already due when the UE belt is empty is placed at the front, not stalled", function(ctx)
+	local st, before_placed, before_late
+	ctx.at(3200, function()
+		local r = layouts.belt_row(loop, "sp3-due", 6440, "transport-belt", 8, false)
+		rows["sp3-due"] = r
+		seen["sp3-due/b"] = { line = r.belts[1].get_transport_line(LANES[1]), ids = {}, ticks = {} }
+	end)
+	ctx.at(3300, function()
+		local d = ep("sp3-due-y").data
+		st = d.stats
+		before_placed, before_late = st.placed, st.late or 0
+		d.due = d.due or {}
+		d.due[1] = game.tick - 300
+		table.insert(d.buf[1], { "1|iron-plate|normal|1", 1, "iron-plate", "normal", 1, nil, g = { 0 }, i = 1,
+			at = game.tick - 400 })
+		st.got[1] = st.got[1] + 1
+		ctx.at(game.tick + poll_bound() + 5, function()
+			ctx.expect(st.placed == before_placed + 1, "the late stack was placed: " .. st.placed .. " from " .. before_placed)
+			ctx.expect(st.late == before_late + 1, "and counted late: " .. st.late .. " from " .. before_late)
+			ctx.expect(#seen["sp3-due/b"].ticks == 1, "and it showed on the border belt: " .. #seen["sp3-due/b"].ticks)
+			seen["sp3-due/b"] = nil
+		end)
+	end)
+end)
+
+local BELT_TIERS = { "transport-belt", "fast-transport-belt", "express-transport-belt", "turbo-transport-belt" }
+local UNDERGROUNDS = { "underground-belt", "fast-underground-belt", "express-underground-belt", "turbo-underground-belt" }
+
+--- edge's endpoint's five stubs, by name.
+local function stub_names(edge)
+	local names = {}
+	for i, e in ipairs(ep(edge).data.stubs) do
+		names[i] = e.valid and e.name or "invalid"
+	end
+	return table.concat(names, ",")
+end
+
+local function five(name)
+	return table.concat({ name, name, name, name, name }, ",")
+end
+
+-- Ground x 6040-6056, ticks 2120-3150 (plan R9: the yellow gaps, since a turbo 3-tick gap is under yellow's 0.25 tiles).
+t.case("belts: spacing - a turbo source and a yellow destination keep the same time gaps (belt spacing spec §9 test 2)",
+	function(ctx)
+	ctx.at(2120, function()
+		timed_row("sp3-gap-mix", 6040, "turbo-transport-belt", GAPS_Y, "transport-belt")
+	end)
+	ctx.at(3150, function()
+		ctx.expect(ep("sp3-gap-mix-x").data.tier == "ue-link-belt-turbo-transport-belt"
+			and ep("sp3-gap-mix-y").data.tier == "ue-link-belt", "each side's stubs are its own border's tier")
+		expect_spacing(ctx, "sp3-gap-mix", GAPS_Y)
+	end)
+end)
+
+-- Ground x 6056-6216, ticks 2130-2400.
+t.case("belts: tiers - each side's stubs are its border belt's tier at build, an underground's too (spec §9 test 4)",
+	function(ctx)
+	ctx.at(2130, function()
+		for i, tier in ipairs(BELT_TIERS) do
+			layouts.belt_row(loop, "sp3-tier-" .. i, 6060 + 20 * (i - 1), tier, 4, true)
+		end
+		for i, ug in ipairs(UNDERGROUNDS) do
+			local fa = layouts.edge(loop, "sp3-tierug-" .. i, 6140 + 20 * (i - 1), 8, { { cid = "c1", type = "belt",
+				pos = 2, width = 1, params = { dir = "ab" } } }, 8)
+			layouts.put(fa, ug, 2.5, 0.5, 0, { type = "input" })
+		end
+	end)
+	ctx.at(2400, function()
+		for i, tier in ipairs(BELT_TIERS) do
+			local want = core.ue_name(tier)
+			for _, s in ipairs({ "-x", "-y" }) do
+				local e = "sp3-tier-" .. i .. s
+				ctx.expect(stub_names(e) == five(want), e .. ": " .. stub_names(e))
+				ctx.expect(ep(e).data.tier == want and ep(e).data.speed == prototypes.entity[tier].belt_speed,
+					e .. ": tier " .. tostring(ep(e).data.tier) .. ", speed " .. tostring(ep(e).data.speed))
+			end
+			local u = "sp3-tierug-" .. i .. "-x"
+			ctx.expect(stub_names(u) == five(want), u .. " (" .. UNDERGROUNDS[i] .. "): " .. stub_names(u))
+		end
+	end)
+end)
+
+--- An upgrade or a downgrade as it lands (belt spacing spec §9 test 5): name built over e by fast-replace, no event.
+local function replace(e, name)
+	return assert(e.surface.create_entity({ name = name, position = e.position, direction = e.direction,
+		force = "player", fast_replace = true }), name)
+end
+
+--- From offset `from` until edge's tier is `want`, at most poll_bound() ticks; then the tier and the stubs are checked.
+local function wait_tier(ctx, edge, from, want, done)
+	layouts.wait(t, ctx, from, from + poll_bound(), function()
+		return ep(edge).data.tier == want
+	end, function(k)
+		ctx.expect(k ~= nil, edge .. " re-matched to " .. want .. " within a poll: " .. tostring(ep(edge).data.tier))
+		ctx.expect(stub_names(edge) == five(want), edge .. ": " .. stub_names(edge))
+		if done then
+			done(k)
+		end
+	end)
+end
+
+-- Ground x 6276-6292, ticks 2140-~2420.
+t.case("belts: tiers - a side with no border belt has the fastest UE belt, and a red belt built later re-matches it (spec §9 test 7)",
+	function(ctx)
+	local fa
+	ctx.at(2140, function()
+		fa = layouts.edge(loop, "sp3-late", 6280, 8, { { cid = "c1", type = "belt", pos = 2, width = 1,
+			params = { dir = "ab" } } }, 8)
+	end)
+	ctx.at(2300, function()
+		local turbo = five("ue-link-belt-turbo-transport-belt")
+		ctx.expect(stub_names("sp3-late-x") == turbo, "no border yet, x: the fastest: " .. stub_names("sp3-late-x"))
+		ctx.expect(stub_names("sp3-late-y") == turbo, "no border yet, y: the fastest: " .. stub_names("sp3-late-y"))
+		layouts.put(fa, "fast-transport-belt", 2.5, 0.5, 0, { raise_built = true })
+		layouts.wait(t, ctx, 2301, 2301 + poll_bound(), function()
+			return ep("sp3-late-x").data.tier == "ue-link-belt-fast-transport-belt"
+		end, function(k)
+			ctx.expect(k ~= nil, "side x re-matched to the red belt within a poll")
+			ctx.expect(stub_names("sp3-late-x") == five("ue-link-belt-fast-transport-belt"),
+				"x: " .. stub_names("sp3-late-x"))
+			ctx.expect(stub_names("sp3-late-y") == turbo, "y is still the fastest: " .. stub_names("sp3-late-y"))
+			ctx.expect(removal_asked["sp3-late-x/c1"] == nil, "no removal asked")
+		end)
+	end)
+end)
+
+-- Ground x 6256-6272, ticks 2150-2800.
+t.case("belts: tiers - legacy ue-link-belt stubs under a red border are re-matched at the first poll, items and freshness kept; "
+	.. "an endpoint from before the deploy keeps working (spec §9 test 6, Review Focus 1 and 2)",
+	function(ctx)
+	local legacy = {}
+	local want = "ue-link-belt-fast-transport-belt"
+	local function lay(stub, lane, list)
+		for _, it in ipairs(list) do
+			local stack = { name = it[1], count = 1 }
+			stack.spoil_percent = it[3]
+			assert(stub.get_transport_line(LANES[lane]).insert_at(it[2], stack, 1), it[1] .. " at " .. it[2])
+		end
+	end
+	ctx.at(2150, function()
+		local fa, fb = layouts.edge(loop, "sp3-legacy", 6260, 8, { { cid = "c1", type = "belt", pos = 2, width = 1,
+			params = { dir = "ab" } } }, 8)
+		local cb = ue.geometry.col("b", 8, 2, 1)
+		layouts.put(fa, "fast-transport-belt", 2.5, 0.5, 0)
+		layouts.put(fb, "fast-transport-belt", cb + 0.5, 0.5, 8)
+		local sa, sb = {}, {}
+		for i = 1, 5 do
+			sa[i] = layouts.put(fa, "ue-link-belt", 2.5, -0.5 - (i - 1), 0)
+			sb[i] = layouts.put(fb, "ue-link-belt", cb + 0.5, -0.5 - (i - 1), 8)
+			legacy[#legacy + 1] = sa[i]
+			legacy[#legacy + 1] = sb[i]
+		end
+		lay(sa[2], 2, { { "iron-plate", 0.125 }, { "iron-plate", 0.375 }, { "iron-plate", 0.625 },
+			{ "iron-plate", 0.875 } })
+		lay(sb[1], 1, { { "iron-plate", 0.125 }, { "iron-plate", 0.375 }, { "iron-plate", 0.625 },
+			{ "iron-plate", 0.875 } })
+		lay(sb[2], 1, { { "iron-plate", 0.125 }, { "iron-plate", 0.375 }, { "yumako", 0.625, 0.37 },
+			{ "yumako", 0.875, 0.37 } })
+		layouts.wait(t, ctx, 2151, 2151 + 3 * poll_bound(), function()
+			local x, y = ep("sp3-legacy-x"), ep("sp3-legacy-y")
+			return x and y and x.data.tier == want and y.data.tier == want
+		end, function(k)
+			ctx.expect(k ~= nil, "both sides re-matched at the first polls")
+			ctx.expect(stub_names("sp3-legacy-x") == five(want), "x: " .. stub_names("sp3-legacy-x"))
+			ctx.expect(stub_names("sp3-legacy-y") == five(want), "y: " .. stub_names("sp3-legacy-y"))
+			for _, e in ipairs(legacy) do
+				ctx.expect(not e.valid, "a legacy stub was rebuilt, not kept")
+			end
+		end)
+	end)
+	ctx.at(2450, function()
+		local x, y = ep("sp3-legacy-x").data, ep("sp3-legacy-y").data
+		local src, dst = x.stats, y.stats
+		ctx.expect(src.captured[2] == 4, "side a's legacy stacks were captured: " .. src.captured[2])
+		ctx.expect(dst.got[2] == 4, "and received: " .. dst.got[2])
+		ctx.expect(src.stubbed == 0 and dst.stubbed == 0, "nothing spilled by the swap: " .. src.stubbed .. ", " .. dst.stubbed)
+		local n = y.border.get_transport_line(LANES[1]).get_item_count()
+		local yumako = {}
+		for _, line in ipairs({ y.border.get_transport_line(LANES[1]) }) do
+			for _, e in ipairs(line.get_detailed_contents()) do
+				if e.stack.name == "yumako" then yumako[#yumako + 1] = e.stack.spoil_percent end
+			end
+		end
+		for i = 1, core.STUBS do
+			n = n + y.lines[i][1].get_item_count()
+			for _, e in ipairs(y.lines[i][1].get_detailed_contents()) do
+				if e.stack.name == "yumako" then yumako[#yumako + 1] = e.stack.spoil_percent end
+			end
+		end
+		ctx.expect(n == 8, "side b's left lane still holds all 8: " .. n)
+		ctx.expect(#yumako == 2, "two yumako on side b's left lane: " .. #yumako)
+		for _, p in ipairs(yumako) do
+			ctx.expect(p >= 0.37 and p <= 0.39, "a yumako kept its freshness: " .. p)
+		end
+	end)
+	-- Part 2 (R7): an endpoint from before the deploy has none of the new fields.
+	local before_placed
+	ctx.at(2500, function()
+		for _, id in ipairs({ "sp3-legacy-x", "sp3-legacy-y" }) do
+			local d = ep(id).data
+			d.tier, d.speed, d.matched, d.last, d.due = nil, nil, nil, nil, nil
+			d.stats.late, d.stats.reanchored = nil, nil
+		end
+		local y = ep("sp3-legacy-y").data
+		table.insert(y.buf[2], { "2|iron-plate|normal|1", 1, "iron-plate", "normal", 1 })
+		before_placed = y.stats.placed
+	end)
+	-- Spec §8: swaps only on an upgrade or the first poll after the deploy. 2700 is after part 2's re-match (the poll
+	-- bound is about 70 ticks after 2500), so a rematch that swapped every poll would change these by 2800.
+	local units = {}
+	local function stub_units()
+		local u = {}
+		for _, id in ipairs({ "sp3-legacy-x", "sp3-legacy-y" }) do
+			for _, s in ipairs(ep(id).data.stubs) do
+				u[#u + 1] = s.valid and s.unit_number or -1
+			end
+		end
+		return table.concat(u, ",")
+	end
+	ctx.at(2700, function() units = stub_units() end)
+	ctx.at(2800, function()
+		ctx.expect(stub_units() == units, "no swap without a change: " .. units .. " then " .. stub_units())
+		for _, id in ipairs({ "sp3-legacy-x", "sp3-legacy-y" }) do
+			local e = ep(id)
+			ctx.expect(e.state == "ready", id .. " is still ready: " .. tostring(e.state))
+			ctx.expect(e.data.tier == want and e.data.speed == prototypes.entity["fast-transport-belt"].belt_speed,
+				id .. " re-matched again: " .. tostring(e.data.tier))
+			ctx.expect(e.data.stats.stubbed == 0, id .. " stubbed is 0")
+		end
+		local placed = ep("sp3-legacy-y").data.stats.placed
+		ctx.expect(placed == before_placed + 1, "the old FIFO entry went down: " .. placed .. " from " .. before_placed)
+	end)
+end)
+
+-- Ground x 6236-6252, ticks 2600-3600.
+t.case("belts: tiers - upgrading and downgrading each border belt mid-flow re-matches its stubs within a poll; "
+	.. "no removal, nothing spilled, conservation holds (spec §9 test 5)",
+	function(ctx)
+	local src_border
+	ctx.at(2600, function()
+		row("sp3-upg", 6240, "transport-belt", 8, false, always("iron-plate"), always("copper-plate"))
+	end)
+	ctx.at(2800, function()
+		src_border = replace(rows["sp3-upg"].feeds[1], "fast-transport-belt")
+		wait_tier(ctx, "sp3-upg-x", 2801, "ue-link-belt-fast-transport-belt")
+	end)
+	ctx.at(2950, function()
+		replace(rows["sp3-upg"].belts[1], "fast-transport-belt")
+		wait_tier(ctx, "sp3-upg-y", 2951, "ue-link-belt-fast-transport-belt")
+	end)
+	ctx.at(3100, function()
+		replace(src_border, "transport-belt")
+		wait_tier(ctx, "sp3-upg-x", 3101, "ue-link-belt")
+	end)
+	ctx.at(3250, function()
+		feeds["sp3-upg"] = nil
+	end)
+	ctx.at(3600, function()
+		ctx.expect(removal_asked["sp3-upg-x/c1"] == nil and removal_asked["sp3-upg-y/c1"] == nil, "no removal asked")
+		local src, dst = ep("sp3-upg-x").data.stats, ep("sp3-upg-y").data
+		local st = dst.stats
+		ctx.expect(src.stubbed == 0 and st.stubbed == 0, "nothing spilled by a swap: " .. src.stubbed .. ", " .. st.stubbed)
+		local shipped = src.captured[1] + src.captured[2]
+		local got = st.got[1] + st.got[2]
+		ctx.expect(shipped > 0 and shipped == got, "shipped = received: " .. shipped .. " and " .. got)
+		ctx.expect(got == st.placed + core.buffered(dst.buf[1]) + core.buffered(dst.buf[2]),
+			"conservation: got " .. got .. ", placed " .. st.placed)
 	end)
 end)

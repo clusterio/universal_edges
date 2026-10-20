@@ -393,7 +393,12 @@ function lanes.visit(ep, tick)
 	-- L16 (logistic-link spec §8.1): a type with poll_independent polls without a ready partner; every other type is
 	-- unchanged, since the flag defaults off.
 	if not ep.closing and ep.state == "ready" and (t.poll_independent or (ep.partner and ep.partner.state == "ready"))
-		and (ep.last_poll == nil or tick - ep.last_poll >= t.schedule.interval) then
+		-- An endpoint's place in the walk can shift earlier (registry churn), so its visit arrives a few ticks early;
+		-- the strict interval check then skipped a whole period, a 63-tick gap, which broke belt spacing spec §5's
+		-- "one capture spans at most one poll" (plan Task 3 ruling). At 3/4 of the interval a visit up to a quarter
+		-- early still polls, so the worst gap is 1 1/4 intervals (40 ticks for belts, their stubs' length at turbo).
+		-- Wakes are what this lets poll a little early (the old rule skipped a wake's extra visit).
+		and (ep.last_poll == nil or tick - ep.last_poll >= t.schedule.interval * 3 / 4) then
 		ep.last_poll = tick
 		connectors.call(ep, "poll", tick)
 	end

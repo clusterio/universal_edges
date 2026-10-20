@@ -19,6 +19,7 @@ data:extend({
 })
 
 -- SP3a (spec §5.4), SP3 visuals batch. UE's link entities: hidden, not minable, blueprintable or upgradable.
+-- `ue-link-belt` is the yellow tier's UE belt; data-final-fixes.lua adds one per other tier (belt spacing spec §3).
 local NOFLAGS = { "placeable-neutral", "not-blueprintable", "not-deconstructable", "not-upgradable", "not-on-map" }
 
 local belt = table.deepcopy(data.raw["transport-belt"]["transport-belt"])

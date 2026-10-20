@@ -213,8 +213,14 @@ t.case("framework: ep:idle is true with nothing unacknowledged (F6); the prototy
 			"ue-test-power-sink" }) do
 			ctx.expect(prototypes.entity[name] ~= nil, name)
 		end
-		ctx.expect(prototypes.entity["ue-link-belt"].belt_speed == prototypes.entity["turbo-transport-belt"].belt_speed,
-			"the link belt runs at the fastest belt's speed")
+		ctx.expect(prototypes.entity["ue-link-belt"].belt_speed == prototypes.entity["transport-belt"].belt_speed,
+			"ue-link-belt is the yellow tier's UE belt")
+		for name, p in pairs(prototypes.get_entity_filtered({ { filter = "type", type = "transport-belt" } })) do
+			if name ~= "transport-belt" and string.sub(name, 1, 3) ~= "ue-" then
+				local u = prototypes.entity["ue-link-belt-" .. name]
+				ctx.expect(u ~= nil and u.belt_speed == p.belt_speed, "a UE belt per tier, same speed: " .. name)
+			end
+		end
 		-- Visuals batch (2026-10-04): the power link's picture is halved again to fit its 1×1 box (data.lua `shrink`);
 		-- the box itself was already 1×1 (D11, §5.4) and is unchanged here.
 		local eei = prototypes.entity["ue-link-interface"]
@@ -286,7 +292,8 @@ t.case("framework: an ordered lane credits in capture order over the loopback, a
 		local src = ep("sp3-f11-x", "c1")
 		src:send("ab", { { "x", 2 }, { "y", 1 }, { "x", 1 } })
 		src:send("ab", { { "x", 1 }, { "z", 2 } })
-		ctx.expect(src:runs("ab") == 4, "x2 y1 x1, the x extended, then z2: 4 runs; got " .. src:runs("ab"))
+		ctx.expect(src:runs("ab") == 5, "x2 y1 x1, then x1 z2 as their own runs (no merge across sends, belt spacing spec §6): 5 runs; got "
+			.. src:runs("ab"))
 		ctx.expect(not pcall(src.send, src, "ab", { { "x", 1.5 } }), "a bad run list is refused")
 	end)
 	ctx.at(1880, function()

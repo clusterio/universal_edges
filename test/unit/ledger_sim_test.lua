@@ -32,6 +32,11 @@ local function side_ctx(S, name)
 				for _ = 1, take do
 					w.oseq[#w.oseq + 1] = x[1]
 				end
+				if x[3] and take == x[2] then -- a whole run brings its g (belt spacing spec §6)
+					for j = 1, #x[3] do
+						w.ogaps[#w.ogaps + 1] = x[3][j]
+					end
+				end
 				a = a + take
 			end
 			return a
@@ -133,7 +138,7 @@ end
 local function ordered_world(S, n, block)
 	S.oq = sequence(n, block)
 	S.A.world.ohead, S.A.world.ocap, S.A.world.orefund = 1, {}, {}
-	S.B.world.oseq, S.B.world.orefund = {}, {}
+	S.B.world.oseq, S.B.world.orefund, S.B.world.ogaps = {}, {}, {}
 end
 
 --- Take up to n items from A's queue as runs and capture them, unless that would pass RUN_CAP (as a transport checks).
@@ -144,8 +149,9 @@ local function capture_items(S, lane, n, ctx)
 		local tail = runs[#runs]
 		if tail and tail[1] == S.oq[i] then
 			tail[2] = tail[2] + 1
+			tail[3][#tail[3] + 1] = i
 		else
-			runs[#runs + 1] = { S.oq[i], 1 }
+			runs[#runs + 1] = { S.oq[i], 1, { i } }
 		end
 	end
 	if #runs == 0 or core.runs(lane) + #runs > core.RUN_CAP then
@@ -594,7 +600,19 @@ local function verdict(S, mode)
 	end
 	-- Ordered: exact with no crash and under a destination crash, never a loss under source crashes; with no crash
 	-- at all, B's credited sequence is A's capture order (a source rollback re-captures, so there is no one order).
-	return ordered_verdict(S, mode == "source", mode == "clean")
+	local broke = ordered_verdict(S, mode == "source", mode == "clean")
+	if broke == nil and mode == "clean" and not S.capped then -- R5: with no crash and no partial acceptance
+		local ogaps, oseq = S.B.world.ogaps, S.B.world.oseq
+		if #ogaps ~= #oseq then
+			return "ordered credited " .. #oseq .. " items but " .. #ogaps .. " runs with their g"
+		end
+		for i = 1, #oseq do
+			if ogaps[i] ~= i then
+				return "ordered run " .. i .. " was not credited whole with its g"
+			end
+		end
+	end
+	return broke
 end
 
 --- A tiny LCG, so a seed replays the same schedule on any Lua. Its high bits: the low ones of an LCG repeat quickly.
@@ -668,13 +686,16 @@ local function schedule(seed, mode, n)
 			apply(S, "B")
 		elseif step == "policy" then
 			S.policy = { cap = r(3) == 1 and r(40) or nil, outcome = ({ "ok", "ok", "busy", "reject" })[r(4)] }
+			S.capped = S.capped or S.policy.cap ~= nil
 		end
 	end
 	drain(S)
 	return verdict(S, mode), steps
 end
 
-t.test("seeded model check: the §11.9 properties hold under loss, duplication, reordering and stale epochs", function()
+local SEEDED = "seeded model check: the §11.9 properties hold under loss, duplication, reordering and stale epochs; "
+	.. "with no crash and no partial acceptance, every ordered run is credited whole with its g (belt spacing spec §6)"
+t.test(SEEDED, function()
 	local only = tonumber(os.getenv("SIM_SEED"))
 	local runs = only and 1 or (tonumber(os.getenv("SIM_RUNS")) or 500)
 	for i = 1, runs do

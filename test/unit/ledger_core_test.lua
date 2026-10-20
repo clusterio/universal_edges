@@ -533,8 +533,9 @@ end)
 --- An ordered ctx: credit takes the list and accepts `accept` items from its front (default: all), recording the list.
 local function octx(fields)
 	local c = ctx(fields)
-	c.taken = {}
+	c.taken, c.lists = {}, {}
 	function c.credit(list)
+		c.lists[#c.lists + 1] = list
 		local total = 0
 		for _, x in ipairs(list) do
 			total = total + x[2]
@@ -553,25 +554,25 @@ local function octx(fields)
 	return c
 end
 
-t.test("ordered: a capture appends runs in order, extends the last run when its key repeats, and caps at 64", function()
+t.test("ordered: a capture appends every run as it comes, never extending an unacknowledged one, and caps at 64", function()
 	local tx, c = core.new("ordered", "tx"), octx()
 	core.capture(tx, { { "a", 2 }, { "b", 1 } }, nil, c)
 	core.capture(tx, { { "b", 3 }, { "a", 0 }, { "a", 1 } }, nil, c)
-	t.expect_same(tx.runs, { { "a", 2, 2 }, { "b", 4, 4 }, { "a", 1, 3 } }, "b extended; a zero amount is no run")
+	t.expect_same(tx.runs, { { "a", 2, 2 }, { "b", 1, 1 }, { "b", 3, 4 }, { "a", 1, 3 } },
+		"b's second send is its own run; a zero amount is no run")
 	t.expect_same(tx.sent, { a = 3, b = 4 })
-	t.expect_eq(core.runs(tx), 3)
+	t.expect_eq(core.runs(tx), 4)
 	local many = {}
-	for i = 1, 61 do
+	for i = 1, 60 do
 		many[i] = { i % 2 == 0 and "a" or "b", 1 }
 	end
 	core.capture(tx, many, nil, c)
-	t.expect_eq(core.runs(tx), 64, "3 runs, then 61 alternating ones")
-	core.capture(tx, { { "b", 1 } }, nil, c)
-	t.expect_eq(core.runs(tx), 64, "a repeat of the last key extends it, even at the cap")
-	t.expect_error(function() core.capture(tx, { { "a", 1 } }, nil, c) end, "at most 64 unacknowledged runs")
+	t.expect_eq(core.runs(tx), 64, "4 runs, then 60")
+	t.expect_error(function() core.capture(tx, { { "b", 1 } }, nil, c) end, "at most 64 unacknowledged runs")
 	t.expect_eq(core.runs(tx), 64, "nothing of a refused capture is taken")
 	t.expect_error(function() core.capture(tx, { { "a", 1.5 } }, nil, c) end, "array of at most")
 	t.expect_error(function() core.capture(tx, { a = 1 }, nil, c) end, "array of at most")
+	t.expect_error(function() core.capture(tx, { { "a", 1, { -1 } } }, nil, c) end, "array of at most")
 end)
 
 t.test("ordered: an offer carries every run since the last ack; the ack drops the front runs it covers", function()
@@ -592,21 +593,34 @@ t.test("ordered: an offer carries every run since the last ack; the ack drops th
 	t.expect_eq(core.visit(tx, c), nil, "and nothing to offer")
 end)
 
-t.test("ordered: an offer's runs are unchanged by a later capture and a later ack (perf item 3)", function()
+t.test("ordered: an offer shares the stored runs, none copied, and a later capture only appends (perf item 3)", function()
 	local tx, c = core.new("ordered", "tx"), octx()
 	core.capture(tx, { { "a", 2 }, { "b", 1 } }, nil, c)
 	local first = core.visit(tx, c)
-	t.expect_same(first, { { k = "o.offer", runs = { { "a", 2, 2 }, { "b", 1, 1 } } } })
-	t.expect_eq(first[1].runs[1], tx.runs[1], "a non-tail run is shared, not copied")
-	core.capture(tx, { { "b", 3 } }, nil, c) -- extends the tail run in lane.runs, in place
-	t.expect_same(tx.runs, { { "a", 2, 2 }, { "b", 4, 4 } }, "the tail run grew")
-	t.expect_same(first[1].runs, { { "a", 2, 2 }, { "b", 1, 1 } }, "but the earlier offer's own tail copy didn't")
+	t.expect_eq(first[1].runs[2], tx.runs[2], "the tail run is shared too: runs never change after their send")
+	core.capture(tx, { { "b", 3 } }, nil, c)
+	t.expect_same(first[1].runs, { { "a", 2, 2 }, { "b", 1, 1 } }, "the earlier offer is untouched")
 	c.tick = 1300
-	local second = core.visit(tx, c)
-	t.expect_same(second[1].runs, { { "a", 2, 2 }, { "b", 4, 4 } }, "the next offer carries the extended tail")
-	core.receive(tx, { k = "s.ack", totals = { a = 2, b = 0 } }, c) -- re-slots lane.runs, dropping the covered front run
-	t.expect_same(tx.runs, { { "b", 4, 4 } })
-	t.expect_same(first[1].runs, { { "a", 2, 2 }, { "b", 1, 1 } }, "and the first offer's array is still untouched")
+	t.expect_same(core.visit(tx, c)[1].runs, { { "a", 2, 2 }, { "b", 1, 1 }, { "b", 3, 4 } })
+	core.receive(tx, { k = "s.ack", totals = { a = 2, b = 1 } }, c)
+	t.expect_same(tx.runs, { { "b", 3, 4 } }, "the ack drops the two covered front runs")
+	t.expect_same(first[1].runs, { { "a", 2, 2 }, { "b", 1, 1 } }, "and the earlier offer's runs are still untouched")
+end)
+
+t.test("ordered: g rides with its run, and reaches the credit only with the whole run (belt spacing spec §6)", function()
+	local tx, c = core.new("ordered", "tx"), octx()
+	core.capture(tx, { { "a", 2, { 0, 1.5 } }, { "b", 1 } }, nil, c)
+	t.expect_same(core.visit(tx, c), { { k = "o.offer", runs = { { "a", 2, 2, { 0, 1.5 } }, { "b", 1, 1 } } } })
+	local rx, cr = core.new("ordered", "rx"), octx()
+	core.receive(rx, { k = "o.offer", runs = { { "a", 2, 2, { 0, 1.5 } }, { "b", 1, 1 } } }, cr)
+	t.expect_same(cr.lists[1], { { "a", 2, { 0, 1.5 } }, { "b", 1 } }, "whole runs: a's g goes with it; b has none")
+	local part, cp = core.new("ordered", "rx"), octx()
+	part.recv = { a = 1 }
+	core.receive(part, { k = "o.offer", runs = { { "a", 2, 2, { 0, 1.5 } } } }, cp)
+	t.expect_same(cp.lists[1], { { "a", 1 } }, "a partial credit has no g")
+	local gap, cg = core.new("ordered", "rx"), octx()
+	core.receive(gap, { k = "o.offer", runs = { { "a", 1, 3, { 4 } } } }, cg)
+	t.expect_same(cg.lists[1], { { "a", 3 } }, "a gap credit (after a destination restore) has no g")
 end)
 
 t.test("ordered: the destination credits each run's new part in order, and a repeat or an older offer adds nothing", function()
@@ -674,6 +688,14 @@ t.test("ordered: malformed runs are refused (G5); an ack may name up to 64 keys"
 	t.expect_eq(core.receive(rx, { k = "o.offer", runs = { { 7, 1, 1 } } }, c), false, "a key that isn't a string")
 	t.expect_eq(core.receive(rx, { k = "o.offer", runs = { x = { "a", 1, 1 } } }, c), false, "not an array")
 	t.expect_eq(core.receive(rx, { k = "s.offer", totals = { a = 1 } }, c), false, "no stream offer on an ordered lane")
+	t.expect_eq(core.receive(rx, { k = "o.offer", runs = { { "a", 2, 2, "x" } } }, c), false, "a g that isn't a table")
+	t.expect_eq(core.receive(rx, { k = "o.offer", runs = { { "a", 2, 2, { 1, 2, 3 } } } }, c), false, "more gaps than items")
+	t.expect_eq(core.receive(rx, { k = "o.offer", runs = { { "a", 2, 2, { -1 } } } }, c), false, "a negative gap")
+	t.expect_eq(core.receive(rx, { k = "o.offer", runs = { { "a", 2, 2, { "1" } } } }, c), false, "a gap that isn't a number")
+	t.expect_eq(core.receive(rx, { k = "o.offer", runs = { { "a", 2, 2, { 0 / 0 } } } }, c), false, "NaN")
+	t.expect_eq(core.receive(rx, { k = "o.offer", runs = { { "a", 2, 2, { 1 / 0 } } } }, c), false, "an infinite gap")
+	t.expect_true(core.receive(rx, { k = "o.offer", runs = { { "a", 2, 2, { 0.5 } } } }, c) ~= false,
+		"fewer gaps than items is the transport's call")
 	local totals = {}
 	for i = 1, 64 do
 		totals["k" .. i] = 0
