@@ -163,8 +163,8 @@ t.case("oracle: its units form no expansion party (spikes 37 and 38)", function(
 	ask(300)
 end)
 
-t.case("oracle: its unit keeps the vanilla unit's collision mask, its spawner collides with nothing (owner, 2026-10-18: a "
-	.. "collision-less unit that builds no bases desynced joining clients)", function(ctx)
+t.case("oracle: its unit and its spawner collide with nothing (plan ruling R14; the vanilla-mask workaround a303a52 "
+	.. "reverted, owner 2026-10-20: Wube fixed the desync for the release after 2.1.22)", function(ctx)
 	ctx.at(5, function()
 		local function layers(name)
 			local out = {}
@@ -174,11 +174,10 @@ t.case("oracle: its unit keeps the vanilla unit's collision mask, its spawner co
 			table.sort(out)
 			return table.concat(out, ",")
 		end
-		for unit, vanilla in pairs({ ["ue-oracle-unit"] = "small-biter", ["ue-oracle-gleba-unit"] = "small-wriggler-pentapod" }) do
-			if prototypes.entity[unit] then
-				ctx.expect(layers(unit) ~= "" and layers(unit) == layers(vanilla), unit .. " mask " .. layers(unit))
+		for _, name in ipairs({ "ue-oracle", "ue-oracle-unit", "ue-oracle-gleba-unit" }) do
+			if prototypes.entity[name] then
+				ctx.expect(layers(name) == "", name .. " mask " .. layers(name))
 			end
 		end
-		ctx.expect(layers("ue-oracle") == "", "ue-oracle mask " .. layers("ue-oracle"))
 	end)
 end)
