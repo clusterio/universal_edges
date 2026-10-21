@@ -740,6 +740,22 @@ test("the station-list broadcast sends only the names that changed, and gone for
 	assert.ok(parts.every(p => p.full === undefined), "changes only");
 });
 
+test("a tile resynced but not yet reported in gets the broadcast's changes too: its full list came before them", () => {
+	const w = world();
+	w.router.broadcastStations();
+	w.router.resync(5); // tile 5's start: its full list is sent, its full report not yet in
+	w.router.receive(2, "ue.route.report", { stations: [station(21, "R MID", { limit: 3 })] });
+	w.sent.length = 0;
+	w.router.broadcastStations();
+	const parts = w.sent.filter(m => m.kind === "ue.route.stations" && m.to === 5).map(m => m.payload);
+	assert.deepEqual(parts.flatMap(p => p.set.map((e: { name: string }) => e.name)), ["R MID"]);
+	w.router.receive(5, "ue.route.report", { full: true });
+	w.router.receive(2, "ue.route.report", { stations: [station(21, "R MID", { limit: 4 })] });
+	w.sent.length = 0;
+	w.router.broadcastStations();
+	assert.equal(w.sent.filter(m => m.kind === "ue.route.stations" && m.to === 5).length, 1, "reported in: sent once");
+});
+
 test("the list's diff and gone go by (surface, name): a name on a second planet comes and goes alone (R35)", () => {
 	const w = world();
 	w.router.broadcastStations();

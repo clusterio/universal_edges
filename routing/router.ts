@@ -379,7 +379,8 @@ export class Router {
 
 	/**
 	 * Every 5 s (controller.ts): the (surface, name) entries that changed and those gone (R35), in parts, to every tile
-	 * with a table.
+	 * with a table, and to every tile resynced since: its full list went out before these changes, and this.sent moves
+	 * on without it.
 	 */
 	broadcastStations(): void {
 		const entries = this.stationEntries();
@@ -397,7 +398,7 @@ export class Router {
 		}
 		this.sent = now;
 		const parts = stationParts(set, gone);
-		for (const tile of this.tiles.keys()) {
+		for (const tile of new Set([...this.tiles.keys(), ...this.pending])) {
 			for (const part of parts) {
 				this.port.send(tile, "ue.route.stations", part);
 			}
