@@ -32,3 +32,54 @@ jobs:
     - run: pnpm --filter universal_edges run prepare
     - run: pnpm --filter universal_edges run lint
     - run: pnpm --filter universal_edges run test
+
+  # A v* tag (npm version): the package to npm and the mod to the mod portal. npm's trusted publisher for the package
+  # names this file, ci.yml.
+  release:
+    name: Release to npm and the mod portal
+    needs: test
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing
+    defaults:
+      run:
+        working-directory: external_plugins/universal_edges
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        repository: clusterio/clusterio
+        ref: v2.0.2
+    - uses: actions/checkout@v7
+      with:
+        path: external_plugins/universal_edges
+    - uses: pnpm/action-setup@v6
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24.x
+        registry-url: https://registry.npmjs.org
+    - run: sudo apt-get update && sudo apt-get install -y zip
+    - run: pnpm install --no-frozen-lockfile
+      working-directory: .
+    - run: pnpm build
+      working-directory: .
+    - run: pnpm run prepare
+    - name: The tag, package.json and mod/info.json agree
+      run: |
+        version=$(jq -r .version package.json)
+        test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, package.json $version"; exit 1; }
+        test "$(jq -r .version mod/info.json)" = "$version"
+        echo "VERSION=$version" >> "$GITHUB_ENV"
+    # pnpm pack writes the workspace: and catalog: ranges out as versions; npm publishes the tarball (trusted
+    # publishing needs npm 11.5.1 or later).
+    - run: pnpm pack
+    - run: npm install -g npm@11
+    - run: npm publish "universal_edges-$VERSION.tgz" --access public
+    - name: Upload the mod to the mod portal
+      env:
+        FACTORIO_MOD_TOKEN: ${{ secrets.FACTORIO_MOD_TOKEN }}
+      run: |
+        url=$(curl -sS --fail-with-body -X POST https://mods.factorio.com/api/v2/mods/releases/init_upload \
+          -H "Authorization: Bearer $FACTORIO_MOD_TOKEN" -F mod=universal_edges | jq -er .upload_url)
+        curl -sS --fail-with-body -X POST "$url" -F "file=@dist/universal_edges_$VERSION.zip" | tee /dev/stderr | jq -e .success

@@ -13,13 +13,13 @@ Links Clusterio instances along their edges for Factorio 2.1. Belts, fluids, pow
 In a Clusterio checkout:
 
 ```sh
-git clone -b v2 https://github.com/clusterio/universal_edges.git external_plugins/universal_edges
+git clone https://github.com/clusterio/universal_edges.git external_plugins/universal_edges
 pnpm install
 pnpm build
 pnpm run -r --if-present prepare
 ```
 
-`prepare` compiles the plugin, bundles its web page and zips its mod to `dist/universal_edges_<mod version>.zip`, the version in `mod/info.json` (2.1.3). Add the plugin to the controller's plugin list with `npx clusteriocontroller plugin add ./external_plugins/universal_edges` and to each host's with `npx clusteriohost plugin add ./external_plugins/universal_edges`, from the checkout (a path needs the `./`). Upload the mod with `npx clusterioctl mod upload external_plugins/universal_edges/dist/universal_edges_<mod version>.zip`, and add it to the instances' mod pack with `npx clusterioctl mod-pack edit <pack> --add-mods universal_edges:<mod version>`.
+`prepare` compiles the plugin, bundles its web page and zips its mod to `dist/universal_edges_<mod version>.zip`. The mod's version is the package's, kept in step in `mod/info.json`. Add the plugin to the controller's plugin list with `npx clusteriocontroller plugin add ./external_plugins/universal_edges` and to each host's with `npx clusteriohost plugin add ./external_plugins/universal_edges`, from the checkout (a path needs the `./`). Upload the mod with `npx clusterioctl mod upload external_plugins/universal_edges/dist/universal_edges_<mod version>.zip`, and add it to the instances' mod pack with `npx clusterioctl mod-pack edit <pack> --add-mods universal_edges:<mod version>`.
 
 ## Test and lint
 
@@ -31,6 +31,15 @@ pnpm --filter universal_edges run lint   # ESLint with Clusterio's rules, and lu
 ```
 
 Game tests (headless Factorio, the `*_game_test.lua` files) and multi-instance end-to-end tests run from the clusterio-v2 integration repo, which isn't public. The design documents that code comments cite by section (§) live there too.
+
+## Release
+
+```sh
+npm version minor   # or major/patch: bumps package.json and mod/info.json, commits and tags v<version>
+git push --follow-tags
+```
+
+A pushed `v*` tag runs CI's release job once the tests pass. It publishes the package to npm through trusted publishing (no token), and uploads `universal_edges_<version>.zip` to the [mod portal](https://mods.factorio.com/mod/universal_edges) with the `FACTORIO_MOD_TOKEN` secret, a factorio.com API key with the "ModPortal: Upload Mods" usage.
 
 ## Licence
 
