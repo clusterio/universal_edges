@@ -3,17 +3,34 @@
 	"version": "2.1.3",
 	"description": "Universal Edges v2: link Clusterio instances with belts, fluids, power and trains",
 	"license": "BlueOak-1.0.0",
-	"repository": { "type": "git", "url": "https://github.com/clusterio/universal_edges" },
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/clusterio/universal_edges"
+	},
 	"type": "module",
-	"files": ["dist/node", "dist/web", "dist/*.zip", "module", "!dist/node/test", "!**/*.tsbuildinfo"],
+	"files": [
+		"dist/node",
+		"dist/web",
+		"dist/*.zip",
+		"module",
+		"!dist/node/test",
+		"!**/*.tsbuildinfo"
+	],
 	"main": "dist/node/index.js",
 	"exports": {
 		".": "./dist/node/index.js",
 		"./runtime": "./dist/node/runtime/index.js",
 		"./edges": "./dist/node/edges/index.js"
 	},
-	"scripts": { "lint": "eslint --max-warnings 0 . && luacheck .", "prepare": "tsc --build && webpack-cli --mode production && node build_mod.mjs", "version": "node build_mod.mjs --sync && git add mod/info.json", "test": "node --test \"dist/node/test/unit/**/*.test.js\" && lua5.2 test/unit/run.lua .. test/unit/*_test.lua" },
-	"engines": { "node": ">=22" },
+	"scripts": {
+		"lint": "eslint --max-warnings 0 . && luacheck .",
+		"prepare": "tsc --build && webpack-cli --mode production && node build_mod.mjs",
+		"version": "node build_mod.mjs --sync && git add mod/info.json",
+		"test": "node --test \"dist/node/test/unit/**/*.test.js\" && lua5.2 test/unit/run.lua .. test/unit/*_test.lua"
+	},
+	"engines": {
+		"node": ">=22"
+	},
 	"peerDependencies": {
 		"@clusterio/controller": "workspace:^",
 		"@clusterio/host": "workspace:^",
