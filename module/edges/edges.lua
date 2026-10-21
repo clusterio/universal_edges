@@ -103,7 +103,12 @@ bridge.on("universal_edges", "ue.edge.sync", function(p)
 			tick = game.tick, n = #p.edges })
 	end
 	local s = storage.universal_edges
-	core.reset(s.edges)
+	-- FC4 (circuit-link spec C5 b): a side the sync turns inactive reads as silence, as after activation(active=false).
+	-- The controller sends no such message first when it knows of no active state, e.g. after its own restart.
+	for _, side in ipairs(core.reset(s.edges)) do
+		marks.recolor(side)
+		lanes.deactivated(side)
+	end
 	local listed = {}
 	for _, rec in ipairs(p.edges) do
 		if type(rec) == "table" and type(rec.id) == "string" then
