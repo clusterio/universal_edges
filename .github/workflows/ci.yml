@@ -2,47 +2,33 @@ name: CI
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  jslint:
-    name: Eslint
+  test:
+    name: Lint and unit tests (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22.x, 24.x, 26.x]
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
+    # Clusterio 2.0 from source: the plugin builds inside Clusterio's pnpm workspace.
+    - uses: actions/checkout@v7
       with:
-        node-version: 22.x
-    - run: npm i -g pnpm
-    - run: pnpm i
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-    - run: pnpm i eslint eslint-plugin-node
-    - run: pnpm run lint
-  lualint:
-    name: Luacheck
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - uses: Danielv123/actions-luacheck@patch-1
+        repository: clusterio/clusterio
+        ref: v2.0.2
+    - uses: actions/checkout@v7
       with:
-        files: module/
-        annotate: "error"
-  publish:
-    needs: [jslint]
-    name: "Publish to npm"
-    runs-on: ubuntu-latest
-
-    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
-    steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
+        path: external_plugins/universal_edges
+    - uses: pnpm/action-setup@v6
+    - uses: actions/setup-node@v7
       with:
-        node-version: 22.x
-    - run: npm i -g pnpm
-    - run: pnpm i
-    - run: pnpm publish --access public --no-git-checks
-      env:
-        NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+        node-version: ${{ matrix.node-version }}
+    - run: sudo apt-get update && sudo apt-get install -y lua5.2 lua-check zip
+    - run: pnpm install --no-frozen-lockfile
+    - run: pnpm build
+    - run: pnpm --filter universal_edges run prepare
+    - run: pnpm --filter universal_edges run lint
+    - run: pnpm --filter universal_edges run test

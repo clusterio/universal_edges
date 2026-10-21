@@ -1,58 +1,40 @@
 {
 	"name": "universal_edges",
-	"version": "1.1.1",
-	"description": "Plugin for seamless belts, fluids, electricity and trains between clusterio instances",
+	"version": "2.0.0",
+	"description": "Universal Edges v2: link Clusterio instances with belts, fluids, power and trains",
+	"license": "BlueOak-1.0.0",
+	"repository": { "type": "git", "url": "https://github.com/clusterio/universal_edges" },
+	"private": true,
+	"type": "module",
 	"main": "dist/node/index.js",
-	"scripts": {
-		"prepare": "tsc --build ./tsconfig.node.json && webpack-cli --env production && node ./build.js",
-		"buildmod": "node ./build.js",
-		"watch": "tsc --build --watch",
-		"cloc": "cloc --exclude-dir=node_modules,dist .",
-		"lint": "eslint \"*.ts\" \"src/**/*\" \"web/**/*\" --fix",
-		"luacheck": "luacheck module",
-		"test": "spaces-to-tabs -s 4 module/**.lua module/**/**.lua module/**/**/**.lua && npm run lint && npm run luacheck"
+	"exports": {
+		".": "./dist/node/index.js",
+		"./runtime": "./dist/node/runtime/index.js",
+		"./edges": "./dist/node/edges/index.js"
 	},
-	"engines": {
-		"node": ">=18"
-	},
+	"scripts": { "lint": "eslint --max-warnings 0 . && luacheck .", "prepare": "tsc --build && webpack-cli --mode production && node build_mod.mjs", "test": "node --test \"dist/node/test/unit/**/*.test.js\" && lua5.2 test/unit/run.lua .. test/unit/*_test.lua" },
+	"engines": { "node": ">=22" },
 	"peerDependencies": {
-		"@clusterio/controller": "^2.0.0-alpha.0",
-		"@clusterio/host": "^2.0.0-alpha.0",
-		"@clusterio/lib": "^2.0.0-alpha.0",
-		"@clusterio/web_ui": "^2.0.0-alpha.0"
-	},
-	"devDependencies": {
-		"@ant-design/icons": "^5.3.7",
-		"@swc/wasm": "^1.5.24",
-		"@types/node": "^20.4.5",
-		"@types/react": "^18.2.21",
-		"@typescript-eslint/eslint-plugin": "^7.11.0",
-		"@typescript-eslint/parser": "^7.11.0",
-		"antd": "^5.13.0",
-		"eslint": "^8.4.1",
-		"eslint-plugin-node": "^11.1.0",
-		"fs-extra": "^11.2.0",
-		"jszip": "^3.10.1",
-		"klaw": "^4.1.0",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0",
-		"react-router-dom": "^6.23.1",
-		"spaces-to-tabs": "^0.0.3",
-		"typescript": "^5.1.6",
-		"webpack": "^5.88.2",
-		"webpack-cli": "^5.1.4",
-		"webpack-merge": "^5.9.0",
-		"yargs": "^17.7.2"
+		"@clusterio/controller": "workspace:^",
+		"@clusterio/host": "workspace:^",
+		"@clusterio/lib": "workspace:^"
 	},
 	"dependencies": {
-		"@sinclair/typebox": "^0.30.4"
+		"@sinclair/typebox": "catalog:"
 	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"keywords": [
-		"clusterio",
-		"clusterio-plugin",
-		"factorio"
-	]
+	"devDependencies": {
+		"@clusterio/controller": "workspace:^",
+		"@clusterio/host": "workspace:^",
+		"@clusterio/lib": "workspace:^",
+		"@clusterio/web_ui": "workspace:^",
+		"@types/node": "catalog:",
+		"@types/react": "catalog:",
+		"antd": "catalog:",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"typescript": "catalog:",
+		"webpack": "catalog:",
+		"webpack-cli": "catalog:",
+		"webpack-merge": "catalog:"
+	}
 }

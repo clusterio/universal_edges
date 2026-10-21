@@ -1,36 +1,78 @@
-import React, { useContext, useCallback, useSyncExternalStore } from "react";
-
-import {
-	BaseWebPlugin, ControlContext,
-} from "@clusterio/web_ui";
-
-import * as messages from "../messages";
-
+import React from "react";
 import * as lib from "@clusterio/lib";
-import EdgeListPage from "./pages/EdgeListPage";
+import type { WebPluginContext } from "@clusterio/web_ui";
+import { EdgeChangedEvent, type EdgeReadiness, type EdgeRecord } from "../edges/contracts.js";
+// No extension: webpack.common maps .js to .ts, not .tsx (packages/web_ui/webpack.common.js).
+import EdgeListPage from "./EdgeListPage";
 
-export class WebPlugin extends BaseWebPlugin {
-	subscribableEdgeConfigs = new lib.EventSubscriber(messages.EdgeUpdate, this.control);
+/** What the page shows: every unpurged live edge, and each edge's readiness. */
+export type EdgeRows = { edges: Map<string, EdgeRecord>; readiness: Map<string, EdgeReadiness> };
 
-	async init() {
-		this.pages = [
-			{
-				path: "/universal_edges",
-				sidebarName: "Universal edges",
-				// This permission is client side only, so it must match the permission string of a resource
-				// request to be secure. An undefined value means that the page will always be visible
-				permission: "universal_edges.config.read",
-				content: <EdgeListPage />,
-			},
-		];
+/**
+ * The edges from the EdgeChangedEvent subscription (SP1 spec §7.4). lib.MapSubscriber wants { updates, isDeleted },
+ * so this keeps its own maps: a tombstone or a purge removes an edge, and readiness arrives on its own.
+ */
+export class EdgeSubscriber extends lib.EventSubscriber<EdgeChangedEvent, EdgeRows> {
+	private edges = new Map<string, EdgeRecord>();
+	private ready = new Map<string, EdgeReadiness>();
+	private version = 0;
+
+	constructor(control: lib.Link) {
+		super(EdgeChangedEvent, control);
 	}
 
-	useEdgeConfigs() {
-		const control = useContext(ControlContext);
-		const subscribe = useCallback(
-			(callback: () => void) => this.subscribableEdgeConfigs.subscribe(callback),
-			[control]
-		);
-		return useSyncExternalStore(subscribe, () => this.subscribableEdgeConfigs.getSnapshot());
+	/**
+	 * ponytail: a counter, not an update time. Readiness and purges carry no time, and the page always wants the whole
+	 * list: a small lastRequestTimeMs makes the controller replay every record (universal_edges/edges/controller.ts).
+	 */
+	protected override getLastUpdatedTimeMs(): number {
+		this.version += 1;
+		return this.version;
 	}
+
+	protected override processEvent(event: EdgeChangedEvent): void {
+		for (const edge of event.edges) {
+			if (edge.deleted) {
+				this.edges.delete(edge.id);
+			} else {
+				this.edges.set(edge.id, edge);
+			}
+		}
+		for (const id of event.purged) {
+			this.edges.delete(id);
+			this.ready.delete(id);
+		}
+		for (const r of event.readiness) {
+			this.ready.set(r.id, r);
+		}
+	}
+
+	protected override makeSnapshot(): EdgeRows {
+		// Also called from the base constructor, before this class's fields exist: new Map(undefined) is empty.
+		return { edges: new Map(this.edges), readiness: new Map(this.ready) };
+	}
+
+	/** A new connection replays everything, so an edge purged while this page was disconnected goes. */
+	override handleConnectionEvent(event: "connect" | "drop" | "resume" | "close"): void {
+		if (event === "connect" || event === "resume") {
+			this.edges.clear();
+			this.ready.clear();
+		}
+		super.handleConnectionEvent(event);
+	}
+}
+
+/** The web entry point (the pin's function form, packages/create/templates/plugin-ts/web/plugin.tsx:55-75). */
+export default async function loadWebPlugin(context: WebPluginContext) {
+	const { control, plugin } = context;
+	const edges = new EdgeSubscriber(control);
+	control.hooks.pages.attach(plugin.name, () => [
+		{
+			path: "/universal_edges",
+			sidebarName: "Universal edges",
+			// Client side only: the controller checks each request's own permission.
+			permission: "universal_edges.edges.read",
+			content: <EdgeListPage edges={edges} />,
+		},
+	]);
 }
