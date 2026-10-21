@@ -220,6 +220,17 @@ export function reassembly(now: () => number = Date.now) {
 			}
 			return body.parts.join("");
 		},
+		/** take's body parsed, or undefined when a part is missing, it isn't JSON, or valid (if given) refuses it. */
+		json<T = unknown>(key: string, n: number, valid?: (value: unknown) => value is T): T | undefined {
+			const body = this.take(key, n);
+			let value: unknown;
+			try {
+				value = body === undefined ? undefined : JSON.parse(body);
+			} catch {
+				return undefined;
+			}
+			return value === undefined || (valid && !valid(value)) ? undefined : value as T;
+		},
 	};
 }
 
@@ -346,15 +357,15 @@ export function edgeForwarding(context: InstancePluginContext, bootId: () => str
 			if ((msg.k === "u.offer" || msg.k === "ep") && typeof msg.chunks === "number") {
 				const lane = msg.k === "ep" ? "ep" : String(msg.dir);
 				const key = `${edge}/${String(msg.cid)}/${lane}/${String(msg.seq)}`;
-				const body = bodies.take(key, msg.chunks);
+				const body = msg.k === "ep" ? bodies.json(key, msg.chunks) : bodies.take(key, msg.chunks);
 				if (body === undefined) {
-					const what = msg.k === "ep" ? "status" : "offer";
-					warn("chunks", `ue.lane chunked ${what} incomplete, dropped`, { edge, cid: msg.cid, seq: msg.seq });
+					const what = msg.k === "ep" ? "status incomplete or invalid" : "offer incomplete";
+					warn("chunks", `ue.lane chunked ${what}, dropped`, { edge, cid: msg.cid, seq: msg.seq });
 					return; // an offer is re-offered; a lost status is a gap its receiver repairs with an ask (§8.3)
 				}
 				delete msg.chunks;
 				if (msg.k === "ep") {
-					msg.status = JSON.parse(body);
+					msg.status = body;
 				} else {
 					msg.body = body;
 				}

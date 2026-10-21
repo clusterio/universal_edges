@@ -28,9 +28,8 @@ export function radarForwarding(context: InstancePluginContext) {
 				up("ue.radar.own")(p);
 				return;
 			}
-			const body = bodies.take(`${p.key}/${p.seq}`, p.chunks);
-			const report: unknown = body === undefined ? undefined : JSON.parse(body);
-			if (!validOwn(report)) {
+			const report = bodies.json(`${p.key}/${p.seq}`, p.chunks, validOwn);
+			if (report === undefined) {
 				warn("chunks", "ue.radar chunked report incomplete or invalid, dropped", { key: p.key, seq: p.seq });
 				return; // the controller sees the next change as a gap and asks for the full own (plan ruling 7)
 			}

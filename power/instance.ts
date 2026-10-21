@@ -22,9 +22,8 @@ export function powerForwarding(context: InstancePluginContext) {
 		"ue.power.report": on(ReportIn, p => {
 			let report: unknown = p;
 			if ("chunks" in p) {
-				const body = bodies.take(`power/${p.seq}`, p.chunks);
-				report = body === undefined ? undefined : JSON.parse(body);
-				if (!validReport(report)) {
+				report = bodies.json(`power/${p.seq}`, p.chunks, validReport);
+				if (report === undefined) {
 					warn("chunks", "ue.power chunked report incomplete or invalid, dropped", { seq: p.seq });
 					return; // the next second's report replaces it
 				}

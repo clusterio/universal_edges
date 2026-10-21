@@ -258,6 +258,25 @@ test("reassembly: parts in order make the body; a missing part, the 16-key cap a
 	assert.equal(r.take("late", 2), undefined, "the first part expired after 60 s");
 });
 
+test("reassembly: json parses the body, and a missing part, a body that isn't JSON or one valid refuses is undefined",
+	() => {
+		const r = reassembly();
+		const parts = (key: string, ...data: string[]) => data.forEach((d, i) => {
+			r.part({ key, i: i + 1, n: data.length, data: d });
+		});
+		parts("ok", '{"a":', "1}");
+		assert.deepEqual(r.json("ok", 2), { a: 1 });
+		parts("missing", '{"a":', "1}");
+		assert.equal(r.json("missing", 3), undefined);
+		parts("bad", '{"a":', "1");
+		assert.equal(r.json("bad", 2), undefined, "a parse error is no throw");
+		assert.equal(r.take("bad", 2), undefined, "and its parts are forgotten too");
+		parts("refused", "[1]");
+		assert.equal(r.json("refused", 1, (v): v is number => typeof v === "number"), undefined);
+		parts("kept", "[1]");
+		assert.deepEqual(r.json("kept", 1, Array.isArray), [1]);
+	});
+
 test("a chunked offer from Lua leaves as one message with the reassembled body", async () => {
 	const w = forwarding();
 	await w.fire(EdgeSyncEvent, new EdgeSyncEvent([rec("e1", 1, 2)]));
@@ -362,7 +381,18 @@ test("FC3: a chunked status from Lua leaves as one ep message with its status pa
 		["c1", status, undefined, undefined],
 		["c2", { v: 1 }, undefined, undefined],
 	], "seq 2's parts never came");
-	assert.ok(w.lines.some(l => l.message === "ue.lane chunked status incomplete, dropped"));
+	assert.ok(w.lines.some(l => l.message === "ue.lane chunked status incomplete or invalid, dropped"));
+});
+
+test("FC3: a chunked status that isn't JSON is dropped with a warning, not thrown", async () => {
+	const w = forwarding();
+	await w.fire(EdgeSyncEvent, new EdgeSyncEvent([rec("e1", 1, 2)]));
+	w.lua("ue.chunk", { key: "e1/c1/ep/1", i: 1, n: 2, data: '{"v":' });
+	w.lua("ue.chunk", { key: "e1/c1/ep/1", i: 2, n: 2, data: "3" });
+	w.lua("ue.lane", { edge: "e1", epoch: "E1", k: "ep", cid: "c1", state: "ready", chunks: 2, seq: 1 });
+	await turn();
+	assert.equal(w.sent.length, 0);
+	assert.ok(w.lines.some(l => l.message === "ue.lane chunked status incomplete or invalid, dropped"));
 });
 
 test("FC3: two chunked statuses of one endpoint in flight at once reassemble under their own keys", async () => {
