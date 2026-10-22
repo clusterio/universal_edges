@@ -65,11 +65,12 @@ jobs:
     - run: pnpm build
       working-directory: .
     - run: pnpm run prepare
-    - name: The tag, package.json and mod/info.json agree
+    - name: The tag, package.json, mod/info.json and module/module.json agree
       run: |
         version=$(jq -r .version package.json)
         test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, package.json $version"; exit 1; }
         test "$(jq -r .version mod/info.json)" = "$version"
+        test "$(jq -r .version module/module.json)" = "$version"
         echo "VERSION=$version" >> "$GITHUB_ENV"
     # pnpm pack writes the workspace: and catalog: ranges out as versions; npm publishes the tarball (trusted
     # publishing needs npm 11.5.1 or later).

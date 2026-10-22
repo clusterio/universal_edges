@@ -25,7 +25,7 @@
 	"scripts": {
 		"lint": "eslint --max-warnings 0 . && luacheck .",
 		"prepare": "tsc --build && webpack-cli --mode production && node build_mod.mjs",
-		"version": "node build_mod.mjs --sync && git add mod/info.json",
+		"version": "node build_mod.mjs --sync && git add mod/info.json module/module.json",
 		"test": "node --test \"dist/node/test/unit/**/*.test.js\" && lua5.2 test/unit/run.lua .. test/unit/*_test.lua"
 	},
 	"engines": {

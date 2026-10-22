@@ -19,7 +19,7 @@ pnpm build
 pnpm run -r --if-present prepare
 ```
 
-`prepare` compiles the plugin, bundles its web page and zips its mod to `dist/universal_edges_<mod version>.zip`. The mod's version is the package's, kept in step in `mod/info.json`. Add the plugin to the controller's plugin list with `npx clusteriocontroller plugin add ./external_plugins/universal_edges` and to each host's with `npx clusteriohost plugin add ./external_plugins/universal_edges`, from the checkout (a path needs the `./`). Upload the mod with `npx clusterioctl mod upload external_plugins/universal_edges/dist/universal_edges_<mod version>.zip`, and add it to the instances' mod pack with `npx clusterioctl mod-pack edit <pack> --add-mods universal_edges:<mod version>`.
+`prepare` compiles the plugin, bundles its web page and zips its mod to `dist/universal_edges_<mod version>.zip`. The mod's version is the package's, kept in step in `mod/info.json` and `module/module.json`. Add the plugin to the controller's plugin list with `npx clusteriocontroller plugin add ./external_plugins/universal_edges` and to each host's with `npx clusteriohost plugin add ./external_plugins/universal_edges`, from the checkout (a path needs the `./`). Upload the mod with `npx clusterioctl mod upload external_plugins/universal_edges/dist/universal_edges_<mod version>.zip`, and add it to the instances' mod pack with `npx clusterioctl mod-pack edit <pack> --add-mods universal_edges:<mod version>`.
 
 ## Test and lint
 
@@ -35,7 +35,7 @@ Game tests (headless Factorio, the `*_game_test.lua` files) and multi-instance e
 ## Release
 
 ```sh
-npm version minor   # or major/patch: bumps package.json and mod/info.json, commits and tags v<version>
+npm version minor   # or major/patch: bumps package.json, mod/info.json and module/module.json, commits and tags v<version>
 git push --follow-tags
 ```
 
