@@ -75,11 +75,19 @@ jobs:
     # publishing needs npm 11.5.1 or later).
     - run: pnpm pack
     - run: npm install -g npm@11
-    - run: npm publish "universal_edges-$VERSION.tgz" --access public
+    # Each step skips a version already out, so a release that failed halfway can be re-run.
+    - name: Publish to npm
+      run: |
+        if npm view "universal_edges@$VERSION" version | grep -q .; then echo "npm has $VERSION"; exit 0; fi
+        npm publish "universal_edges-$VERSION.tgz" --access public
     - name: Upload the mod to the mod portal
       env:
         FACTORIO_MOD_TOKEN: ${{ secrets.FACTORIO_MOD_TOKEN }}
       run: |
+        if curl -sS --fail-with-body https://mods.factorio.com/api/mods/universal_edges \
+          | jq -e --arg v "$VERSION" 'any(.releases[]; .version == $v)' > /dev/null; then
+          echo "the mod portal has $VERSION"; exit 0
+        fi
         url=$(curl -sS --fail-with-body -X POST https://mods.factorio.com/api/v2/mods/releases/init_upload \
           -H "Authorization: Bearer $FACTORIO_MOD_TOKEN" -F mod=universal_edges | jq -er .upload_url)
         curl -sS --fail-with-body -X POST "$url" -F "file=@dist/universal_edges_$VERSION.zip" | tee /dev/stderr | jq -e .success
