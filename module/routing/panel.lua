@@ -7,7 +7,7 @@
 -- group sync spec §5.7) list the cluster's groups and interrupts from the sync's cache: picking a group joins it,
 -- picking an interrupt adds it. The pickers act only while routing is live (the routing latch, plan ruling C5).
 -- Beside a train stop's window, on its left, a second panel lists the same planet's station names from every tile, each
--- with a pencil that renames the open stop to it (docs/superpowers/specs/2026-10-22-stop-name-picker-design.md).
+-- with a pencil that renames the open stop to it.
 local bridge = require("modules/universal_edges/runtime/bridge")
 local base = require("modules/universal_edges/routing/base")
 local scheduler = require("modules/universal_edges/runtime/scheduler")
@@ -22,6 +22,11 @@ local DEFAULT_AT = { x = 460, y = 44 } -- right of the train sidebar at UI scale
 --- 2026-10-06).
 function panel.is_locomotive(e)
 	return e ~= nil and e.object_name == "LuaEntity" and e.valid and e.type == "locomotive"
+end
+
+--- A train stop's window gets the stop panel.
+function panel.is_stop(e)
+	return e ~= nil and e.object_name == "LuaEntity" and e.valid and e.type == "train-stop"
 end
 
 --- The train whose window the player has open, or nil.
@@ -238,7 +243,7 @@ local STOP_TIP = "Every station name on this planet, on every tile. Click the pe
 --- The stop whose window the player has open, or nil.
 local function opened_stop(player)
 	local e = player.opened
-	if e ~= nil and e.object_name == "LuaEntity" and e.valid and e.type == "train-stop" then
+	if panel.is_stop(e) then
 		return e
 	end
 end
@@ -261,19 +266,21 @@ local function fill_stop_pane(player, frame, list)
 	end
 end
 
+--- Closing a stop's window takes the stop panel with it.
+function panel.close_stop(player)
+	local frame = player.gui.relative[STOP_NAME]
+	if frame then
+		frame.destroy()
+	end
+end
+
 --- (Re)build the stop panel, a frame on the left of the train stop window, for the stop the player has open; none if no
 --- stop window is open. keep: an open panel whose filtered rows have the same names and tiles is left alone; otherwise
 --- only the rows are rebuilt, so the search text (and its focus) survive.
 function panel.show_stop(player, keep)
 	local stop = opened_stop(player)
 	local frame = player.gui.relative[STOP_NAME]
-	if not stop then
-		if frame then
-			frame.destroy()
-		end
-		return
-	end
-	if frame and keep then
+	if stop and frame and keep then
 		local list = panel.sorted(stop.surface.name, frame.router_stop_search_row.router_stop_search.text)
 		if not same_rows(frame.router_stop_pane.router_stop_grid, list, 2) then
 			frame.router_stop_pane.destroy()
@@ -281,10 +288,11 @@ function panel.show_stop(player, keep)
 		end
 		return
 	end
-	if frame then
-		frame.destroy()
+	panel.close_stop(player)
+	if not stop then
+		return
 	end
-	frame = player.gui.relative.add{ type = "frame", name = STOP_NAME, direction = "vertical", anchor = {
+	frame =player.gui.relative.add{ type = "frame", name = STOP_NAME, direction = "vertical", anchor = {
 		gui = defines.relative_gui_type.train_stop_gui, position = defines.relative_gui_position.left } }
 	local surface = stop.surface
 	local planet = surface.planet
@@ -294,12 +302,15 @@ function panel.show_stop(player, keep)
 	fill_stop_pane(player, frame, panel.sorted(surface.name))
 end
 
---- A click on a row's "+" in the stop panel: the stop whose window is open takes the name; nothing if none is open.
+--- A click on a row's pencil in the stop panel: the stop whose window is open takes the name; nothing if none is open
+--- or the player's permission group denies renaming stops (vanilla's rename checks it, a script's click doesn't).
 function panel.rename(player, tags)
 	local stop = opened_stop(player)
-	if stop then
-		stop.backer_name = tags.name
+	local group = player.permission_group
+	if not stop or group and not group.allows_action(defines.input_action.change_train_stop_station) then
+		return
 	end
+	stop.backer_name = tags.name
 end
 
 --- (Re)build the panel, a draggable window on player.gui.screen, for the train window the player has open; none if no
@@ -504,31 +515,24 @@ end
 panel.events[defines.events.on_gui_opened] = function(e)
 	if e.gui_type == defines.gui_type.entity and panel.is_locomotive(e.entity) then
 		panel.show(game.get_player(e.player_index))
-	elseif e.gui_type == defines.gui_type.entity and e.entity and e.entity.valid and e.entity.type == "train-stop" then
+	elseif e.gui_type == defines.gui_type.entity and panel.is_stop(e.entity) then
 		panel.show_stop(game.get_player(e.player_index))
-	end
-end
-
---- Closing a stop's window takes the stop panel with it.
-local function close_stop(player)
-	local frame = player.gui.relative[STOP_NAME]
-	if frame then
-		frame.destroy()
 	end
 end
 
 panel.events[defines.events.on_gui_closed] = function(e)
 	if e.gui_type == defines.gui_type.entity and panel.is_locomotive(e.entity) then
 		panel.close(game.get_player(e.player_index))
-	elseif e.gui_type == defines.gui_type.entity and e.entity and e.entity.valid and e.entity.type == "train-stop" then
-		close_stop(game.get_player(e.player_index))
+	elseif e.gui_type == defines.gui_type.entity then
+		-- No check on the entity: a stop mined or destroyed with its window open closes it invalid; its panel goes too.
+		panel.close_stop(game.get_player(e.player_index))
 	end
 end
 
 -- A screen frame outlives a disconnect; a player joins with no train window open, so a leftover panel goes (review M4).
 panel.events[defines.events.on_player_joined_game] = function(e)
 	panel.close(game.get_player(e.player_index))
-	close_stop(game.get_player(e.player_index))
+	panel.close_stop(game.get_player(e.player_index))
 end
 
 panel.events[defines.events.on_gui_location_changed] = function(e)

@@ -1099,8 +1099,8 @@ t.case("routing: a station list broadcast keeps an open panel's interrupt pick a
 	end)
 end)
 
--- The stop name picker (docs/superpowers/specs/2026-10-22-stop-name-picker-design.md): the panel beside an open train
--- stop's window lists this planet's names from every tile; "+" renames the stop; the stop panel follows broadcasts.
+-- The stop name picker: the panel beside an open train stop's window lists this planet's names from every tile; the
+-- pencil renames the stop, unless the player's permission group denies it; the stop panel follows broadcasts.
 -- Tick 3560 alone; a lone stop at row 79500.
 t.case("routing: the stop name picker lists this planet's names, searches, renames the open stop and follows broadcasts", function(ctx)
 	ctx.at(3560, function()
@@ -1133,8 +1133,14 @@ t.case("routing: the stop name picker lists this planet's names, searches, renam
 		frame.router_stop_search_row.router_stop_search.text = "b"
 		panel.show_stop(player, true) -- on_gui_text_changed
 		ctx.expect(rows() == "RTSN B", "the search narrows the rows: " .. rows())
+		player.permission_group = { allows_action = function(action)
+			return action ~= defines.input_action.change_train_stop_station
+		end }
 		panel.rename(player, frame.router_stop_pane.router_stop_grid.children[4].tags)
-		ctx.expect(stop.backer_name == "RTSN B", "+ renames the open stop: " .. stop.backer_name)
+		ctx.expect(stop.backer_name == "RTSN OWN", "a group that denies renaming stops: no rename: " .. stop.backer_name)
+		player.permission_group = nil
+		panel.rename(player, frame.router_stop_pane.router_stop_grid.children[4].tags)
+		ctx.expect(stop.backer_name == "RTSN B", "the pencil renames the open stop: " .. stop.backer_name)
 		deliver("ue.route.stations", { set = { entry(here, "RTSN BB", "gridworld_2_0") }, gone = {} })
 		panel.show_stop(player, true) -- the stations handler's redraw
 		ctx.expect(player.gui.relative.router_stop_names == frame and rows() == "RTSN B,RTSN BB"
