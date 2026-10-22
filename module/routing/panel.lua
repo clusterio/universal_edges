@@ -6,6 +6,8 @@
 -- train given a remote name waits in no_path until routing routes it. Above it, the group and interrupt pickers (train
 -- group sync spec §5.7) list the cluster's groups and interrupts from the sync's cache: picking a group joins it,
 -- picking an interrupt adds it. The pickers act only while routing is live (the routing latch, plan ruling C5).
+-- Beside a train stop's window, on its left, a second panel lists the same planet's station names from every tile, each
+-- with a pencil that renames the open stop to it (docs/superpowers/specs/2026-10-22-stop-name-picker-design.md).
 local bridge = require("modules/universal_edges/runtime/bridge")
 local base = require("modules/universal_edges/routing/base")
 local scheduler = require("modules/universal_edges/runtime/scheduler")
@@ -13,6 +15,7 @@ local sync = require("modules/universal_edges/schedules/sync")
 
 local panel = { events = {} }
 local NAME = "router_stations"
+local STOP_NAME = "router_stop_names"
 local DEFAULT_AT = { x = 460, y = 44 } -- right of the train sidebar at UI scales 1.25 to 1.75, before UI scale
 
 --- Only a locomotive's window is the train window: a wagon's opens its inventory, and the panel stays shut (owner,
@@ -133,23 +136,24 @@ local function tiles_text(st)
 	return table.concat(out, " · ")
 end
 
-local HEADER = 3 -- the station table's cells before the first row: a header of three
-local COLS = 3 -- name, free, add
+local COLS = 3 -- the train panel's station table: name, free, add; its header is one row of COLS cells
 
---- The index of cell c (1 to COLS) of the grid's i-th station row.
-local function cell(i, c)
-	return HEADER + COLS * (i - 1) + c
+--- The index of cell c (1 to cols) of the grid's i-th station row.
+local function cell(i, c, cols)
+	cols = cols or COLS
+	return cols * i + c
 end
 
---- The grid's rows (three cells each, after the header) name exactly list's stations and tiles, in order: only free
+--- The grid's rows (cols cells each, after the header) name exactly list's stations and tiles, in order: only free
 --- counts can differ.
-local function same_rows(grid, list)
+local function same_rows(grid, list, cols)
+	cols = cols or COLS
 	local kids = grid.children
-	if #kids ~= HEADER + COLS * #list then
+	if #kids ~= cols * (#list + 1) then
 		return false
 	end
 	for i, st in ipairs(list) do
-		local name = kids[cell(i, 1)]
+		local name = kids[cell(i, 1, cols)]
 		if name.caption ~= st.name or name.tooltip ~= "On tiles: " .. tiles_text(st) then
 			return false
 		end
@@ -225,6 +229,76 @@ local function fill_pane(player, frame, list)
 		free.style.horizontal_align = "right"
 		grid.add{ type = "sprite-button", sprite = "utility/add_white", style = "tool_button",
 			tooltip = { "", "Add ", st.name, " to the choice in Add to" }, tags = { router = "add", name = st.name } }
+	end
+end
+
+local STOP_TIP = "Every station name on this planet, on every tile. Click the pencil beside a name to rename this stop to "
+	.. "it, and trains sent to that name can come here."
+
+--- The stop whose window the player has open, or nil.
+local function opened_stop(player)
+	local e = player.opened
+	if e ~= nil and e.object_name == "LuaEntity" and e.valid and e.type == "train-stop" then
+		return e
+	end
+end
+
+--- The stop panel's scroll pane of rows for list: the name (its tooltip lists the tiles) and a pencil that renames the
+--- open stop to it, under a header. A pencil, not the train panel's "+": this replaces the name (owner, 2026-10-22).
+local function fill_stop_pane(player, frame, list)
+	local pane = frame.add{ type = "scroll-pane", name = "router_stop_pane" }
+	pane.style.maximal_height = math.floor(player.display_resolution.height / player.display_scale / 2)
+	local grid = pane.add{ type = "table", name = "router_stop_grid", column_count = 2 }
+	grid.add{ type = "label", caption = "Station [img=info]", tooltip = STOP_TIP, style = "bold_label" }
+	grid.add{ type = "empty-widget" }
+	for _, st in ipairs(list) do
+		local name = grid.add{ type = "label", caption = st.name, tooltip = "On tiles: " .. tiles_text(st) }
+		name.style.horizontally_stretchable = true
+		grid.add{ type = "sprite-button", sprite = "utility/rename_icon", style = "tool_button",
+			tooltip = { "", "Rename this stop to ", st.name, "\nIts current name is replaced. Trains sent to ", st.name,
+				" can then stop here too." },
+			tags = { router = "rename", name = st.name } }
+	end
+end
+
+--- (Re)build the stop panel, a frame on the left of the train stop window, for the stop the player has open; none if no
+--- stop window is open. keep: an open panel whose filtered rows have the same names and tiles is left alone; otherwise
+--- only the rows are rebuilt, so the search text (and its focus) survive.
+function panel.show_stop(player, keep)
+	local stop = opened_stop(player)
+	local frame = player.gui.relative[STOP_NAME]
+	if not stop then
+		if frame then
+			frame.destroy()
+		end
+		return
+	end
+	if frame and keep then
+		local list = panel.sorted(stop.surface.name, frame.router_stop_search_row.router_stop_search.text)
+		if not same_rows(frame.router_stop_pane.router_stop_grid, list, 2) then
+			frame.router_stop_pane.destroy()
+			fill_stop_pane(player, frame, list)
+		end
+		return
+	end
+	if frame then
+		frame.destroy()
+	end
+	frame = player.gui.relative.add{ type = "frame", name = STOP_NAME, direction = "vertical", anchor = {
+		gui = defines.relative_gui_type.train_stop_gui, position = defines.relative_gui_position.left } }
+	local surface = stop.surface
+	local planet = surface.planet
+	frame.add{ type = "label", caption = { "", planet and planet.prototype.localised_name or surface.name, " stations, all tiles" },
+		style = "frame_title" }
+	labelled(frame, "router_stop_search_row", "Search", SEARCH_TIP, { type = "textfield", name = "router_stop_search" })
+	fill_stop_pane(player, frame, panel.sorted(surface.name))
+end
+
+--- A click on a row's "+" in the stop panel: the stop whose window is open takes the name; nothing if none is open.
+function panel.rename(player, tags)
+	local stop = opened_stop(player)
+	if stop then
+		stop.backer_name = tags.name
 	end
 end
 
@@ -430,18 +504,31 @@ end
 panel.events[defines.events.on_gui_opened] = function(e)
 	if e.gui_type == defines.gui_type.entity and panel.is_locomotive(e.entity) then
 		panel.show(game.get_player(e.player_index))
+	elseif e.gui_type == defines.gui_type.entity and e.entity and e.entity.valid and e.entity.type == "train-stop" then
+		panel.show_stop(game.get_player(e.player_index))
+	end
+end
+
+--- Closing a stop's window takes the stop panel with it.
+local function close_stop(player)
+	local frame = player.gui.relative[STOP_NAME]
+	if frame then
+		frame.destroy()
 	end
 end
 
 panel.events[defines.events.on_gui_closed] = function(e)
 	if e.gui_type == defines.gui_type.entity and panel.is_locomotive(e.entity) then
 		panel.close(game.get_player(e.player_index))
+	elseif e.gui_type == defines.gui_type.entity and e.entity and e.entity.valid and e.entity.type == "train-stop" then
+		close_stop(game.get_player(e.player_index))
 	end
 end
 
 -- A screen frame outlives a disconnect; a player joins with no train window open, so a leftover panel goes (review M4).
 panel.events[defines.events.on_player_joined_game] = function(e)
 	panel.close(game.get_player(e.player_index))
+	close_stop(game.get_player(e.player_index))
 end
 
 panel.events[defines.events.on_gui_location_changed] = function(e)
@@ -455,6 +542,8 @@ end
 panel.events[defines.events.on_gui_text_changed] = function(e)
 	if e.element.valid and e.element.name == "router_search" then
 		panel.show(game.get_player(e.player_index), true)
+	elseif e.element.valid and e.element.name == "router_stop_search" then
+		panel.show_stop(game.get_player(e.player_index), true)
 	end
 end
 
@@ -465,7 +554,9 @@ end
 
 panel.events[defines.events.on_gui_click] = function(e)
 	local tags = e.element.valid and e.element.tags
-	if tags and tags.router then
+	if tags and tags.router == "rename" then
+		panel.rename(game.get_player(e.player_index), tags)
+	elseif tags and tags.router then
 		panel.click(game.get_player(e.player_index), tags)
 	end
 end
@@ -516,6 +607,9 @@ bridge.on("universal_edges", "ue.route.stations", function(p)
 	for _, player in pairs(game.connected_players) do
 		if player.gui.screen[NAME] then
 			panel.show(player, true)
+		end
+		if player.gui.relative[STOP_NAME] then
+			panel.show_stop(player, true)
 		end
 	end
 end)
