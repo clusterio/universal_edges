@@ -1099,6 +1099,58 @@ t.case("routing: a station list broadcast keeps an open panel's interrupt pick a
 	end)
 end)
 
+-- The stop name picker: the panel beside an open train stop's window lists this planet's names from every tile; the
+-- pencil renames the stop, unless the player's permission group denies it; the stop panel follows broadcasts.
+-- Tick 3560 alone; a lone stop at row 79500.
+t.case("routing: the stop name picker lists this planet's names, searches, renames the open stop and follows broadcasts", function(ctx)
+	ctx.at(3560, function()
+		local stop = lone_stop(30000, 79500, "RTSN OWN", false)
+		local here = stop.surface.name
+		local player = { index = 1, gui = { screen = fake_gui(), relative = fake_gui() }, opened = stop, display_scale = 1.25,
+			display_resolution = { width = 2560, height = 2088 } }
+		local function entry(surface, name, tile)
+			return { surface = surface, name = name, tiles = { tile }, free = 1 }
+		end
+		local function rows()
+			local frame = player.gui.relative.router_stop_names
+			local out = {}
+			for i = 3, #frame.router_stop_pane.router_stop_grid.children, 2 do
+				out[#out + 1] = frame.router_stop_pane.router_stop_grid.children[i].caption
+			end
+			return table.concat(out, ",")
+		end
+		deliver("ue.route.stations", { full = true, gone = {}, set = {
+			entry(here, "RTSN B", "gridworld_1_0"), entry(here, "RTSN A", "gridworld_0_0"), entry("sp4v", "RTSN OTHER", "t1") } })
+		panel.show_stop(player)
+		local frame = player.gui.relative.router_stop_names
+		ctx.expect(frame and frame.anchor.gui == defines.relative_gui_type.train_stop_gui
+			and frame.anchor.position == defines.relative_gui_position.left, "the frame is anchored left of the stop window")
+		ctx.expect(rows() == "RTSN A,RTSN B", "this surface's names in order, not the other's: " .. rows())
+		local kids = frame.router_stop_pane.router_stop_grid.children
+		ctx.expect(kids[1].caption == "Station [img=info]" and kids[2].type == "empty-widget" and kids[3].tooltip == "On tiles: 0,0"
+			and kids[4].sprite == "utility/rename_icon" and kids[4].tooltip[3] == "RTSN A" and kids[4].tags.router == "rename"
+			and kids[4].tags.name == "RTSN A", "header, then a name and its pencil per row")
+		frame.router_stop_search_row.router_stop_search.text = "b"
+		panel.show_stop(player, true) -- on_gui_text_changed
+		ctx.expect(rows() == "RTSN B", "the search narrows the rows: " .. rows())
+		player.permission_group = { allows_action = function(action)
+			return action ~= defines.input_action.change_train_stop_station
+		end }
+		panel.rename(player, frame.router_stop_pane.router_stop_grid.children[4].tags)
+		ctx.expect(stop.backer_name == "RTSN OWN", "a group that denies renaming stops: no rename: " .. stop.backer_name)
+		player.permission_group = nil
+		panel.rename(player, frame.router_stop_pane.router_stop_grid.children[4].tags)
+		ctx.expect(stop.backer_name == "RTSN B", "the pencil renames the open stop: " .. stop.backer_name)
+		deliver("ue.route.stations", { set = { entry(here, "RTSN BB", "gridworld_2_0") }, gone = {} })
+		panel.show_stop(player, true) -- the stations handler's redraw
+		ctx.expect(player.gui.relative.router_stop_names == frame and rows() == "RTSN B,RTSN BB"
+			and frame.router_stop_search_row.router_stop_search.text == "b", "the new name appears and the search text stays: " .. rows())
+		stop.destroy()
+		ctx.expect(pcall(panel.rename, player, { router = "rename", name = "RTSN A" }), "no stop: the click does nothing")
+		ctx.expect(pcall(panel.show_stop, player, true) and player.gui.relative.router_stop_names == nil, "no stop: the panel is gone")
+	end)
+end)
+
 -- The edge-stop migration (§5.4, §11.4): a prototype-era tile, rebuilt by hand. A plain train-stop named "<edge> <pos>"
 -- stands where the ground box's edge stop stood (local (col + 5, -23), facing out; train_core's old STOP_DX, STOP_Y) and
 -- is the endpoint's data.stop; one train has a permanent record and an interrupt target naming it; another has a routed
