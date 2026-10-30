@@ -4,7 +4,7 @@ Links Clusterio instances along their edges for Factorio 2.1. Belts, fluids, pow
 
 ## Requirements
 
-- Clusterio 2.0, built from source: a checkout of tag `v2.0.2` or later in the 2.0 series. The plugin builds inside Clusterio's pnpm workspace. 2.0.0-alpha.27 and older lack APIs this uses, and Clusterio 2.1 may change the plugin API.
+- Clusterio 2.1, built from source: 2.1 isn't released yet, so a checkout of `master`. The plugin builds inside Clusterio's pnpm workspace. This version doesn't load on Clusterio 2.0, use tag `v2.2.1` of this plugin there.
 - Node 22 or later, and pnpm at the version in Clusterio's `packageManager`.
 - `zip` (the mod build), and `lua5.2` and `luacheck` (tests and lint).
 
@@ -23,11 +23,11 @@ pnpm run -r --if-present prepare
 
 ## Test and lint
 
-Run these from inside the Clusterio checkout, where ESLint is installed:
+Run these from inside the Clusterio checkout, where Oxlint is installed:
 
 ```sh
 pnpm --filter universal_edges run test   # TypeScript and Lua unit tests; run prepare first
-pnpm --filter universal_edges run lint   # ESLint with Clusterio's rules, and luacheck
+pnpm --filter universal_edges run lint   # Oxlint with Clusterio's rules, and luacheck
 ```
 
 Game tests (headless Factorio, the `*_game_test.lua` files) and multi-instance end-to-end tests run from the clusterio-v2 integration repo, which isn't public. The design documents that code comments cite by section (§) live there too.
