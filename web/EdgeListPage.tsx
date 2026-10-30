@@ -4,7 +4,7 @@ import {
 	ControlContext, PageHeader, PageLayout, notifyErrorHandler, useAccount, useInstance, useInstances,
 } from "@clusterio/web_ui";
 import { EdgeEnsureRequest, EdgeRemoveRequest, type EdgeRecord, type EdgeSpec, type Side } from "../edges/contracts.js";
-import type { EdgeSubscriber } from "./index";
+import type { EdgeSubscriber } from "./index.js";
 
 // v1's "Universal edges" page (universal_edges/web/pages/EdgeListPage.tsx), on SP1a's requests and subscription
 // (SP1 spec §7.4, D13). Geometry is read-only once an edge exists (D7): moving an edge means delete and add.

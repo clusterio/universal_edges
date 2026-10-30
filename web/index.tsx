@@ -2,8 +2,7 @@ import React from "react";
 import * as lib from "@clusterio/lib";
 import type { WebPluginContext } from "@clusterio/web_ui";
 import { EdgeChangedEvent, type EdgeReadiness, type EdgeRecord } from "../edges/contracts.js";
-// No extension: webpack.common maps .js to .ts, not .tsx (packages/web_ui/webpack.common.js).
-import EdgeListPage from "./EdgeListPage";
+import EdgeListPage from "./EdgeListPage.js";
 
 /** What the page shows: every unpurged live edge, and each edge's readiness. */
 export type EdgeRows = { edges: Map<string, EdgeRecord>; readiness: Map<string, EdgeReadiness> };

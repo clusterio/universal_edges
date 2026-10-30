@@ -269,6 +269,7 @@ function simulate(name: string, l: Layout, delay: number, seed: number): Stats {
 	st.removal = w.removals[0];
 	st.moved = w.moved;
 	if (process.env.POWER_MODEL_OUT) {
+		// eslint-disable-next-line node/no-sync
 		appendFileSync(process.env.POWER_MODEL_OUT, `${JSON.stringify(st)}\n`);
 	}
 	return st;
