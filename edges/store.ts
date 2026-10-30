@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import * as lib from "@clusterio/lib";
 import { lifecycle, newId } from "../runtime/index.js";
 import {
-	EdgeSpecSchema,
+	EdgeConflictError, EdgeDeletingError, EdgeInvalidError, EdgeOwnerError, EdgeSpecSchema,
 	type Connector, type ConnectorChange, type ConnectorResult, type EdgeEvent, type EdgeRecord, type EdgeSpec,
 	type Side,
 } from "./contracts.js";
@@ -120,19 +120,19 @@ export class EdgeStore {
 	ensure(spec: EdgeSpec): Promise<EdgeRecord> {
 		const problem = specProblem(spec);
 		if (problem !== undefined) {
-			return Promise.reject(new lib.RequestError(`invalid edge spec: ${problem}`, "EdgeInvalid"));
+			return Promise.reject(new EdgeInvalidError(`invalid edge spec: ${problem}`));
 		}
 		const wanted = { id: spec.id, owner: spec.owner, length: spec.length, a: sideOf(spec.a), b: sideOf(spec.b) };
 		const existing = this.records.get(spec.id);
 		if (existing?.deleted) {
 			const message = `edge ${spec.id} is being deleted; ensure it again once it is purged`;
-			return Promise.reject(new lib.RequestError(message, "EdgeDeleting"));
+			return Promise.reject(new EdgeDeletingError(message));
 		}
 		if (existing) {
 			const { id, owner, length, a, b } = existing;
 			if (!isDeepStrictEqual({ id, owner, length, a, b }, wanted)) {
 				const message = `edge ${spec.id} exists with another spec`;
-				return Promise.reject(new lib.RequestError(message, "EdgeConflict"));
+				return Promise.reject(new EdgeConflictError(message));
 			}
 		} else {
 			const record = this.commit({ ...wanted, deleted: false, connectors: [] }, newId());
@@ -151,7 +151,7 @@ export class EdgeStore {
 		if (r && !r.deleted) {
 			if (r.owner !== owner) {
 				const message = `edge ${id} is owned by ${r.owner}, not ${owner}`;
-				return Promise.reject(new lib.RequestError(message, "EdgeOwner"));
+				return Promise.reject(new EdgeOwnerError(message));
 			}
 			this.tombstone(r, reason);
 		}

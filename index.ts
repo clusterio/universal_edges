@@ -1,8 +1,9 @@
 import type * as lib from "@clusterio/lib";
 import {
-	ConnectorChangeRequest, EdgeActivationEvent, EdgeAppliedEvent, EdgeChangedEvent, EdgeEnsureRequest,
-	EdgeListRequest, EdgePurgedEvent, EdgeRemoveRequest, EdgeSyncEvent, EdgeUpdateEvent, LaneBatchEvent,
-	PlayerCrossRequest, PlayerLeftEvent, PlayerJoinRequest,
+	ConnectorChangeRequest, EdgeActivationEvent, EdgeAppliedEvent, EdgeChangedEvent, EdgeConflictError,
+	EdgeDeletingError, EdgeEnsureRequest, EdgeInvalidError, EdgeListRequest, EdgeOwnerError, EdgePurgedEvent,
+	EdgeRemoveRequest, EdgeSyncEvent, EdgeUpdateEvent, LaneBatchEvent, PlayerCrossRequest, PlayerLeftEvent,
+	PlayerJoinRequest,
 } from "./edges/contracts.js";
 import { PingEvent, RuntimeEvent } from "./messages.js";
 import { RouteDownEvent, RouteUpEvent } from "./routing/contracts.js";
@@ -51,6 +52,7 @@ export const plugin: lib.PluginDeclaration = {
 		SchedUpEvent,
 		SchedDownEvent,
 	],
+	errors: [EdgeInvalidError, EdgeDeletingError, EdgeConflictError, EdgeOwnerError],
 	permissions: [
 		{
 			name: "universal_edges.edges.read",

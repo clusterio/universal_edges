@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import * as lib from "@clusterio/lib";
 import {
 	AppliedPayload, ConnectorChangeRequest, EdgeActivationEvent, EdgeAppliedEvent, EdgeChangedEvent,
-	EdgeEnsureRequest, EdgePurgedEvent, EdgeRecordSchema, EdgeRemoveRequest, EdgeSpecSchema, EdgeSyncEvent,
-	EdgeUpdateEvent, LaneBatchEvent, SyncedPayload, type EdgeRecord, type EdgeSpec,
+	EdgeConflictError, EdgeDeletingError, EdgeEnsureRequest, EdgeInvalidError, EdgeOwnerError, EdgePurgedEvent,
+	EdgeRecordSchema, EdgeRemoveRequest, EdgeSpecSchema, EdgeSyncEvent, EdgeUpdateEvent, LaneBatchEvent, SyncedPayload,
+	type EdgeRecord, type EdgeSpec,
 } from "../../edges/contracts.js";
 import { plugin } from "../../index.js";
 
@@ -90,6 +91,22 @@ test("the plugin declares its messages and permissions in a form Clusterio regis
 	}
 	assert.ok(lib.permissions.has("universal_edges.edges.read"));
 	assert.ok(lib.permissions.has("universal_edges.edges.write"));
+});
+
+test("a refused edge reaches the requester over a link as the same class and code", () => {
+	const refusals = [
+		[new EdgeInvalidError("bad"), EdgeInvalidError, lib.ValidationError, "EdgeInvalid"],
+		[new EdgeDeletingError("bad"), EdgeDeletingError, lib.ConflictError, "EdgeDeleting"],
+		[new EdgeConflictError("bad"), EdgeConflictError, lib.ConflictError, "EdgeConflict"],
+		[new EdgeOwnerError("bad"), EdgeOwnerError, lib.ForbiddenError, "EdgeOwner"],
+	] as const;
+	for (const [sent, Class, Base, code] of refusals) {
+		const received = lib.Link.errorFromResponse(lib.Link.errorToResponse(sent));
+		assert.ok(received instanceof Class, code);
+		assert.ok(received instanceof Base, code);
+		assert.equal((received as { code?: string }).code, code);
+		assert.equal(received.message, "bad");
+	}
 });
 
 test("a lane batch caps every trace at 64 characters, and names its edge and epoch (M3, §11.2)", () => {
