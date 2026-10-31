@@ -100,6 +100,31 @@ export const AppliedPayload = Type.Object({
 /** Lua → TS: a sync's reports are complete; n is how many records the sync held. */
 export const SyncedPayload = Type.Object({ n: Type.Integer({ minimum: 0 }) });
 
+/**
+ * Why the store refused an ensure or remove. `code` is the name the EdgeApi documents, and what its callers branch on:
+ * gridworld's reconciler waits out EdgeDeleting quietly and logs the rest. The link rebuilds these by class, so each is
+ * in the plugin declaration's errors.
+ */
+export class EdgeInvalidError extends lib.ValidationError {
+	static plugin = "universal_edges" as const;
+	code = "EdgeInvalid";
+}
+
+export class EdgeDeletingError extends lib.ConflictError {
+	static plugin = "universal_edges" as const;
+	code = "EdgeDeleting";
+}
+
+export class EdgeConflictError extends lib.ConflictError {
+	static plugin = "universal_edges" as const;
+	code = "EdgeConflict";
+}
+
+export class EdgeOwnerError extends lib.ForbiddenError {
+	static plugin = "universal_edges" as const;
+	code = "EdgeOwner";
+}
+
 /** Controller → instance: every unpurged edge the instance is a side of, tombstones included. Authoritative. */
 export class EdgeSyncEvent {
 	declare ["constructor"]: typeof EdgeSyncEvent;

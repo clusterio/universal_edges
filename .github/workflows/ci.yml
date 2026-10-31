@@ -14,11 +14,12 @@ jobs:
       matrix:
         node-version: [22.x, 24.x, 26.x]
     steps:
-    # Clusterio 2.0 from source: the plugin builds inside Clusterio's pnpm workspace.
+    # Clusterio 2.1 from source: the plugin builds inside Clusterio's pnpm workspace. 2.1 has no tag yet, so this and
+    # the release job build against master. Pin both to the tag once it is out.
     - uses: actions/checkout@v7
       with:
         repository: clusterio/clusterio
-        ref: v2.0.2
+        ref: master
     - uses: actions/checkout@v7
       with:
         path: external_plugins/universal_edges
@@ -47,10 +48,12 @@ jobs:
       run:
         working-directory: external_plugins/universal_edges
     steps:
+    # Don't tag a release until Clusterio's packages are at 2.1: pnpm pack below would write the peer ranges as ^2.0.3,
+    # and this build can't load on 2.0.
     - uses: actions/checkout@v7
       with:
         repository: clusterio/clusterio
-        ref: v2.0.2
+        ref: master
     - uses: actions/checkout@v7
       with:
         path: external_plugins/universal_edges
