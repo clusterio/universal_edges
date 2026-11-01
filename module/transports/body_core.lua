@@ -5,14 +5,15 @@ local geometry = require("modules/universal_edges/edges/geometry_core")
 local core = {}
 
 --- The body of a vehicle captured on side frame. f = { name, quality, type, x, y, orientation, speed, health, color?,
---- label?, state?, inventories, grid?, burning?, destinations?, patrol?, driver?, passenger? }, read by vehicle.lua; rider
---- fields are player names, carried-in ones included (§10.3). Spidertrons keep their destinations, not their speed.
+--- label?, state?, inventories, grid?, burning?, destinations?, patrol?, driver?, passenger?, remote? }, read by vehicle.lua; rider
+--- fields are player names, carried-in ones included (§10.3); remote names the riders holding a spidertron remote.
+--- Spidertrons keep their destinations, not their speed.
 function core.body(frame, f)
 	local x, y = geometry.to_local(frame, f.x, f.y)
 	local b = {
 		v = 1, name = f.name, quality = f.quality, type = f.type, x = x, y = y, o = (f.orientation - frame.facing / 16) % 1,
 		health = f.health, color = f.color, label = f.label, inv = f.inventories, grid = f.grid, burning = f.burning,
-		driver = f.driver, passenger = f.passenger, state = f.state,
+		driver = f.driver, passenger = f.passenger, state = f.state, remote = f.remote,
 	}
 	if f.type ~= "spider-vehicle" then
 		b.speed = f.speed

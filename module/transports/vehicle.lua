@@ -37,6 +37,13 @@ local function name_of(r)
 	return r.player and r.player.name
 end
 
+--- The rider's player when they hold a spidertron remote in their cursor.
+local function holds_remote(r)
+	local p = r and (r.object_name == "LuaPlayer" and r or r.player)
+	local c = p and p.cursor_stack
+	return c and c.valid_for_read and c.type == "spidertron-remote" and p.name or nil
+end
+
 local function occupied(v)
 	return v.get_driver() ~= nil or v.get_passenger() ~= nil
 end
@@ -174,6 +181,20 @@ local function settings(v)
 	return st
 end
 
+--- The spidertron's riders holding a remote, { [name] = true }, nil when none does.
+local function remote_holders(v)
+	local out
+	-- Not ipairs over { driver, passenger }: with no driver that's { nil, passenger }, and ipairs stops at the nil.
+	for _, r in pairs({ v.get_driver() or false, v.get_passenger() or false }) do
+		local name = r and holds_remote(r)
+		if name then
+			out = out or {}
+			out[name] = true
+		end
+	end
+	return out
+end
+
 --- The facts body_core needs, read from v; riders' names live or carried in (§10.3).
 local function facts(v, carried)
 	local inv = {}
@@ -194,6 +215,8 @@ local function facts(v, carried)
 		orientation = v.orientation, speed = v.speed, health = v.health, color = v.color, label = v.entity_label,
 		inventories = inv, grid = v.grid and serialize.serialize_equipment_grid(v.grid), burning = burning,
 		destinations = v.type == "spider-vehicle" and v.autopilot_destinations or nil,
+		-- At a corner's middle tile the riders aren't seated yet: their remote rides on from the waiting seat, as their names do.
+		remote = v.type == "spider-vehicle" and (remote_holders(v) or carried.remote) or nil,
 		patrol = v.type == "spider-vehicle" and v.autopilot_patrol_size or nil,
 		driver = name_of(v.get_driver()) or carried.driver, passenger = name_of(v.get_passenger()) or carried.passenger,
 		state = settings(v),
@@ -277,6 +300,37 @@ function vehicle.restore_body(v, body, dest)
 	end
 end
 
+--- Players whose spidertron crossed with them, name → its unit number here: the next remote they pick up while
+--- riding it steers it (owner 2026-11-01).
+local function pickup()
+	local s = storage.universal_edges
+	s.remote_pickup = s.remote_pickup or {} -- ponytail: created on first use, no schema bump (as players.arriving)
+	return s.remote_pickup
+end
+
+--- Seats target (a LuaPlayer or a character) as role in v. The spider a player steered on the other side is gone, and
+--- their remote here points at whatever they left behind: one held when they crossed is back in hand, pointed at
+--- this spider (set only with a remote in the cursor: an empty hand with a selection acts as a remote); else the next
+--- remote picked up in it points at it (vehicle.on_cursor).
+local function sit(v, role, target, remote)
+	if role == "driver" then
+		v.set_driver(target)
+	else
+		v.set_passenger(target)
+	end
+	local player = target.object_name == "LuaPlayer" and target or target.player
+	if not (player and v.type == "spider-vehicle") then
+		return
+	end
+	local c = player.cursor_stack
+	if remote and c and player.clear_cursor() and c.can_set_stack({ name = "spidertron-remote" }) then
+		c.set_stack({ name = "spidertron-remote" })
+		player.spidertron_remote_selection = { v }
+	else
+		pickup()[player.name] = v.unit_number
+	end
+end
+
 --- Crossing spec §6.4: seat name in the vehicle or carriage waiting for them, once they are placed. A driver sitting
 --- releases a held vehicle. A seat whose vehicle is gone (crossed on, destroyed) is dropped, logged, and the next one
 --- naming them is tried. Returns whether they sat.
@@ -288,11 +342,7 @@ players.seat = function(name, target)
 			local v = game.get_entity_by_unit_number(un)
 			if v and v.valid then
 				-- set_passenger exists only for cars, spidertrons and cargo pods: rolling stock has one seat.
-				if role == "driver" or not vehicle.TYPES[v.type] then
-					v.set_driver(target)
-				else
-					v.set_passenger(target)
-				end
+				sit(v, vehicle.TYPES[v.type] and role or "driver", target, w.remote and w.remote[name])
 				send("trace", { op = "ue.player", phase = "seated", level = "info", tick = game.tick, trace = w.trace,
 					player = name, unit_number = un, seat = role })
 				if role == "driver" then
@@ -386,11 +436,7 @@ connectors.register_type({
 				local name = body[role]
 				local here = name and players.online(name)
 				if here and players.seatable(here) then
-					if role == "driver" then
-						v.set_driver(here)
-					else
-						v.set_passenger(here)
-					end
+					sit(v, role, here, body.remote and body.remote[name])
 					-- M4: seated straight away logs the same as a rider seated later (players.seat, above)
 					send("trace", { op = "ue.player", phase = "seated", level = "info", tick = game.tick,
 						trace = meta.trace, player = name, edge = ep.edge, unit_number = v.unit_number, seat = role })
@@ -424,7 +470,7 @@ connectors.register_type({
 			-- the body's speed for its onward capture (M3), its riders' names riding on in the body, not seated here (I2).
 			v.disabled_by_script = waiting.driver ~= nil or onward
 			s.waiting[un] = { driver = waiting.driver, passenger = waiting.passenger, expires = game.tick + players.WAIT,
-				onward = onward or nil, trace = meta.trace }
+				onward = onward or nil, trace = meta.trace, remote = body.remote }
 		end
 		s.watch[un] = v -- arrived past a line, perhaps (a corner's middle tile): the next pass sends it on, or drops it
 		ep:materialized(dir, v, body.ext, meta)
@@ -516,6 +562,22 @@ function vehicle.watch_selection(list)
 		if sp.valid then
 			storage.universal_edges.watch[sp.unit_number] = sp
 		end
+	end
+end
+
+--- on_player_cursor_stack_changed: a remote picked up in a spidertron that crossed with its rider steers it.
+function vehicle.on_cursor(event)
+	local s = storage.universal_edges.remote_pickup
+	local player = s and next(s) and game.get_player(event.player_index)
+	local un = player and s[player.name]
+	local c = un and player.cursor_stack
+	if not (c and c.valid_for_read and c.type == "spidertron-remote") then
+		return
+	end
+	s[player.name] = nil
+	local v = player.vehicle
+	if v and v.valid and v.unit_number == un then
+		player.spidertron_remote_selection = { v }
 	end
 end
 
