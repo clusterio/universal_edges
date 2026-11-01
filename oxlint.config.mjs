@@ -13,4 +13,13 @@ function swap(pattern) {
 	return pattern.replace("{packages,plugins}/*/", "").replace("{packages,plugins}/", "");
 }
 
-export default { ...base, overrides: base.overrides.map(o => ({ ...o, files: o.files.map(swap) })) };
+// Its JS plugins (@stylistic) resolve from the checkout too: Oxlint looks them up from this file, which in a plugin
+// linked from outside the checkout (this repo's dev tool links it) never reaches the checkout's node_modules.
+const fromRoot = createRequire(path.join(root, "package.json"));
+const resolve = names => names && names.map(name => fromRoot.resolve(name));
+
+export default {
+	...base,
+	jsPlugins: resolve(base.jsPlugins),
+	overrides: base.overrides.map(o => ({ ...o, files: o.files.map(swap), jsPlugins: resolve(o.jsPlugins) })),
+};
