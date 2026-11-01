@@ -184,8 +184,9 @@ end
 --- The spidertron's riders holding a remote, { [name] = true }, nil when none does.
 local function remote_holders(v)
 	local out
-	for _, r in ipairs({ v.get_driver(), v.get_passenger() }) do
-		local name = holds_remote(r)
+	-- Not ipairs over { driver, passenger }: with no driver that's { nil, passenger }, and ipairs stops at the nil.
+	for _, r in pairs({ v.get_driver() or false, v.get_passenger() or false }) do
+		local name = r and holds_remote(r)
 		if name then
 			out = out or {}
 			out[name] = true
@@ -214,7 +215,8 @@ local function facts(v, carried)
 		orientation = v.orientation, speed = v.speed, health = v.health, color = v.color, label = v.entity_label,
 		inventories = inv, grid = v.grid and serialize.serialize_equipment_grid(v.grid), burning = burning,
 		destinations = v.type == "spider-vehicle" and v.autopilot_destinations or nil,
-		remote = v.type == "spider-vehicle" and remote_holders(v) or nil,
+		-- At a corner's middle tile the riders aren't seated yet: their remote rides on from the waiting seat, as their names do.
+		remote = v.type == "spider-vehicle" and (remote_holders(v) or carried.remote) or nil,
 		patrol = v.type == "spider-vehicle" and v.autopilot_patrol_size or nil,
 		driver = name_of(v.get_driver()) or carried.driver, passenger = name_of(v.get_passenger()) or carried.passenger,
 		state = settings(v),
