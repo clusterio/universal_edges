@@ -42,9 +42,10 @@ t.test("body: a spidertron keeps its destinations in order and its patrol size, 
 	local b = { origin = { 64, 0 }, facing = 8, length = 64 }
 	local f = { name = "spidertron", quality = "rare", type = "spider-vehicle", x = 5, y = -1, orientation = 0, speed = 0.2,
 		health = 3000, inventories = {}, destinations = { { x = 5, y = -10 }, { x = 20, y = -20 }, { x = 30, y = -5 } },
-		patrol = 2 }
+		patrol = 2, remote = { hal = true } }
 	local body = core.body(a, f)
 	t.expect_eq(body.speed, nil, "a spider-vehicle's speed isn't writable")
+	t.expect_same(body.remote, { hal = true }, "the riders holding a remote ride on, so it is back in their hand")
 	t.expect_eq(body.patrol, 2)
 	local _, _, _, dest = core.landing(b, body)
 	t.expect_eq(#dest, 3)

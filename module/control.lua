@@ -59,6 +59,7 @@ control.events[defines.events.on_player_controller_changed] = players.guarded(pl
 control.events[defines.events.on_player_driving_changed_state] = players.guarded(vehicle.on_driving, "ue.vehicle")
 control.events[defines.events.on_cargo_pod_finished_descending] = players.guarded(players.on_pod_landed, "ue.player")
 control.events[defines.events.on_player_used_spidertron_remote] = players.guarded(vehicle.on_remote, "ue.vehicle")
+control.events[defines.events.on_player_cursor_stack_changed] = players.guarded(vehicle.on_cursor, "ue.vehicle")
 
 -- Raids and parties walking to a crossing (cross-border biters spec §6.1): their go_to_location ends.
 control.events[defines.events.on_ai_command_completed] = players.guarded(biters.on_command_completed, "ue.raid")
