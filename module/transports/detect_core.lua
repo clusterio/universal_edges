@@ -24,7 +24,8 @@ core.BORDER_TYPES = {
 --- The proposal for entity e = { type, x, y, direction, size } (world centre and direction; size 2 for a 2×2 pole) on
 --- side me with frame (origin, facing, length): { type, col, width, params }, col this side's local column; or nil.
 --- A belt facing outward makes this side the source. A pump lies across the edge with its centre at local y = 1, so
---- its footprint (0, 2) holds the border row and leaves the link tank's tile free (plan ruling 4).
+--- its footprint (0, 2) holds the border row and leaves the link tank's tile free (plan ruling 4). A 2×2 pole stands
+--- against the line (centre y = 1) or across it (y = 0: its own mirror, so one blueprint pastes on both sides).
 function core.propose(me, frame, e)
 	local kind = core.KIND[e.type]
 	if not kind then
@@ -48,7 +49,7 @@ function core.propose(me, frame, e)
 			return nil
 		end
 	elseif kind == "power" and e.size == 2 then
-		if not (y > 0.5 and y < 1.5) then
+		if not (y > -0.5 and y < 1.5) then
 			return nil
 		end
 		col, width = math.floor(x + 0.5) - 1, 2
