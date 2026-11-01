@@ -41,7 +41,7 @@ t.test("detect: ends — columns outside [0, L - width] are ignored", function()
 	t.expect_eq(core.propose("a", f, at(f, "electric-pole", L - 1, 1, 0, 2)).col, L - 2)
 end)
 
-t.test("detect: pipes, pipe-to-ground and 1×1 poles in the row; pumps across it at y = 1; 2×2 poles at y = 1", function()
+t.test("detect: pipes, pipe-to-ground and 1×1 poles in the row; pumps across it at y = 1; 2×2 poles at y = 1 or 0", function()
 	for _, facing in ipairs(FACINGS) do
 		local f = frame(facing)
 		t.expect_same(core.propose("a", f, at(f, "pipe-to-ground", 5.5, 0.5, 4)),
@@ -54,6 +54,9 @@ t.test("detect: pipes, pipe-to-ground and 1×1 poles in the row; pumps across it
 		t.expect_same(core.propose("a", f, at(f, "electric-pole", 8, 1, 0, 2)),
 			{ type = "power", col = 7, width = 2, params = {} }, "a substation over columns 7 and 8")
 		t.expect_eq(core.propose("a", f, at(f, "electric-pole", 8, 2, 0, 2)), nil, "a 2×2 pole one row in")
+		t.expect_same(core.propose("a", f, at(f, "electric-pole", 8, 0, 0, 2)),
+			{ type = "power", col = 7, width = 2, params = {} }, "a substation across the line, its own mirror")
+		t.expect_eq(core.propose("a", f, at(f, "electric-pole", 8, -1, 0, 2)), nil, "a 2×2 pole wholly outside")
 		t.expect_eq(core.propose("a", f, at(f, "assembling-machine", 7.5, 0.5)), nil, "not a detected type")
 	end
 end)

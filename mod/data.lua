@@ -40,6 +40,10 @@ local function interface(name, priority, buffer)
 	local i = table.deepcopy(data.raw["electric-energy-interface"]["electric-energy-interface"])
 	i.name, i.hidden, i.minable, i.flags = name, true, nil, NOFLAGS
 	i.collision_box, i.selection_box = { { -0.35, -0.35 }, { 0.35, 0.35 } }, { { -0.5, -0.5 }, { 0.5, 0.5 } }
+	-- collides with nothing and can't be selected: a 2×2 pole across the line covers the link interface's tile, the
+	-- partner's interface is often there before the player places that side's pole (power_game_test.lua), and the pole,
+	-- not the interface, must take the hover over that tile
+	i.selectable_in_game, i.collision_mask = false, { layers = {} }
 	i.energy_source = { type = "electric", usage_priority = priority, buffer_capacity = buffer,
 		input_flow_limit = "1TW", output_flow_limit = "1TW" }
 	i.energy_production, i.energy_usage, i.gui_mode = "0W", "0W", "none"

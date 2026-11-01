@@ -6,6 +6,7 @@ local layouts = require("modules/v2_test/layouts")
 local MODE = defines.electric_interface_mode
 
 local connectors = require("modules/universal_edges/edges/connectors")
+local geometry = require("modules/universal_edges/edges/geometry_core")
 local bridge = require("modules/universal_edges/runtime/bridge")
 
 local function ep(edge, cid)
@@ -132,6 +133,35 @@ local function reported(key, from, to, first)
 	end
 	return found
 end
+
+-- A 2×2 pole across the line (owner, 2026-11-01): centred on it, it is its own mirror, so one blueprint pastes on both
+-- tiles. Each side's interface stands inside that pole's footprint. Side a's pole is there before its interface; side b's
+-- interface is there before its pole, which a player must still be able to place over it.
+t.case("power: a substation across the line takes the link's interface on its network, on either side, in either " ..
+	"order", function(ctx)
+	local fa, fb, sa, sb
+	ctx.at(500, function()
+		fa, fb = layouts.edge(loop, "ph-across", 27800, 12, { { cid = "c1", type = "power", pos = 2, width = 2, params = {} } }, 12)
+		sa = layouts.put(fa, "substation", 3, 0)
+	end)
+	ctx.at(700, function()
+		local x, y = pair("ph-across")
+		ctx.expect(x ~= nil, "the pair is ready")
+		ctx.expect(eei(x) ~= nil and eei(x).electric_network_id == sa.electric_network_id,
+			"side a's interface, made under its substation, is on its network")
+		local bx, by = geometry.flip(12, 3, 0) -- side b counts its columns from the other end
+		local wx, wy = geometry.to_world(fb, bx, by)
+		ctx.expect(y ~= nil and eei(y) ~= nil and game.surfaces.nauvis.can_place_entity({ name = "substation",
+			position = { wx, wy }, force = "player", build_check_type = defines.build_check_type.manual }),
+			"a player can place side b's substation over its interface")
+		sb = layouts.put(fb, "substation", bx, by)
+	end)
+	ctx.at(701, function()
+		local _, y = pair("ph-across")
+		ctx.expect(y ~= nil and eei(y) ~= nil and eei(y).electric_network_id == sb.electric_network_id,
+			"side b's interface is on its substation's network")
+	end)
+end)
 
 -- §5, spike 45 P1 and P6: a strip of its own at y 3500 (no edge), so no poll touches its interface.
 t.case("power hub: ue-link-interface and the test source are dynamic: new ones start in tertiary_input_output, and " ..
