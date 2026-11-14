@@ -148,6 +148,16 @@ t.case("arrival: a first-time player (never left) is not guarded; a move into a 
 	end)
 end)
 
+t.case("arrival: a pod rider's moves don't cross from the pod's departure until it lands (spike 51)", function(ctx)
+	ctx.at(2138, function()
+		players.pod_left("pd")
+		ctx.expect(players.arriving("pd"), "pd: in flight")
+		ctx.expect(ue_rt.player_move("pd", "nauvis", 7326.5, 2501.5) == nil, "pd: the surface switch's move doesn't cross")
+		players.settle("pd") -- on_pod_landed's step; it needs a LuaPlayer, and none exists in a game test
+		ctx.expect(ue_rt.player_move("pd", "nauvis", 7326.5, 2501.5) ~= nil, "pd: landed, a move into the zone crosses")
+	end)
+end)
+
 t.case("arrival: a respawn ends the guard, and a move into a zone then crosses (spec §5.1 End)", function(ctx)
 	ctx.at(2136, function()
 		players.away_all({ "rs" })
