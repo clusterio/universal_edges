@@ -17,6 +17,9 @@ local sync = require("modules/universal_edges/schedules/sync") -- train group sy
 local train = {}
 -- ponytail: the boxes and spawned trains belong to the "player" force; carry the force in the body if a map uses others.
 train.FORCE = "player"
+-- A train whose seat waits for its rider stays in the next outbound box this long (60 s, owner 2026-11-21), so the
+-- rider can finish joining this server before it crosses on. Past it the train goes, and the rider is dropped here.
+train.RIDER_HOLD = 3600
 train.STOCK = { "locomotive", "cargo-wagon", "fluid-wagon", "artillery-wagon" }
 local SIGNAL = defines.signal_state
 local send = bridge.channel("universal_edges")
@@ -518,7 +521,18 @@ local function seat(ep, c, e, trace)
 		players.settle(name) -- the arrival guard ends too (crossing-arrival spec §5.1)
 	else
 		storage.universal_edges.waiting[e.unit_number] = { driver = name, expires = game.tick + players.WAIT,
-			trace = trace }
+			hold = game.tick + train.RIDER_HOLD, trace = trace }
+	end
+end
+
+--- The first rider train tr's outbound box still holds it for: a seat waiting for them, its hold not run out.
+local function held_for(tr)
+	local waiting = storage.universal_edges.waiting
+	for _, c in pairs(tr.carriages) do
+		local w = waiting[c.unit_number]
+		if w and w.driver and w.hold and game.tick < w.hold then
+			return w.driver
+		end
 	end
 end
 
@@ -974,10 +988,21 @@ function train.capture(ep, d, tr, side)
 			qep, q = other, oq
 		end
 	end
+	-- A rider whose carriage is still queued is bound for this server: it rides on empty, and commit drops them here, on
+	-- foot at their crossing point (owner 2026-11-21). The queue keeps its riders, for a restore that resumes the joins.
+	local dropped = {}
 	if q then
 		for i = q.next, #q.carriages do
-			q.carriages[i].riders = nil -- ponytail: a rider still queued is bound for this server; it lands as for limbo
-			body.carriages[#body.carriages + 1] = q.carriages[i]
+			local c = q.carriages[i]
+			if c.riders then
+				dropped[#dropped + 1] = c.riders.driver
+				local copy = {}
+				for k, v in pairs(c) do
+					copy[k] = v
+				end
+				copy.riders, c = nil, copy
+			end
+			body.carriages[#body.carriages + 1] = c
 		end
 	end
 	local seq = ep:send(ep.params.dir, body)
@@ -1000,8 +1025,8 @@ function train.capture(ep, d, tr, side)
 	if q then
 		q.handed = true
 	end
-	d.held = { seq = seq, carriages = held, riders = riders, queue = qep and qep.key }
-	d.last, d.waiting, d.logged = { seq = seq, epoch = side.epoch }, nil, nil
+	d.held = { seq = seq, carriages = held, riders = riders, queue = qep and qep.key, dropped = dropped }
+	d.last, d.waiting, d.logged, d.rider_logged = { seq = seq, epoch = side.epoch }, nil, nil, nil
 end
 
 --- The inbound endpoint and queue whose tail held train h carries on, if any.
@@ -1027,7 +1052,7 @@ local function poll_outbound(ep, d)
 		-- 20 ticks), and that second train is then held at the hold signal for good, uncaptured, with no "waiting"
 		-- line logged (the early return above fires before the log at :727). Rare; the owner's rule accepts it.
 		-- Upgrade: clear the mark on a reserved read too, not only open.
-		d.waiting, d.logged, d.rejected = nil, nil, nil
+		d.waiting, d.logged, d.rejected, d.rider_logged = nil, nil, nil, nil
 		return
 	end
 	if d.rejected or not ep:can_send(ep.params.dir) then
@@ -1045,6 +1070,14 @@ local function poll_outbound(ep, d)
 			return
 		end
 		d.waiting = found
+	end
+	local waits_for = held_for(found.train)
+	if waits_for then
+		if not d.rider_logged then
+			d.rider_logged = true
+			train.event(ep, "rider_wait", "info", { player = waits_for })
+		end
+		return
 	end
 	local side = storage.universal_edges.edges[ep.edge]
 	if not core.gate(ep.partner.status, d.last, side.epoch) then
@@ -1071,8 +1104,16 @@ local function commit(ep, _, seq, trace)
 	-- The riders' crossing point: the box's border point, 1 tile past the line at its column, which mirrors to just
 	-- inside the partner. A carriage from the third on stands inside this world: its own position mirrors out of reach.
 	local bx, by = train.world(ep, train.cx(ep), -1)
+	local waiting = storage.universal_edges.waiting
+	local dropped = { table.unpack(h.dropped or {}) } -- or {}: a train held across the deploy that added it
 	for i, c in ipairs(h.carriages) do
 		if c.valid then
+			-- A seat still waiting leaves empty: its rider, not here in time, is dropped here (owner 2026-11-21).
+			local w = waiting[c.unit_number]
+			if w and w.driver then
+				waiting[c.unit_number] = nil
+				dropped[#dropped + 1] = w.driver
+			end
 			local name = h.riders and h.riders[i]
 			if name then
 				-- H3: held: the rider stands where the carriage stood, inside the world from the third carriage on; a
@@ -1088,6 +1129,10 @@ local function commit(ep, _, seq, trace)
 		train.event(qep, "handed_on", "info", { trace = q.trace, carriages = #q.carriages - q.next + 1, to = ep.cid })
 	end
 	d.held = nil
+	-- Last, once the train is wholly gone from here: a raise in a drop can't leave a second copy of it standing.
+	for _, name in ipairs(dropped) do
+		players.dropped(name, trace)
+	end
 end
 
 --- Restore (§12.7). On close (ep.closing; teardown has run) the train is let go: it never left. On a reject it goes to
