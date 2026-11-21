@@ -38,5 +38,5 @@ export async function loadDataFile(file: string, migrations: Migration[]): Promi
 
 /** Write `{ schema: latest, data }` atomically (spec §7.4). */
 export async function saveDataFile(file: string, migrations: Migration[], data: unknown): Promise<void> {
-	await lib.safeOutputFile(file, JSON.stringify({ schema: migrations.length + 1, data }, null, "\t"));
+	await lib.atomicOverwriteFile(file, JSON.stringify({ schema: migrations.length + 1, data }, null, "\t"));
 }
