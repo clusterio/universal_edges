@@ -7,8 +7,18 @@ import {
 /** The parts of clusterioctl's plugin context this entrypoint uses (CtlPluginContext lives in @clusterio/ctl). */
 type CtlContext = { hooks: { addCommands: lib.AsyncHook<[lib.CommandTree]> }; plugin: { name: string } };
 
-function out(text: string) {
-	process.stdout.write(`${text}\n`);
+/**
+ * Print a line of the command's result. Through clusterioctl's output (2.1, clusterio/clusterio#1230), so ctl doesn't
+ * add "Command ran successfully" after it; a plain write on a ctl without one.
+ */
+function out(control: lib.Link, text: string) {
+	const write = () => process.stdout.write(`${text}\n`);
+	const output = (control as lib.Link & { output?: { result(data: unknown, human: () => void): void } }).output;
+	if (output) {
+		output.result(text, write);
+	} else {
+		write();
+	}
 }
 
 function parseJson(text: string, what: string): any {
@@ -35,7 +45,7 @@ edgeCommands.add(new lib.Command({
 	handler: async (args: { specJson: string }, control: lib.Link) => {
 		const spec = { owner: "manual", ...parseJson(args.specJson, "spec-json") };
 		const response = await control.send(new EdgeEnsureRequest(spec));
-		out(JSON.stringify(response.edge));
+		out(control, JSON.stringify(response.edge));
 	},
 }));
 edgeCommands.add(new lib.Command({
@@ -54,11 +64,11 @@ edgeCommands.add(new lib.Command({
 	handler: async (args: { json: boolean }, control: lib.Link) => {
 		const { edges } = await control.send(new EdgeListRequest());
 		if (args.json) {
-			out(JSON.stringify(edges));
+			out(control, JSON.stringify(edges));
 			return;
 		}
 		for (const edge of edges) {
-			out(line(edge));
+			out(control, line(edge));
 		}
 	},
 }));
@@ -85,7 +95,7 @@ connectorCommands.add(new lib.Command({
 		if (!result.ok) {
 			throw new lib.CommandError(`connector rejected: ${result.reason}`);
 		}
-		out(result.cid ?? "");
+		out(control, result.cid ?? "");
 	},
 }));
 connectorCommands.add(new lib.Command({
