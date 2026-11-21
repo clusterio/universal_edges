@@ -5,8 +5,9 @@ local connectors = require("modules/universal_edges/edges/connectors")
 local lanes = require("modules/universal_edges/edges/lanes")
 local train = require("modules/universal_edges/transports/train")
 local seams = require("modules/universal_edges/transports/train_seams")
+local players = require("modules/universal_edges/transports/players")
 
--- Rows 40000-43200 of "sp3b", ticks 600-2100. Each outbound connector sends on ab to a scripted partner. The partner's
+-- Rows 40000-44800 of "sp3b", ticks 600-2100. Each outbound connector sends on ab to a scripted partner. The partner's
 -- ep message carries the gate's status (§12.3), and its u.reply settles the crossing. The capture runs in the poll,
 -- so its offer leaves the same tick: the steps read the endpoint's ledger and ep.data instead. The reply's handler
 -- runs in the step, so its events wait in the bridge's queue.
@@ -434,4 +435,132 @@ t.case("trains: a rider past the third carriage still crosses at commit, though 
 			ctx.expect(storage.universal_edges.players.pending[rider_name] ~= nil, "a move inside leaves the held crossing alone")
 			ctx.expect(not outer.valid, "commit destroyed the carriage it crossed")
 		end)
+	end)
+
+-- Rider hold (owner 2026-11-21): rows 44000-44800, ticks 618-1500. A seat waiting for its rider is set by hand, as
+-- seat() leaves it for a rider still joining (trains_spawn_game_test covers seat() itself).
+local function wait_seat(c, name, hold)
+	storage.universal_edges.waiting[c.unit_number] = { driver = name, expires = game.tick + 36000, hold = game.tick + hold,
+		trace = "rh" }
+end
+
+local function player_events(phase, name)
+	local n = 0
+	for _, m in ipairs(storage.universal_edges.bridge.out.universal_edges or {}) do
+		local p = m.payload
+		if m.type == "trace" and p.op == "ue.player" and p.phase == phase and p.player == name then
+			n = n + 1
+		end
+	end
+	return n
+end
+
+local inbox_seq = 0
+local function deliver(msg_type, payload)
+	inbox_seq = inbox_seq + 1
+	ue_rt.inbox("universal_edges", helpers.table_to_json({ { id = "0000c4ba." .. inbox_seq, type = msg_type, payload = payload } }))
+end
+
+t.case("trains: a seat waiting for its rider holds the train in the outbound box until they sit", function(ctx)
+	local id, wagon = "sp3b-rider-hold", nil
+	live(ctx, 618, id, 44000, { ready = true })
+	ctx.at(638, function()
+		seams.add(id, "t1", { layout = "LCC", at = 40, next = "SP3B NEXT", speed = 1 })
+		wagon = seams.trains(id, "t1")[1].carriages[2]
+		wait_seat(wagon, "rh-a", 100000)
+	end)
+	ctx.at(1000, function()
+		local ep, tr = ep_of(id), seams.trains(id, "t1")[1]
+		ctx.expect(ep.data.held == nil and ep.tx.ab.inflight == nil, "not captured while the seat waits")
+		ctx.expect(held_at(ep, tr, ep.data.hold, MARGIN), "parked at the hold signal")
+		ctx.expect(ep.data.rider_logged == true, "ue.train rider_wait logged, marked so it logs once")
+		storage.universal_edges.waiting[wagon.unit_number] = nil -- the rider sat (players.seat clears it)
+	end)
+	ctx.at(1060, function()
+		ctx.expect(ep_of(id).data.held ~= nil, "captured once nothing waits")
+		reply(id, "credited")
+		ctx.expect(player_events("dropped", "rh-a") == 0, "nobody dropped")
+	end)
+	ctx.expect_ipc("universal_edges:out", '"phase":"rider_wait"')
+end)
+
+t.case("trains: past its hold the train crosses on; commit drops the rider, told once they're placed", function(ctx)
+	local id, wagon, body = "sp3b-rider-ttl", nil, nil
+	live(ctx, 620, id, 44400, { ready = true })
+	ctx.at(640, function()
+		seams.add(id, "t1", { layout = "LCC", at = 40, next = "SP3B NEXT", speed = 1 })
+		wagon = seams.trains(id, "t1")[1].carriages[2]
+		wait_seat(wagon, "rh-b", 600) -- runs out at tick 1240
+	end)
+	ctx.at(1200, function()
+		ctx.expect(ep_of(id).data.held == nil, "still held for the rider at 1200")
+	end)
+	ctx.at(1300, function()
+		local ep = ep_of(id)
+		ctx.expect(ep.data.held ~= nil, "captured once the hold ran out")
+		local un = wagon.unit_number
+		reply(id, "credited")
+		ctx.expect(storage.universal_edges.waiting[un] == nil, "the seat left with the train")
+		ctx.expect(player_events("dropped", "rh-b") == 1, "ue.player dropped")
+		ctx.expect(storage.universal_edges.players.dropped["rh-b"] ~= nil, "kept for their placing: they aren't here yet")
+		-- They join: placed (no arrival entry: pulled inside), not seated, so told, and the mark goes.
+		local sx, sy = train.world(ep, train.cx(ep) + 6, 3)
+		body = game.get_surface(ep.frame.surface_index).create_entity{ name = "character", position = { sx, sy }, force = "player" }
+		ue_rt.player_join("rh-b", body.unit_number)
+		deliver("ue.player.arrival", { player = "rh-b" })
+	end)
+	ctx.at(1303, function()
+		ctx.expect(storage.universal_edges.players.dropped["rh-b"] == nil, "told at their placing, the mark cleared")
+		body.destroy()
+	end)
+end)
+
+t.case("trains: a rider still queued rides on empty and is dropped at commit; the queue keeps them for a restore",
+	function(ctx)
+		local id, q = "sp3b-rider-queued", nil
+		live(ctx, 622, id, 44800, { ready = true })
+		ctx.at(642, function()
+			seams.add(id, "t1", { layout = "LC", at = 40, next = "SP3B NEXT", speed = 1 })
+			-- This train's tail still queued behind an inbound box (credit's d.queue): set by hand, on this endpoint,
+			-- with no join scheduled, so it stays queued until the capture carries it on.
+			q = { front = seams.trains(id, "t1")[1].front_stock, next = 1, started = game.tick, trace = "rq",
+				carriages = { { name = "cargo-wagon", quality = "normal", flip = false, riders = { driver = "rh-c" } } } }
+			ep_of(id).data.queue = q
+		end)
+		ctx.at(1000, function()
+			local ep = ep_of(id)
+			ctx.expect(ep.data.held ~= nil and q.handed, "captured with the queued tail")
+			ctx.expect(ep.data.held.dropped[1] == "rh-c" and ep.data.held.riders[3] == nil,
+				"its rider rides on empty, kept to drop at commit")
+			ctx.expect(q.carriages[1].riders.driver == "rh-c", "the queue keeps its rider, for a restore")
+			reply(id, "credited")
+			ctx.expect(ep.data.queue == nil and events(id, "handed_on") == 1, "the queue handed on")
+			ctx.expect(player_events("dropped", "rh-c") == 1, "ue.player dropped")
+			-- Already standing here: told at once, nothing kept.
+			local sx, sy = train.world(ep, train.cx(ep) + 6, 3)
+			local body = game.get_surface(ep.frame.surface_index).create_entity{ name = "character", position = { sx, sy }, force = "player" }
+			storage.universal_edges.players.stand_in = storage.universal_edges.players.stand_in or {}
+			storage.universal_edges.players.stand_in["rh-d"] = body.unit_number
+			players.dropped("rh-d", "rq")
+			ctx.expect(storage.universal_edges.players.dropped["rh-d"] == nil, "an online rider is told at once")
+			body.destroy()
+		end)
+	end)
+
+t.case("trains: a train seat whose wait runs out (players.WAIT) while its train still stands here drops its rider, told",
+	function(ctx)
+		local id, wagon = "sp3b-rider-wait-out", nil
+		live(ctx, 624, id, 45200, { ready = true })
+		ctx.at(644, function()
+			seams.add(id, "t1", { layout = "LCC", at = 40, next = "SP3B NEXT", speed = 1 })
+			wagon = seams.trains(id, "t1")[1].carriages[2]
+			wait_seat(wagon, "rh-e", 100000) -- held for good: the wait below runs out first
+			storage.universal_edges.waiting[wagon.unit_number].expires = game.tick + 300
+		end)
+		ctx.at(1100, function()
+			ctx.expect(storage.universal_edges.waiting[wagon.unit_number] == nil, "the seat went with its wait")
+			ctx.expect(storage.universal_edges.players.dropped["rh-e"] ~= nil, "dropped, kept for their placing")
+			storage.universal_edges.players.dropped["rh-e"] = nil
+		end)
+		ctx.expect_ipc("universal_edges:out", '"player":"rh-e"')
 	end)

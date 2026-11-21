@@ -33,7 +33,7 @@ return {
 	-- failures' log times (the arrival record is the controller's); the vehicle watch, rejected vehicles, and the seats
 	-- waiting for riders by unit number, vehicles and carriages alike (§6.4).
 	function(state)
-		state.players = { pending = {}, placing = {}, hook_failed = {} }
+		state.players = { pending = {}, placing = {}, hook_failed = {}, dropped = {} }
 		state.watch = {}
 		state.rejected = {}
 		state.waiting = {}

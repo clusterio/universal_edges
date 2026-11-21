@@ -40,7 +40,7 @@ t.test("migration 4 adds the players, watch, rejected and waiting tables and kee
 	state.edges.e1 = { id = "e1", eps = {} }
 	local after = core.run(state, { schema[1], schema[2], schema[3], schema[4] })
 	t.expect_eq(after.schema, 4)
-	t.expect_same(after.players, { pending = {}, placing = {}, hook_failed = {} })
+	t.expect_same(after.players, { pending = {}, placing = {}, hook_failed = {}, dropped = {} })
 	t.expect_same({ after.watch, after.rejected, after.waiting }, { {}, {}, {} })
 	t.expect_eq(after.edges.e1.id, "e1")
 end)
@@ -50,7 +50,7 @@ t.test("a fresh state reaches schema 11 through migrations 1 to 11, in its final
 	local state = core.run({ schema = 0 }, schema)
 	storage = nil
 	t.expect_eq(state.schema, 11)
-	t.expect_same(state.players, { pending = {}, placing = {}, hook_failed = {} })
+	t.expect_same(state.players, { pending = {}, placing = {}, hook_failed = {}, dropped = {} })
 	t.expect_same({ state.watch, state.rejected, state.waiting }, { {}, {}, {} })
 	t.expect_eq(state.frozen, nil)
 	t.expect_same(state.biters, { walking = {}, oracles = {}, targets = {} })

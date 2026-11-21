@@ -484,6 +484,28 @@ players.seat = function()
 	return false
 end
 
+players.DROPPED = "Your train left before you arrived, so you're on foot."
+
+--- A dropped rider's chat line. A test's stand-in character has no chat: the trace's "dropped" line is the record.
+local function tell(target)
+	if target.object_name == "LuaPlayer" then
+		target.print(players.DROPPED)
+	end
+end
+
+--- A train rider whose seat crossed on without them (owner 2026-11-21): they stay on this server, on foot where their
+--- arrival places them, and are told once placed. Told now if they're already standing here.
+function players.dropped(name, id)
+	emit("dropped", "info", id, { player = name })
+	local target = players.online(name)
+	if target and players.seatable(target) then
+		tell(target)
+	else
+		-- ponytail: one entry per rider still joining, cleared at their next placing; one who never comes keeps theirs
+		state().dropped[name] = game.tick + players.WAIT
+	end
+end
+
 --- §6.1–6.4: name has a body here. Placed from their arrival (the leave point within reach, else the crossing point),
 --- or pulled inside when there is none, then seated if a vehicle waits for them.
 function players.place(name)
@@ -523,8 +545,16 @@ function players.place(name)
 		players.pull_in(name, target)
 	end
 	players.settle(name) -- placed: their crossings count again (spec §5.1)
-	if players.seat(name, target) then
+	local sat = players.seat(name, target)
+	if sat then
 		s.placing[name] = nil
+	end
+	local until_tick = s.dropped[name]
+	if until_tick then
+		s.dropped[name] = nil
+		if not sat and game.tick <= until_tick then
+			tell(target)
+		end
 	end
 end
 

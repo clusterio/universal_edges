@@ -110,6 +110,9 @@ local watch = players.guarded(function(tick)
 	end
 	for un, f in pairs(s.waiting) do
 		if tick >= f.expires then
+			if f.hold and f.driver then -- a train seat (only those have a hold): its rider is dropped, and told so
+				players.dropped(f.driver, f.trace)
+			end
 			vehicle.release(un, "ttl", true)
 		end
 	end
