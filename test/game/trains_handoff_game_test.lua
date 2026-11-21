@@ -458,7 +458,7 @@ end
 local inbox_seq = 0
 local function deliver(msg_type, payload)
 	inbox_seq = inbox_seq + 1
-	ue_rt.inbox("universal_edges", helpers.table_to_json({ { id = "0000c4ba." .. inbox_seq, type = msg_type, payload = payload } }))
+	ue_rt.inbox("universal_edges", helpers.table_to_json({ { id = "0000c4be." .. inbox_seq, type = msg_type, payload = payload } }))
 end
 
 t.case("trains: a seat waiting for its rider holds the train in the outbound box until they sit", function(ctx)
