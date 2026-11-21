@@ -428,10 +428,17 @@ function players.on_pod_left(event)
 	end
 end
 
+--- The landing ends the pod's guard, unless the rider left mid-flight: they stay away (true), as the pod lands without them.
+function players.pod_landed(name)
+	if type(guard()[name]) == "number" then
+		players.settle(name)
+	end
+end
+
 function players.on_pod_landed(event)
 	local player = event.player_index and game.get_player(event.player_index)
 	if player then
-		players.settle(player.name) -- before rescue, which skips an arriving player
+		players.pod_landed(player.name) -- before rescue, which skips an arriving player
 	end
 	if player and player.character then
 		players.rescue(player.name, player.character)

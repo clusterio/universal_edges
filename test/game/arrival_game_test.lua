@@ -153,8 +153,19 @@ t.case("arrival: a pod rider's moves don't cross from the pod's departure until 
 		players.pod_left("pd")
 		ctx.expect(players.arriving("pd"), "pd: in flight")
 		ctx.expect(ue_rt.player_move("pd", "nauvis", 7326.5, 2501.5) == nil, "pd: the surface switch's move doesn't cross")
-		players.settle("pd") -- on_pod_landed's step; it needs a LuaPlayer, and none exists in a game test
+		players.pod_landed("pd")
 		ctx.expect(ue_rt.player_move("pd", "nauvis", 7326.5, 2501.5) ~= nil, "pd: landed, a move into the zone crosses")
+	end)
+end)
+
+t.case("arrival: a pod rider who leaves mid-flight is still away after the pod lands", function(ctx)
+	ctx.at(2139, function()
+		players.pod_left("pl")
+		players.leave("pl", 1, "nauvis", 0.5, 0.5)
+		players.pod_landed("pl")
+		ctx.expect(players.arriving("pl"), "pl: the landing kept the away guard")
+		players.joined("pl")
+		ctx.expect(ue_rt.player_move("pl", "nauvis", 7326.5, 2501.5) == nil, "pl: rejoined, held until placed")
 	end)
 end)
 
