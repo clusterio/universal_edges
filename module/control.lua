@@ -57,6 +57,7 @@ control.events[defines.events.on_player_controller_changed] = players.guarded(pl
 
 -- Vehicles crossing with their riders (SP3 spec §10): a driver change, and a spidertron remote's selection.
 control.events[defines.events.on_player_driving_changed_state] = players.guarded(vehicle.on_driving, "ue.vehicle")
+control.events[defines.events.on_cargo_pod_finished_ascending] = players.guarded(players.on_pod_left, "ue.player")
 control.events[defines.events.on_cargo_pod_finished_descending] = players.guarded(players.on_pod_landed, "ue.player")
 control.events[defines.events.on_player_used_spidertron_remote] = players.guarded(vehicle.on_remote, "ue.vehicle")
 control.events[defines.events.on_player_cursor_stack_changed] = players.guarded(vehicle.on_cursor, "ue.vehicle")

@@ -414,8 +414,32 @@ function players.rescue(name, target)
 	return bring_in(name, target, surface, p)
 end
 
+--- Spike 51: as a pod switches surfaces, one on_player_changed_position comes with the rider in their character and
+--- out of the pod (cargo_pod nil), about 240 north and 120 east of the landing point, so off_body can't see it. The
+--- arrival guard holds their crossings from the pod's departure until it lands, PLACING ticks at most.
+function players.pod_left(name)
+	guard()[name] = game.tick + players.PLACING
+end
+
+function players.on_pod_left(event)
+	local player = event.player_index and game.get_player(event.player_index)
+	if player then
+		players.pod_left(player.name)
+	end
+end
+
+--- The landing ends the pod's guard, unless the rider left mid-flight: they stay away (true), as the pod lands without them.
+function players.pod_landed(name)
+	if type(guard()[name]) == "number" then
+		players.settle(name)
+	end
+end
+
 function players.on_pod_landed(event)
 	local player = event.player_index and game.get_player(event.player_index)
+	if player then
+		players.pod_landed(player.name) -- before rescue, which skips an arriving player
+	end
 	if player and player.character then
 		players.rescue(player.name, player.character)
 	end
