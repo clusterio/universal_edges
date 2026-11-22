@@ -350,3 +350,79 @@ test("S7: the deactivated end is in the built state throughout; the removed link
 			s => `removal ${JSON.stringify(s.removal)}`);
 	}
 });
+
+// #38: one relay tile's polls driven directly, with fixed targets (the hub never drives a relay to its debt cap in
+// these layouts, so the scenarios above can't show it). Network 1 relays to networks 2..k+1; its inflow lands once a
+// second; each link's lane is idle at its poll. Returns each link's kJ sent a second, the largest owe over its cap (J)
+// and the ledger error (J).
+type Relay = {
+	n: number[]; b: number; owe?: number[]; inflow: number; phase: number[]; jitter?: boolean; drain?: number;
+};
+function relay(o: Relay) {
+	const links = o.n.map((_, i): [number, number] => [0, i + 1]);
+	const w = new World({ nets: o.n.map(() => ({})).concat([{}]), links, delay: 1, seed: 1 });
+	const net = w.nets[0];
+	const ends = o.n.map((_, i) => w.end(i, 0));
+	ends.forEach((e, i) => {
+		e.n = o.n[i];
+		e.b = o.b;
+		e.buf = 1000 * o.b;
+		e.owe = o.owe?.[i] ?? 0;
+	});
+	let seed = 7;
+	const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+	const next = o.phase.slice();
+	const secs = 120;
+	let over = 0;
+	let flow = -(o.owe ?? []).reduce((s, x) => s + x, 0);
+	for (let t = 0; t < secs * 60; t++) {
+		w.tick = t;
+		const p = net.pool();
+		if (t % 60 === 10) {
+			net.write(p.a + o.inflow, p.c);
+			flow += o.inflow;
+		} else if (o.drain) {
+			const d = Math.min(p.a, o.drain);
+			net.write(p.a - d, p.c);
+			flow -= d;
+		}
+		for (let i = 0; i < ends.length; i++) {
+			const e = ends[i];
+			if (t === next[i]) {
+				next[i] = t + (o.jitter ? 45 + Math.floor(rand() * 31) : 60); // lanes.lua's 3/4 rule: as early as 45
+				e.tat = t;
+				e.acked = e.sent;
+				w.poll(e);
+				over = Math.max(over, e.owe - 1000 * e.b);
+			}
+		}
+	}
+	const sent = ends.reduce((s, e) => s + e.sent, 0);
+	const err = net.pool().a - ends.reduce((s, e) => s + e.owe, 0) - (flow - 1000 * sent);
+	return { rate: ends.map(e => e.sent / secs), over, err };
+}
+
+// The live numbers in #38, every link already at its 10 GJ cap: 9,973 MW in, 16,471 MW asked for.
+const LIVE = { n: [4447312, 4447312, 76773, 7500000], b: 1e7, owe: [1e10, 1e10, 1e10, 1e10], inflow: 9973e6 };
+for (const [name, phase, jitter] of [["in poll order", [12, 14, 16, 40], false], ["reversed", [40, 44, 48, 12], false],
+	["polls 45-75 ticks apart", [12, 14, 16, 40], true]] as const) {
+	test(`#38: a short relay at its debt cap shares its inflow by n, ${name}`, () => {
+		const r = relay({ ...LIVE, phase: [...phase], jitter });
+		const share = LIVE.inflow / 1000 / LIVE.n.reduce((s, x) => s + x, 0);
+		const got = r.rate.map((x, i) => x / LIVE.n[i]);
+		const parts = got.map(x => x.toFixed(3)).join(", ");
+		assert.ok(got.every(x => Math.abs(x - share) < 0.03), `parts of n near ${share.toFixed(3)}: ${parts}`);
+		assert.ok(Math.abs(r.err) < 1, `conserved: ${r.err} J`);
+	});
+}
+
+test("#38: the tile's own draw between a budget and a poll never takes a link past its debt cap", () => {
+	const r = relay({ n: [20000, 20000], b: 10000, inflow: 30e6, phase: [12, 40], drain: 10e6 / 60 });
+	assert.ok(r.over <= 1e-6, `owe over the cap by ${r.over} J`);
+	assert.ok(Math.abs(r.err) < 1, `conserved: ${r.err} J`);
+});
+
+test("#38: one link that isn't short sends its n, its polls 45-75 ticks apart (b = n / 2)", () => {
+	const r = relay({ n: [1000000], b: 500000, inflow: 1.2e9, phase: [12], jitter: true });
+	assert.ok(r.rate[0] >= 0.99 * 1000000, `sent ${r.rate[0]} kJ a second of 1,000,000`);
+});

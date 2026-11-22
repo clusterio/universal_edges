@@ -46,7 +46,7 @@ const zero = (): Flows => ({ so: 0, po: 0, se: 0, to: 0, pd: 0, sd: 0, td: 0 });
 
 /**
  * One end of a link: its interface (§5: mode, limits, energy and buffer in J) and its endpoint's data (§6.2–§6.3:
- * n and b in kJ, tat, owe in J, sent and got in kJ, its network's last budget at and its share q in J) and its
+ * n and b in kJ, tat, owe in J, sent and got in kJ, and the share q it holds in J) and its
  * outbound stream lane (acked, next, backoff).
  */
 export class End {
@@ -61,7 +61,6 @@ export class End {
 	tat = -Infinity;
 	busy = false;
 	owe = 0;
-	at = -Infinity;
 	q = 0;
 	sent = 0;
 	got = 0;
@@ -364,54 +363,63 @@ export class World {
 	}
 
 	/**
-	 * #38, the tile's budget (power.lua): once a second, at the first of a network's ends to poll, the ends that don't
-	 * send pay what they owe, then the rest of the pool is shared over the sending ends by their n; each pays its owe
-	 * from its share and keeps the remainder (q) for its send.
+	 * #38, the tile's budget (power.lua), at every poll: the ends that don't send (no fresh n, off, or their lane busy)
+	 * let go of what they held and pay what they owe from the energy no end holds; the rest is shared over the sending
+	 * ends by n, each taking at most what it still lacks; each pays its owe from what it holds and keeps the rest (q).
+	 * Holdings shrink in proportion when the pool falls below them.
 	 */
 	private budget(n: Net): void {
 		const p = n.pool();
 		const ends = n.ends.filter(o => !o.gone).sort((x, y) => x.key.localeCompare(y.key));
 		const senders: End[] = [];
-		let a = p.a;
+		const others: End[] = [];
 		let sum = 0;
+		let held = 0;
 		for (const o of ends) {
-			o.at = this.tick;
-			o.q = 0;
 			if (o.n > 0 && this.tick - o.tat <= STALE && !o.off && !o.partner.gone) {
 				senders.push(o);
 				sum += o.n;
+				held += o.q;
 			} else {
-				const pay = Math.min(o.owe, a);
-				o.owe -= pay;
-				a -= pay;
+				o.q = 0;
+				others.push(o);
 			}
 		}
-		let left = a;
+		const scale = held > p.a && held > 0 ? p.a / held : 1;
+		let free = Math.max(0, p.a - held * scale);
+		let paid = 0;
+		for (const o of others) {
+			const pay = Math.min(o.owe, free);
+			o.owe -= pay;
+			free -= pay;
+			paid += pay;
+		}
+		const split = free;
 		for (const o of senders) {
-			const q = a * o.n / sum;
+			let q = o.q * scale;
+			q += Math.min(split * o.n / sum, Math.max(0, o.owe + 1000 * o.n - q));
 			const pay = Math.min(o.owe, q);
 			o.owe -= pay;
 			o.q = q - pay;
-			left -= pay;
+			paid += pay;
 		}
-		left = Math.max(0, left);
-		if (left !== p.a) {
-			n.write(left, p.c);
+		if (paid > 0) {
+			n.write(Math.max(0, p.a - paid), p.c);
 		}
 	}
 
-	/** Task 7's poll (§6.3, plan ruling 3): the network's budget (#38), freshness, buffer, send. */
-	private poll(e: End): void {
+	/**
+	 * Task 7's poll (§6.3, plan ruling 3): the network's budget (#38), freshness, buffer, send. Public so a test can
+	 * drive a relay's polls directly.
+	 */
+	poll(e: End): void {
 		if (e.partner.gone) {
 			return;
 		}
 		const n = e.net;
-		if (this.tick - e.at >= 60) {
-			this.budget(n);
-		}
+		this.budget(n);
 		const p = n.pool();
 		const q = e.q;
-		e.q = 0;
 		if (this.tick - e.tat > STALE) {
 			built(e);
 			return;
@@ -425,15 +433,17 @@ export class World {
 			e.buf = B;
 			n.write(p.a, p.c);
 		}
-		const x = Math.min(e.n, Math.floor((q + 1000 * e.b - e.owe) / 1000));
+		const held = Math.min(q, p.a);
+		const x = Math.min(e.n, Math.floor((held + 1000 * e.b - e.owe) / 1000));
 		if (x > 0 && e.sent === e.acked) {
 			e.sent += x;
 			this.moved += 1000 * x;
-			const take = Math.min(1000 * x, q, p.a);
+			const take = Math.min(1000 * x, held);
 			if (take > 0) {
 				n.write(p.a - take, p.c);
 			}
 			e.owe += 1000 * x - take;
+			e.q = q - take;
 			this.offer(e);
 		}
 	}

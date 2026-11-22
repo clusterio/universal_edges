@@ -367,42 +367,51 @@ end)
 
 local schedule = { per_tick = 4, interval = 60 }
 
---- #38: one budget a second for each network, so the order its links poll in doesn't decide which of them the pool
---- feeds. The first of the network's links to poll in a second budgets them all: the links that don't send this second
---- pay what they owe, then the rest of the pool is shared over the sending links by their n. Each pays its owe from its
---- share and keeps the remainder (d.q, J) for its own send (§6.3 step 4). A share is only marked: its energy stays in
---- the pool until that link's poll takes it.
--- ponytail: a share a link doesn't use (its lane busy, or it needs less) stays in the pool for the next budget rather
--- than going to the others this second. A poll less than 60 ticks after the last budget (a wake, or the walk shifting
--- after churn) has no share and sends on its credit alone; the pool waits for the next budget.
+--- #38: the pool is shared over its network's sending links by their n, so the order they poll in doesn't decide which
+--- of them it feeds. Every poll first budgets the energy no link holds yet: the links that don't send (no fresh n, or
+--- not polling) let go of what they held and pay what they owe from it, then the rest is shared over the sending links
+--- by n, each taking at most what it still lacks (its owe and n less what it holds). Each pays its owe from what it
+--- holds and keeps the rest (d.q, J) for its own send (§6.3 step 4). What a link holds is only marked: the energy stays
+--- in the pool until that link's poll takes it, and when the tile's own consumers draw the pool below what the links
+--- hold, each holding shrinks in proportion. One sending link on its network gets the whole pool, as before.
+-- ponytail: what the tile's own consumers draw between a budget and a link's poll comes out of the links still holding,
+-- not those that already took theirs. Budget the draw too if a relay with a big load of its own shows it.
 local function budget(g, tick)
-	local eps, senders, sum, a = {}, {}, 0, g.a
+	local eps, senders, others, sum, held = {}, {}, {}, 0, 0
 	for i, o in ipairs(g.eps) do
 		eps[i] = o
 	end
 	table.sort(eps, function(x, y) return x.key < y.key end) -- the shares don't depend on pairs' order
 	for _, o in ipairs(eps) do
 		local d = o.data
-		d.at, d.q, d.owe = tick, 0, d.owe or 0 -- plan ruling 6: an endpoint built before the power hub has no owe
+		d.owe, d.q = d.owe or 0, d.q or 0 -- plan ruling 6: an endpoint built before the power hub has no owe
 		if (d.n or 0) > 0 and d.tat and tick - d.tat <= stale() and polling(o) then
 			senders[#senders + 1] = o
-			sum = sum + d.n
+			sum, held = sum + d.n, held + d.q
 		else
-			local p = math.min(d.owe, a)
-			d.owe, a = d.owe - p, a - p
+			d.q = 0
+			others[#others + 1] = o
 		end
 	end
-	local left = a
+	local scale = held > g.a and held > 0 and g.a / held or 1
+	local free, paid = math.max(0, g.a - held * scale), 0
+	for _, o in ipairs(others) do
+		local d = o.data
+		local p = math.min(d.owe, free)
+		d.owe, free, paid = d.owe - p, free - p, paid + p
+	end
+	local split = free
 	for _, o in ipairs(senders) do
 		local d = o.data
-		local q = a * d.n / sum
+		local q = d.q * scale
+		q = q + math.min(split * d.n / sum, math.max(0, d.owe + 1000 * d.n - q))
 		local p = math.min(d.owe, q)
-		d.owe, d.q, left = d.owe - p, q - p, left - p
+		d.owe, d.q, paid = d.owe - p, q - p, paid + p
 	end
-	left = math.max(0, left)
-	if left ~= g.a then
-		write(g, left)
-		g.a = left
+	if paid > 0 then
+		local a = math.max(0, g.a - paid)
+		write(g, a)
+		g.a = a
 	end
 end
 
@@ -452,11 +461,8 @@ connectors.register_type({
 		if not g then
 			return
 		end
-		if not d.at or tick - d.at >= schedule.interval then
-			budget(g, tick)
-		end
-		local owe, q = d.owe or 0, d.q or 0
-		d.q = 0 -- a share is for one send
+		budget(g, tick)
+		local owe, q = d.owe, d.q
 		if not d.tat or tick - d.tat > stale() then
 			built(eei)
 			return
@@ -473,15 +479,16 @@ connectors.register_type({
 		-- rule, edges/lanes.lua), but ep:idle gates the extra send so energy is conserved. Scale it by the ticks since the
 		-- last poll if a type's walk ever stretches polls past 60 (over about 240 power endpoints on one tile at per_tick 4).
 		local dir = out_dir(ep)
-		local x = math.min(d.n, math.floor((q + 1000 * d.b - owe) / 1000))
+		local held = math.min(q, g.a) -- what it holds, as far as the pool still has it
+		local x = math.min(d.n, math.floor((held + 1000 * d.b - owe) / 1000))
 		if x > 0 and ep:idle(dir) and ep:can_send(dir) then
 			ep:send(dir, { [KEY] = x }) -- first: a refused send (MAX_TOTAL) raises before anything is taken
 			d.stats.sent = d.stats.sent + x
-			local take = math.min(1000 * x, q, g.a)
+			local take = math.min(1000 * x, held)
 			if take > 0 then
 				write(g, g.a - take)
 			end
-			d.owe = owe + 1000 * x - take
+			d.owe, d.q = owe + 1000 * x - take, q - take
 		end
 	end,
 	--- T2: add only what fits, at one fill ratio over the pool, and credit exactly that (§6.4).

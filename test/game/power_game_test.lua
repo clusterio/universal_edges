@@ -294,7 +294,7 @@ end)
 t.case("power hub: a short pool is shared over its links by their n, whichever polls first (#38)", function(ctx)
 	local c1, c2
 	ctx.at(500, function()
-		local fa = layouts.edge(loop, "ph-split", 28600, 12, {
+		local fa = layouts.edge(loop, "ph-split", 27600, 12, {
 			{ cid = "c1", type = "power", pos = 2, width = 2, params = {} },
 			{ cid = "c2", type = "power", pos = 7, width = 2, params = {} },
 		}, 12)
@@ -321,6 +321,44 @@ t.case("power hub: a short pool is shared over its links by their n, whichever p
 		ctx.expect(eei(c1).energy + eei(c2).energy < 1, "the pool spent")
 		ctx.expect(math.abs(c1.data.owe - 10e6) < 1 and math.abs(c2.data.owe - 10e6) < 1, "each still owes its buffer: " ..
 			c1.data.owe .. ", " .. c2.data.owe)
+	end)
+end)
+
+-- #38, the other order: the same pool, with c2 polled before c1 (both called straight away, ahead of the walk). Before
+-- the fix c2 paid its owe from all 2 MJ and sent it, and c1 sent nothing.
+t.case("power hub: a short pool is shared over its links by their n, the other link polled first (#38)", function(ctx)
+	local c1, c2
+	ctx.at(500, function()
+		local fa = layouts.edge(loop, "ph-split2", 27700, 12, {
+			{ cid = "c1", type = "power", pos = 2, width = 2, params = {} },
+			{ cid = "c2", type = "power", pos = 7, width = 2, params = {} },
+		}, 12)
+		local p1, p2 = layouts.put(fa, "substation", 3, 1), layouts.put(fa, "substation", 8, 1)
+		local W, script = defines.wire_connector_id, defines.wire_origin.script
+		p1.get_wire_connector(W.pole_copper, true).connect_to(p2.get_wire_connector(W.pole_copper, true), false, script)
+	end)
+	ctx.at(700, function()
+		c1, c2 = ep("ph-split2-x", "c1"), ep("ph-split2-x", "c2")
+		ctx.expect(c1 and c2 and c1.state == "ready" and c2.state == "ready", "both links ready")
+		if c1 and c2 then
+			targets({ [c1.key] = { n = 0, b = 10000, k = 0 }, [c2.key] = { n = 0, b = 10000, k = 0 } })
+		end
+	end)
+	ctx.at(800, function()
+		ctx.expect(eei(c1).electric_buffer_size == 10e6 and eei(c2).electric_buffer_size == 10e6, "both buffers at b")
+		eei(c1).energy, eei(c2).energy, c1.data.owe, c2.data.owe = 1e6, 1e6, 10e6, 10e6
+		c1.data.stats.sent, c2.data.stats.sent = 0, 0
+		targets({ [c1.key] = { n = 1000, b = 10000, k = 0 }, [c2.key] = { n = 3000, b = 10000, k = 0 } })
+		local poll = connectors.types.power.poll
+		poll(c2, game.tick)
+		poll(c1, game.tick)
+		ctx.expect(c1.data.stats.sent == 500 and c2.data.stats.sent == 1500, "the 2 MJ split 1:3 at once: sent " ..
+			c1.data.stats.sent .. " and " .. c2.data.stats.sent)
+	end)
+	ctx.at(950, function()
+		ctx.expect(c1.data.stats.sent == 500 and c2.data.stats.sent == 1500, "and nothing more: sent " ..
+			c1.data.stats.sent .. " and " .. c2.data.stats.sent)
+		ctx.expect(eei(c1).energy + eei(c2).energy < 1, "the pool spent")
 	end)
 end)
 
@@ -642,7 +680,6 @@ do
 		if drain[tick] then
 			local x = drain[tick]
 			x.data.n = math.ceil(x.data.eei.energy / 1000) -- the pool's whole energy, so no debt is left to drain the refill
-			x.data.at = nil -- and its share of the pool: this extra poll budgets the network (#38)
 			connectors.types.power.poll(x, tick)
 			x.data.n = 0
 			emptied[tick] = x.data.eei.energy < 1 and true or ("energy " .. x.data.eei.energy .. ", idle " ..
