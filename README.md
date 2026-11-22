@@ -4,7 +4,7 @@ Links Clusterio instances along their edges for Factorio 2.1. Belts, fluids, pow
 
 ## Requirements
 
-- Clusterio 2.1, built from source: 2.1 isn't released yet, so a checkout of `master`. The plugin builds inside Clusterio's pnpm workspace. This version doesn't load on Clusterio 2.0, use tag `v2.2.1` of this plugin there.
+- Clusterio 2.1.1 or later. Built from source, the plugin builds inside Clusterio's pnpm workspace. This version doesn't load on Clusterio 2.0, use tag `v2.2.1` of this plugin there.
 - Node 22 or later, and pnpm at the version in Clusterio's `packageManager`.
 - `zip` (the mod build), and `lua5.2` and `luacheck` (tests and lint).
 
