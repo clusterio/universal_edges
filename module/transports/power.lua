@@ -367,6 +367,45 @@ end)
 
 local schedule = { per_tick = 4, interval = 60 }
 
+--- #38: one budget a second for each network, so the order its links poll in doesn't decide which of them the pool
+--- feeds. The first of the network's links to poll in a second budgets them all: the links that don't send this second
+--- pay what they owe, then the rest of the pool is shared over the sending links by their n. Each pays its owe from its
+--- share and keeps the remainder (d.q, J) for its own send (§6.3 step 4). A share is only marked: its energy stays in
+--- the pool until that link's poll takes it.
+-- ponytail: a share a link doesn't use (its lane busy, or it needs less) stays in the pool for the next budget rather
+-- than going to the others this second. A poll less than 60 ticks after the last budget (a wake, or the walk shifting
+-- after churn) has no share and sends on its credit alone; the pool waits for the next budget.
+local function budget(g, tick)
+	local eps, senders, sum, a = {}, {}, 0, g.a
+	for i, o in ipairs(g.eps) do
+		eps[i] = o
+	end
+	table.sort(eps, function(x, y) return x.key < y.key end) -- the shares don't depend on pairs' order
+	for _, o in ipairs(eps) do
+		local d = o.data
+		d.at, d.q, d.owe = tick, 0, d.owe or 0 -- plan ruling 6: an endpoint built before the power hub has no owe
+		if (d.n or 0) > 0 and d.tat and tick - d.tat <= stale() and polling(o) then
+			senders[#senders + 1] = o
+			sum = sum + d.n
+		else
+			local p = math.min(d.owe, a)
+			d.owe, a = d.owe - p, a - p
+		end
+	end
+	local left = a
+	for _, o in ipairs(senders) do
+		local d = o.data
+		local q = a * d.n / sum
+		local p = math.min(d.owe, q)
+		d.owe, d.q, left = d.owe - p, q - p, left - p
+	end
+	left = math.max(0, left)
+	if left ~= g.a then
+		write(g, left)
+		g.a = left
+	end
+end
+
 connectors.register_type({
 	name = "power",
 	lanes = function() return { ab = "stream", ba = "stream" } end,
@@ -403,7 +442,7 @@ connectors.register_type({
 			built(x)
 		end
 	end,
-	--- §6.3, with the pay step before the freshness check (plan ruling 3).
+	--- §6.3, with the pay step, now the network's budget (#38), before the freshness check (plan ruling 3).
 	poll = function(ep, tick)
 		snapshot()
 		detect.check(ep)
@@ -413,13 +452,11 @@ connectors.register_type({
 		if not g then
 			return
 		end
-		local owe = d.owe or 0 -- plan ruling 6: an endpoint built before the power hub has none
-		local p = math.min(owe, g.a)
-		if p > 0 then
-			write(g, g.a - p)
-			g.a, owe = g.a - p, owe - p
+		if not d.at or tick - d.at >= schedule.interval then
+			budget(g, tick)
 		end
-		d.owe = owe
+		local owe, q = d.owe or 0, d.q or 0
+		d.q = 0 -- a share is for one send
 		if not d.tat or tick - d.tat > stale() then
 			built(eei)
 			return
@@ -430,17 +467,17 @@ connectors.register_type({
 			eei.electric_buffer_size = B
 			write(g, g.a) -- plan ruling 26: one fill ratio again, so a buffer shrunk to its energy isn't left full
 		end
-		-- §6.3 step 4: this second's amount, once per poll and nothing carried over (plan review B1), at most the pool's
-		-- energy plus this link's buffer less what it owes already.
+		-- §6.3 step 4: this second's amount, once per poll and nothing carried over (plan review B1), at most this link's
+		-- share of the pool plus its buffer less what it owes already.
 		-- ponytail: n is a second's worth for a poll every 60 ticks; a poll after a wake can come at 45 ticks (the 3/4
 		-- rule, edges/lanes.lua), but ep:idle gates the extra send so energy is conserved. Scale it by the ticks since the
 		-- last poll if a type's walk ever stretches polls past 60 (over about 240 power endpoints on one tile at per_tick 4).
 		local dir = out_dir(ep)
-		local x = math.min(d.n, math.floor((g.a + 1000 * d.b - owe) / 1000))
+		local x = math.min(d.n, math.floor((q + 1000 * d.b - owe) / 1000))
 		if x > 0 and ep:idle(dir) and ep:can_send(dir) then
 			ep:send(dir, { [KEY] = x }) -- first: a refused send (MAX_TOTAL) raises before anything is taken
 			d.stats.sent = d.stats.sent + x
-			local take = math.min(1000 * x, g.a)
+			local take = math.min(1000 * x, q, g.a)
 			if take > 0 then
 				write(g, g.a - take)
 			end

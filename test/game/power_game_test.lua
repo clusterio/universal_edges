@@ -288,6 +288,42 @@ t.case("power hub: a link sends n, owes what its pool lacks, and pays it from th
 	end)
 end)
 
+-- #38: a short relay pool is shared over its links by their n, whatever order they poll in. Side a: c1 and c2 on one
+-- network, both owing their whole buffer (10 MJ), holding 2 MJ; c1 asked for 1,000 kJ, c2 for 3,000. Before the fix the
+-- first to poll paid its owe from all 2 MJ and sent it, and the other, still at its cap, sent nothing.
+t.case("power hub: a short pool is shared over its links by their n, whichever polls first (#38)", function(ctx)
+	local c1, c2
+	ctx.at(500, function()
+		local fa = layouts.edge(loop, "ph-split", 28600, 12, {
+			{ cid = "c1", type = "power", pos = 2, width = 2, params = {} },
+			{ cid = "c2", type = "power", pos = 7, width = 2, params = {} },
+		}, 12)
+		local p1, p2 = layouts.put(fa, "substation", 3, 1), layouts.put(fa, "substation", 8, 1)
+		local W, script = defines.wire_connector_id, defines.wire_origin.script
+		p1.get_wire_connector(W.pole_copper, true).connect_to(p2.get_wire_connector(W.pole_copper, true), false, script)
+	end)
+	ctx.at(700, function()
+		c1, c2 = ep("ph-split-x", "c1"), ep("ph-split-x", "c2")
+		ctx.expect(c1 and c2 and c1.state == "ready" and c2.state == "ready", "both links ready")
+		if c1 and c2 then
+			targets({ [c1.key] = { n = 0, b = 10000, k = 0 }, [c2.key] = { n = 0, b = 10000, k = 0 } })
+		end
+	end)
+	ctx.at(800, function()
+		ctx.expect(eei(c1).electric_buffer_size == 10e6 and eei(c2).electric_buffer_size == 10e6, "both buffers at b")
+		eei(c1).energy, eei(c2).energy, c1.data.owe, c2.data.owe = 1e6, 1e6, 10e6, 10e6
+		c1.data.stats.sent, c2.data.stats.sent = 0, 0
+		targets({ [c1.key] = { n = 1000, b = 10000, k = 0 }, [c2.key] = { n = 3000, b = 10000, k = 0 } })
+	end)
+	ctx.at(950, function()
+		ctx.expect(c1.data.stats.sent == 500 and c2.data.stats.sent == 1500, "the 2 MJ split 1:3, as their n: sent " ..
+			c1.data.stats.sent .. " and " .. c2.data.stats.sent)
+		ctx.expect(eei(c1).energy + eei(c2).energy < 1, "the pool spent")
+		ctx.expect(math.abs(c1.data.owe - 10e6) < 1 and math.abs(c2.data.owe - 10e6) < 1, "each still owes its buffer: " ..
+			c1.data.owe .. ", " .. c2.data.owe)
+	end)
+end)
+
 -- Plan ruling 26 (model F3): a buffer change rewrites the pool at one fill ratio, so an interface shrunk to its stored
 -- energy isn't left full (room 0, drawing nothing) until the pool's next write. Side a: two links on one network, c1 at
 -- 40 of 100 MJ given b = 20 MJ (so it shrinks to 40 MJ), c2 empty at 10 MJ: after c1's poll they hold 32 and 8 MJ.
@@ -606,6 +642,7 @@ do
 		if drain[tick] then
 			local x = drain[tick]
 			x.data.n = math.ceil(x.data.eei.energy / 1000) -- the pool's whole energy, so no debt is left to drain the refill
+			x.data.at = nil -- and its share of the pool: this extra poll budgets the network (#38)
 			connectors.types.power.poll(x, tick)
 			x.data.n = 0
 			emptied[tick] = x.data.eei.energy < 1 and true or ("energy " .. x.data.eei.energy .. ", idle " ..

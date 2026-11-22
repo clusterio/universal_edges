@@ -46,7 +46,8 @@ const zero = (): Flows => ({ so: 0, po: 0, se: 0, to: 0, pd: 0, sd: 0, td: 0 });
 
 /**
  * One end of a link: its interface (§5: mode, limits, energy and buffer in J) and its endpoint's data (§6.2–§6.3:
- * n and b in kJ, tat, owe in J, sent and got in kJ) and its outbound stream lane (acked, next, backoff).
+ * n and b in kJ, tat, owe in J, sent and got in kJ, its network's last budget at and its share q in J) and its
+ * outbound stream lane (acked, next, backoff).
  */
 export class End {
 	partner!: End;
@@ -60,6 +61,8 @@ export class End {
 	tat = -Infinity;
 	busy = false;
 	owe = 0;
+	at = -Infinity;
+	q = 0;
 	sent = 0;
 	got = 0;
 	acked = 0;
@@ -360,19 +363,55 @@ export class World {
 		}
 	}
 
-	/** Task 7's poll (§6.3, plan ruling 3): pay, freshness, buffer, send. */
+	/**
+	 * #38, the tile's budget (power.lua): once a second, at the first of a network's ends to poll, the ends that don't
+	 * send pay what they owe, then the rest of the pool is shared over the sending ends by their n; each pays its owe
+	 * from its share and keeps the remainder (q) for its send.
+	 */
+	private budget(n: Net): void {
+		const p = n.pool();
+		const ends = n.ends.filter(o => !o.gone).sort((x, y) => x.key.localeCompare(y.key));
+		const senders: End[] = [];
+		let a = p.a;
+		let sum = 0;
+		for (const o of ends) {
+			o.at = this.tick;
+			o.q = 0;
+			if (o.n > 0 && this.tick - o.tat <= STALE && !o.off && !o.partner.gone) {
+				senders.push(o);
+				sum += o.n;
+			} else {
+				const pay = Math.min(o.owe, a);
+				o.owe -= pay;
+				a -= pay;
+			}
+		}
+		let left = a;
+		for (const o of senders) {
+			const q = a * o.n / sum;
+			const pay = Math.min(o.owe, q);
+			o.owe -= pay;
+			o.q = q - pay;
+			left -= pay;
+		}
+		left = Math.max(0, left);
+		if (left !== p.a) {
+			n.write(left, p.c);
+		}
+	}
+
+	/** Task 7's poll (§6.3, plan ruling 3): the network's budget (#38), freshness, buffer, send. */
 	private poll(e: End): void {
 		if (e.partner.gone) {
 			return;
 		}
 		const n = e.net;
-		const p = n.pool();
-		const pay = Math.min(e.owe, p.a);
-		if (pay > 0) {
-			n.write(p.a - pay, p.c);
-			p.a -= pay;
-			e.owe -= pay;
+		if (this.tick - e.at >= 60) {
+			this.budget(n);
 		}
+		const p = n.pool();
+		const q = e.q;
+		e.q = 0;
 		if (this.tick - e.tat > STALE) {
 			built(e);
 			return;
@@ -386,11 +425,11 @@ export class World {
 			e.buf = B;
 			n.write(p.a, p.c);
 		}
-		const x = Math.min(e.n, Math.floor((p.a + 1000 * e.b - e.owe) / 1000));
+		const x = Math.min(e.n, Math.floor((q + 1000 * e.b - e.owe) / 1000));
 		if (x > 0 && e.sent === e.acked) {
 			e.sent += x;
 			this.moved += 1000 * x;
-			const take = Math.min(1000 * x, p.a);
+			const take = Math.min(1000 * x, q, p.a);
 			if (take > 0) {
 				n.write(p.a - take, p.c);
 			}
