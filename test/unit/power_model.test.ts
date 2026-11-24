@@ -353,10 +353,13 @@ test("S7: the deactivated end is in the built state throughout; the removed link
 
 // #38: one relay tile's polls driven directly, with fixed targets (the hub never drives a relay to its debt cap in
 // these layouts, so the scenarios above can't show it). Network 1 relays to networks 2..k+1; its inflow lands once a
-// second; each link's lane is idle at its poll. Returns each link's kJ sent a second, the largest owe over its cap (J)
-// and the ledger error (J).
+// second at tick inPhase (10); the tile's own consumers draw `drain` J a tick from it. A link's lane is busy from its
+// send until its ack, rtt ticks later (2; Infinity: never acked). Link 0 is off its network for the seconds in away
+// (power.lua's poll returns before the budget). Returns each link's kJ sent a second, the largest owe over its cap
+// (J) and the ledger error (J).
 type Relay = {
 	n: number[]; b: number; owe?: number[]; inflow: number; phase: number[]; jitter?: boolean; drain?: number;
+	rtt?: number[]; inPhase?: number; secs?: number; away?: [number, number];
 };
 function relay(o: Relay) {
 	const links = o.n.map((_, i): [number, number] => [0, i + 1]);
@@ -372,13 +375,16 @@ function relay(o: Relay) {
 	let seed = 7;
 	const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
 	const next = o.phase.slice();
-	const secs = 120;
+	const ack = o.n.map(() => 0);
+	const secs = o.secs ?? 120;
 	let over = 0;
 	let flow = -(o.owe ?? []).reduce((s, x) => s + x, 0);
 	for (let t = 0; t < secs * 60; t++) {
 		w.tick = t;
+		const away = o.away && t >= 60 * o.away[0] && t < 60 * o.away[1];
+		net.ends.splice(0, net.ends.length, ...ends.filter((_, i) => i > 0 || !away));
 		const p = net.pool();
-		if (t % 60 === 10) {
+		if (t % 60 === (o.inPhase ?? 10)) {
 			net.write(p.a + o.inflow, p.c);
 			flow += o.inflow;
 		} else if (o.drain) {
@@ -388,17 +394,26 @@ function relay(o: Relay) {
 		}
 		for (let i = 0; i < ends.length; i++) {
 			const e = ends[i];
+			if (t >= ack[i]) {
+				e.acked = e.sent;
+			}
 			if (t === next[i]) {
 				next[i] = t + (o.jitter ? 45 + Math.floor(rand() * 31) : 60); // lanes.lua's 3/4 rule: as early as 45
 				e.tat = t;
-				e.acked = e.sent;
+				if (i === 0 && away) {
+					continue;
+				}
+				const sent = e.sent;
 				w.poll(e);
+				if (e.sent > sent) {
+					ack[i] = t + (o.rtt?.[i] ?? 2);
+				}
 				over = Math.max(over, e.owe - 1000 * e.b);
 			}
 		}
 	}
 	const sent = ends.reduce((s, e) => s + e.sent, 0);
-	const err = net.pool().a - ends.reduce((s, e) => s + e.owe, 0) - (flow - 1000 * sent);
+	const err = net.pool().a + ends.reduce((s, e) => s + e.q - e.owe, 0) - (flow - 1000 * sent);
 	return { rate: ends.map(e => e.sent / secs), over, err };
 }
 
@@ -425,4 +440,84 @@ test("#38: the tile's own draw between a budget and a poll never takes a link pa
 test("#38: one link that isn't short sends its n, its polls 45-75 ticks apart (b = n / 2)", () => {
 	const r = relay({ n: [1000000], b: 500000, inflow: 1.2e9, phase: [12], jitter: true });
 	assert.ok(r.rate[0] >= 0.99 * 1000000, `sent ${r.rate[0]} kJ a second of 1,000,000`);
+});
+
+// #38, PR review: a link whose lane stays busy (its partner never acks) keeps the share it can't send, and the tile's
+// own consumers draw the pool. As marks on the pool, that share was drawn away and given again from each inflow, and
+// the healthy link sent 524 of its 1,000 kJ a second (main: 1,000). A link's share is now held out of the pool.
+test("#38: a link whose lane stays busy doesn't cost a healthy one its share under the tile's own draw", () => {
+	const r = relay({ n: [1000, 1000], b: 5000, inflow: 1.5e6, drain: 1e6 / 60, phase: [12, 40], rtt: [Infinity, 2],
+		secs: 600 });
+	assert.ok(r.rate[1] >= 0.99 * 1000, `the healthy link sent ${r.rate[1]} kJ a second of 1,000`);
+	assert.ok(r.over <= 1e-6, `owe over the cap by ${r.over} J`);
+	assert.ok(Math.abs(r.err) < 1, `conserved: ${r.err} J`);
+});
+
+// #38, PR review: a far link's ack takes rtt ticks, so its lane is busy at most of its polls and it can send at one
+// poll in ceil(rtt / 60). It keeps its share while busy, so its part of n is the near links' part, or all its lane can
+// carry when that is less; over ten minutes, with polls at other ticks, mixed n and the tile's own draw. Main gave the
+// far link 8 kJ a second in the first case (poll order took the rest).
+const FAR: [string, Relay][] = [
+	["ack after 90 ticks", { n: [1000, 1000, 1000], b: 5000, inflow: 1.5e6, phase: [12, 20, 40], rtt: [2, 2, 90] }],
+	["ack after 90 ticks, the tile's own draw", { n: [1000, 1000, 1000], b: 5000, inflow: 2e6, drain: 0.5e6 / 60,
+		phase: [12, 20, 40], rtt: [2, 2, 90] }],
+	["ack after 90 ticks, polls 45-75 ticks apart", { n: [1000, 1000, 1000], b: 5000, inflow: 1.5e6,
+		phase: [12, 20, 40], rtt: [2, 2, 90], jitter: true }],
+	["ack after 400 ticks, b = n / 10, the tile's own draw", { n: [1000, 1000, 1000], b: 100, inflow: 1.8e6,
+		drain: 10000, phase: [48, 2, 15], inPhase: 41, rtt: [2, 2, 400] }],
+	["mixed n, ack after 130 ticks, the tile's own draw", { n: [3000, 1000, 2000], b: 5000, inflow: 3.5e6,
+		drain: 0.5e6 / 60, phase: [12, 20, 40], rtt: [2, 2, 130] }],
+	["mixed n, the far link polls first, ack after 250 ticks", { n: [1000, 3000, 500], b: 3000, inflow: 1.5e6,
+		phase: [30, 45, 11], rtt: [2, 2, 250] }],
+];
+for (const [name, o] of FAR) {
+	test(`#38: a far link keeps its share by n, ${name}`, () => {
+		const r = relay({ ...o, secs: 600 });
+		const f = o.n.length - 1;
+		const parts = r.rate.map((x, i) => x / o.n[i]);
+		const fair = Math.min(...parts.slice(0, f), 1 / Math.ceil(o.rtt![f] / 60));
+		assert.ok(parts[f] >= 0.98 * fair, `far part ${parts[f].toFixed(3)} of n, fair ${fair.toFixed(3)}; ` +
+			`parts ${parts.map(x => x.toFixed(3)).join(", ")}`);
+		assert.ok(r.over <= 1e-6, `owe over the cap by ${r.over} J`);
+		assert.ok(Math.abs(r.err) < 1, `conserved: ${r.err} J`);
+	});
+}
+
+// #38, PR review: a link off its network (border pole gone, power.lua's read returns nil) or moved to another keeps
+// what it holds, real energy taken from the pool it was granted in, and takes no more than its share of the pool it
+// joins.
+// As a mark, its hold claimed the new pool's energy first: c2 got 250 of its 500 kJ.
+test("#38: a link that leaves its network and joins one brings what it holds and takes only its share there", () => {
+	const w = new World({ nets: [{}, {}, {}], links: [[0, 1], [0, 2]], delay: 1, seed: 1 });
+	const net = w.nets[0];
+	const [c1, c2] = [w.end(0, 0), w.end(1, 0)];
+	for (const e of [c1, c2]) {
+		e.n = 1000;
+		e.b = 5000;
+		e.buf = 5e6;
+		e.tat = 0;
+	}
+	w.tick = 0;
+	c1.sent = 1; // c1's lane busy: it keeps its share
+	c2.owe = 5e6; // c2 at its debt cap: it sends what it holds, no credit
+	net.write(1e6, net.pool().c);
+	w.poll(c2);
+	assert.equal(c2.sent, 500, "c2 sent its half of the first pool");
+	assert.ok(Math.abs(c1.q - 0.5e6) < 1, `c1 holds its half: ${c1.q}`);
+	const held = c1.q;
+	net.ends.splice(net.ends.indexOf(c1), 1); // off the network, then on another holding 1 MJ
+	c1.e = 0;
+	net.write(0, net.pool().c);
+	net.ends.push(c1);
+	net.write(1e6, net.pool().c);
+	w.tick = 60;
+	c1.tat = 60;
+	c2.tat = 60;
+	c2.acked = c2.sent;
+	c2.owe = 5e6;
+	w.poll(c2);
+	assert.equal(c2.sent, 1000, `c2 sent its half of the new pool: ${c2.sent - 500} kJ`);
+	assert.ok(Math.abs(c1.q - (held + 0.5e6)) < 1, `c1 holds what it brought and its half: ${c1.q}`);
+	const err = net.pool().a + c1.q + c2.q - c2.owe + 1000 * (c2.sent - 500) - (1e6 + held - 5e6);
+	assert.ok(Math.abs(err) < 1, `conserved: ${err} J`);
 });

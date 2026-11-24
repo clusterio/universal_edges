@@ -287,7 +287,7 @@ function power.sample()
 			local acc, a, c, l = st.nets[id], 0, 0, {}
 			for _, ep in ipairs(n.eps) do
 				local x, d = ep.data.eei, ep.data
-				a, c = a + x.energy - (d.owe or 0), c + x.electric_buffer_size
+				a, c = a + x.energy + (d.q or 0) - (d.owe or 0), c + x.electric_buffer_size -- #38: held, not yet sent
 				if polling(ep) then
 					l[#l + 1] = { ep.key, d.stats.sent, d.stats.got }
 				end
@@ -368,16 +368,19 @@ end)
 local schedule = { per_tick = 4, interval = 60 }
 
 --- #38: the pool is shared over its network's sending links by their n, so the order they poll in doesn't decide which
---- of them it feeds. Every poll first budgets the energy no link holds yet: the links that don't send (no fresh n, or
---- not polling) let go of what they held and pay what they owe from it, then the rest is shared over the sending links
---- by n, each taking at most what it still lacks (its owe and n less what it holds). Each pays its owe from what it
---- holds and keeps the rest (d.q, J) for its own send (§6.3 step 4). What a link holds is only marked: the energy stays
---- in the pool until that link's poll takes it, and when the tile's own consumers draw the pool below what the links
---- hold, each holding shrinks in proportion. One sending link on its network gets the whole pool, as before.
--- ponytail: what the tile's own consumers draw between a budget and a link's poll comes out of the links still holding,
--- not those that already took theirs. Budget the draw too if a relay with a big load of its own shows it.
+--- of them it feeds. Every poll first budgets the pool: the links that don't send (no fresh n, or not polling) pay what
+--- they owe from what they hold, put the rest back into the pool as far as it has room, and pay the rest of their owe
+--- from the pool; then the pool is shared by n over the sending links that lack any, each taking at most what it still
+--- lacks (its owe and n less what it holds). Each pays its owe from what it takes and holds the rest (d.q, J) for its
+--- own send (§6.3 step 4). What a link holds is taken out of the pool at once, so the tile's own consumers can't draw
+--- it away before that link's poll, and a link whose lane is busy (a far partner's ack still on its way) keeps its
+--- share for the poll it can send at. A link off its network keeps what it holds and brings it to the one it joins.
+--- One sending link on its network gets the whole pool, as before. The report counts what the links hold in the
+--- pool's energy.
+-- ponytail: a link whose lane stays busy (its partner never acks) holds up to 1000·n out of its tile's network until
+-- it stops sending; give it back after some ticks busy if a relay's own load ever misses that.
 local function budget(g, tick)
-	local eps, senders, others, sum, held = {}, {}, {}, 0, 0
+	local eps, senders, others, sum = {}, {}, {}, 0
 	for i, o in ipairs(g.eps) do
 		eps[i] = o
 	end
@@ -387,29 +390,31 @@ local function budget(g, tick)
 		d.owe, d.q = d.owe or 0, d.q or 0 -- plan ruling 6: an endpoint built before the power hub has no owe
 		if (d.n or 0) > 0 and d.tat and tick - d.tat <= stale() and polling(o) then
 			senders[#senders + 1] = o
-			sum, held = sum + d.n, held + d.q
+			sum = sum + (d.owe + 1000 * d.n > d.q and d.n or 0) -- one that holds all it can send takes no part
 		else
-			d.q = 0
 			others[#others + 1] = o
 		end
 	end
-	local scale = held > g.a and held > 0 and g.a / held or 1
-	local free, paid = math.max(0, g.a - held * scale), 0
+	local a = g.a
 	for _, o in ipairs(others) do
 		local d = o.data
-		local p = math.min(d.owe, free)
-		d.owe, free, paid = d.owe - p, free - p, paid + p
+		local p = math.min(d.owe, d.q)
+		local back = math.min(d.q - p, math.max(0, g.c - a))
+		d.owe, d.q, a = d.owe - p, d.q - p - back, a + back
+		p = math.min(d.owe, a)
+		d.owe, a = d.owe - p, a - p
 	end
-	local split = free
+	local split = a
 	for _, o in ipairs(senders) do
 		local d = o.data
-		local q = d.q * scale
-		q = q + math.min(split * d.n / sum, math.max(0, d.owe + 1000 * d.n - q))
+		local lack = d.owe + 1000 * d.n - d.q
+		local x = lack > 0 and math.min(split * d.n / sum, lack) or 0
+		local q = d.q + x
 		local p = math.min(d.owe, q)
-		d.owe, d.q, paid = d.owe - p, q - p, paid + p
+		d.owe, d.q, a = d.owe - p, q - p, a - x
 	end
-	if paid > 0 then
-		local a = math.max(0, g.a - paid)
+	if a ~= g.a then
+		a = math.max(0, a)
 		write(g, a)
 		g.a = a
 	end
@@ -473,21 +478,17 @@ connectors.register_type({
 			eei.electric_buffer_size = B
 			write(g, g.a) -- plan ruling 26: one fill ratio again, so a buffer shrunk to its energy isn't left full
 		end
-		-- §6.3 step 4: this second's amount, once per poll and nothing carried over (plan review B1), at most this link's
-		-- share of the pool plus its buffer less what it owes already.
+		-- §6.3 step 4: this second's amount, once per poll and nothing carried over (plan review B1), at most what this
+		-- link holds of the pool plus its buffer less what it owes already.
 		-- ponytail: n is a second's worth for a poll every 60 ticks; a poll after a wake can come at 45 ticks (the 3/4
 		-- rule, edges/lanes.lua), but ep:idle gates the extra send so energy is conserved. Scale it by the ticks since the
 		-- last poll if a type's walk ever stretches polls past 60 (over about 240 power endpoints on one tile at per_tick 4).
 		local dir = out_dir(ep)
-		local held = math.min(q, g.a) -- what it holds, as far as the pool still has it
-		local x = math.min(d.n, math.floor((held + 1000 * d.b - owe) / 1000))
+		local x = math.min(d.n, math.floor((q + 1000 * d.b - owe) / 1000))
 		if x > 0 and ep:idle(dir) and ep:can_send(dir) then
 			ep:send(dir, { [KEY] = x }) -- first: a refused send (MAX_TOTAL) raises before anything is taken
 			d.stats.sent = d.stats.sent + x
-			local take = math.min(1000 * x, held)
-			if take > 0 then
-				write(g, g.a - take)
-			end
+			local take = math.min(1000 * x, q) -- from what it holds, already out of the pool
 			d.owe, d.q = owe + 1000 * x - take, q - take
 		end
 	end,
@@ -502,14 +503,18 @@ connectors.register_type({
 		ep.data.stats.got = ep.data.stats.got + x
 		return { [KEY] = x }
 	end,
-	--- §6.4, plan review S4: what the link owes is paid from its pool as far as it holds. The rest stays owed for the
-	--- lane's refund, which comes after teardown, to cancel; it is logged with the most a refund may cancel (the lane's
-	--- unacknowledged send). Then the interface's energy goes into the network's other link interfaces and then the
-	--- border pole's accumulators; what fits nowhere is dropped and logged.
+	--- §6.4, plan review S4: what the link owes is paid from what it holds (#38), then its pool as far as it holds. The
+	--- rest stays owed for the lane's refund, which comes after teardown, to cancel; it is logged with the most a refund
+	--- may cancel (the lane's unacknowledged send). Then the interface's energy and the rest of what the link held go into
+	--- the network's other link interfaces and then the border pole's accumulators; what fits nowhere is dropped and
+	--- logged.
 	teardown = function(ep)
 		snapshot()
 		local d, eei = ep.data, ep.data.eei
-		local owe = d.owe or 0
+		local q = d.q or 0
+		local p = math.min(d.owe or 0, q)
+		local owe = (d.owe or 0) - p
+		q, d.q, d.owe = q - p, 0, owe
 		if owe > 0 then
 			local g = read(ep)
 			local x = g and math.min(owe, g.a) or 0
@@ -523,11 +528,11 @@ connectors.register_type({
 					edge = ep.edge, cid = ep.cid, amount = d.owe / 1000, refundable = pending and pending[KEY] or 0 })
 			end
 		end
+		local left = to_pool(ep, (eei and eei.valid and eei.energy or 0) + q)
+		if left > 0 then
+			dropped(ep, left)
+		end
 		if eei and eei.valid then
-			local left = to_pool(ep, eei.energy)
-			if left > 0 then
-				dropped(ep, left)
-			end
 			eei.destroy()
 		end
 	end,

@@ -249,7 +249,7 @@ export class World {
 		for (const n of this.nets) {
 			held += n.accE;
 			for (const e of n.ends) {
-				held += e.e - e.owe + (e.sent - e.partner.got) * 1000;
+				held += e.e + e.q - e.owe + (e.sent - e.partner.got) * 1000;
 			}
 		}
 		return held + this.lost - (this.initial + this.generated - this.consumed);
@@ -275,6 +275,9 @@ export class World {
 		const r = { owe: 0, paid: 0, cancelled: 0, unpaid: 0, lane: 0, dropped: 0 };
 		for (const e of this.links[i]) {
 			r.owe += e.owe;
+			const held = Math.min(e.owe, e.q);
+			e.owe -= held;
+			r.paid += held;
 			const { a, c } = e.net.pool();
 			const pay = Math.min(e.owe, a);
 			if (pay > 0) {
@@ -284,12 +287,14 @@ export class World {
 			}
 			e.gone = true;
 			const others = e.net.pool();
-			const put = Math.max(0, Math.min(e.e, others.c - others.a));
+			const left = e.e + e.q - held;
+			const put = Math.max(0, Math.min(left, others.c - others.a));
 			if (put > 0) {
 				e.net.write(others.a + put, others.c);
 			}
-			r.dropped += this.toAcc(e.net, e.e - put);
+			r.dropped += this.toAcc(e.net, left - put);
 			e.e = 0;
+			e.q = 0;
 			e.buf = 0;
 		}
 		for (const e of this.links[i]) {
@@ -363,10 +368,11 @@ export class World {
 	}
 
 	/**
-	 * #38, the tile's budget (power.lua), at every poll: the ends that don't send (no fresh n, off, or their lane busy)
-	 * let go of what they held and pay what they owe from the energy no end holds; the rest is shared over the sending
-	 * ends by n, each taking at most what it still lacks; each pays its owe from what it holds and keeps the rest (q).
-	 * Holdings shrink in proportion when the pool falls below them.
+	 * #38, the tile's budget (power.lua), at every poll: the ends that don't send (no fresh n, or off) pay what they
+	 * owe from what they hold, put the rest back into the pool as far as it has room and pay the rest of their owe from
+	 * the pool; the pool is then shared by n over the sending ends that lack any, busy lanes included, each taking at
+	 * most what it still lacks. Each pays its owe from what it takes and holds the rest (q) out of the pool until its
+	 * send.
 	 */
 	private budget(n: Net): void {
 		const p = n.pool();
@@ -374,37 +380,37 @@ export class World {
 		const senders: End[] = [];
 		const others: End[] = [];
 		let sum = 0;
-		let held = 0;
 		for (const o of ends) {
 			if (o.n > 0 && this.tick - o.tat <= STALE && !o.off && !o.partner.gone) {
 				senders.push(o);
-				sum += o.n;
-				held += o.q;
+				sum += o.owe + 1000 * o.n > o.q ? o.n : 0; // one that holds all it can send takes no part
 			} else {
-				o.q = 0;
 				others.push(o);
 			}
 		}
-		const scale = held > p.a && held > 0 ? p.a / held : 1;
-		let free = Math.max(0, p.a - held * scale);
-		let paid = 0;
+		let a = p.a;
 		for (const o of others) {
-			const pay = Math.min(o.owe, free);
+			let pay = Math.min(o.owe, o.q);
+			const back = Math.min(o.q - pay, Math.max(0, p.c - a));
 			o.owe -= pay;
-			free -= pay;
-			paid += pay;
+			o.q -= pay + back;
+			a += back;
+			pay = Math.min(o.owe, a);
+			o.owe -= pay;
+			a -= pay;
 		}
-		const split = free;
+		const split = a;
 		for (const o of senders) {
-			let q = o.q * scale;
-			q += Math.min(split * o.n / sum, Math.max(0, o.owe + 1000 * o.n - q));
+			const lack = o.owe + 1000 * o.n - o.q;
+			const x = lack > 0 ? Math.min(split * o.n / sum, lack) : 0;
+			const q = o.q + x;
 			const pay = Math.min(o.owe, q);
 			o.owe -= pay;
 			o.q = q - pay;
-			paid += pay;
+			a -= x;
 		}
-		if (paid > 0) {
-			n.write(Math.max(0, p.a - paid), p.c);
+		if (a !== p.a) {
+			n.write(Math.max(0, a), p.c);
 		}
 	}
 
@@ -433,15 +439,11 @@ export class World {
 			e.buf = B;
 			n.write(p.a, p.c);
 		}
-		const held = Math.min(q, p.a);
-		const x = Math.min(e.n, Math.floor((held + 1000 * e.b - e.owe) / 1000));
+		const x = Math.min(e.n, Math.floor((q + 1000 * e.b - e.owe) / 1000));
 		if (x > 0 && e.sent === e.acked) {
 			e.sent += x;
 			this.moved += 1000 * x;
-			const take = Math.min(1000 * x, held);
-			if (take > 0) {
-				n.write(p.a - take, p.c);
-			}
+			const take = Math.min(1000 * x, q); // from what it holds, already out of the pool
 			e.owe += 1000 * x - take;
 			e.q = q - take;
 			this.offer(e);
@@ -588,7 +590,7 @@ export class World {
 			let c = 0;
 			for (const e of n.ends) {
 				if (!e.gone) {
-					a += e.e - e.owe;
+					a += e.e + e.q - e.owe;
 					c += e.buf;
 				}
 			}
