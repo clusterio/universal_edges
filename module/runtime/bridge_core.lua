@@ -48,6 +48,22 @@ function core.batch(tick, parts)
 	return '{"tick":' .. tick .. ',"msgs":[' .. table.concat(parts, ",") .. "]}"
 end
 
+--- s cut into parts of at most size bytes for a chunked body, each ending on a UTF-8 character boundary (#21): the host
+--- decodes each IPC line on its own, so a character cut in two would arrive as two U+FFFD. A cut moves back while the
+--- byte after it is a continuation byte (0x80-0xBF), never to an empty part. Joined, the parts are s; "" has none.
+function core.chunks(s, size)
+	local parts, i = {}, 1
+	while i <= #s do
+		local j = math.min(i + size - 1, #s)
+		while j > i and j < #s and string.byte(s, j + 1) >= 0x80 and string.byte(s, j + 1) < 0xC0 do
+			j = j - 1
+		end
+		parts[#parts + 1] = string.sub(s, i, j)
+		i = j + 1
+	end
+	return parts
+end
+
 --- The well-formed, first-seen messages of an inbound batch. Everything else is only counted: rejects (a malformed
 --- batch or message) and repeats (an id already seen from that sender).
 function core.accept(batch, seen, tick, counters)

@@ -80,3 +80,39 @@ t.test("inbound: a batch with a hole rejects the whole batch instead of dropping
 	t.expect_eq(#accepted, 0)
 	t.expect_eq(counters.rejects, 1)
 end)
+
+-- #21: a chunked body's parts end on UTF-8 character boundaries, so the host decodes each part to the same text.
+local function boundary_ok(parts, s, size)
+	t.expect_eq(table.concat(parts), s, "the parts join to the body, byte for byte")
+	for k, p in ipairs(parts) do
+		t.expect_true(#p >= 1 and #p <= size, "part " .. k .. " is 1.." .. size .. " bytes: " .. #p)
+		local b = string.byte(p, 1)
+		t.expect_true(b < 0x80 or b >= 0xC0, "part " .. k .. " starts a character")
+	end
+end
+
+t.test("chunks: ASCII is cut at exactly size bytes; a body of exactly size is one part; empty has none", function()
+	local s = string.rep("abcdefghij", 30)
+	local parts = core.chunks(s, 100)
+	t.expect_eq(#parts, 3)
+	boundary_ok(parts, s, 100)
+	t.expect_same(core.chunks(string.rep("x", 100), 100), { string.rep("x", 100) })
+	t.expect_eq(#core.chunks(string.rep("x", 101), 100), 2)
+	t.expect_same(core.chunks("", 100), {})
+end)
+
+t.test("chunks: a 2, 3 or 4-byte character straddling every cut position moves the cut back to its start", function()
+	for _, ch in ipairs({ "\195\166", "\226\130\172", "\240\159\152\128" }) do -- æ, €, 😀
+		for pad = 0, 12 do
+			local s = string.rep("a", pad) .. string.rep(ch, 10) .. "z"
+			for size = 4, 13 do
+				boundary_ok(core.chunks(s, size), s, size)
+			end
+		end
+	end
+end)
+
+t.test("chunks: the issue's case, æø cut at 3 bytes, keeps each character whole", function()
+	t.expect_same(core.chunks("\195\166\195\184", 3), { "\195\166", "\195\184" })
+	t.expect_same(core.chunks("\195\166\195\184", 4), { "\195\166\195\184" })
+end)

@@ -5,6 +5,7 @@
 -- they arrive, and the circuit link's write task writes them in its one budget (plan ruling 2). A discovery every 10 s
 -- makes and removes hosts (§4's hosting rule); guard 6.2 keeps two hosts on one network from reporting it twice (§6.2).
 local bridge = require("modules/universal_edges/runtime/bridge")
+local bridge_core = require("modules/universal_edges/runtime/bridge_core")
 local scheduler = require("modules/universal_edges/runtime/scheduler")
 local circuit = require("modules/universal_edges/transports/circuit")
 local cc = require("modules/universal_edges/transports/circuit_core")
@@ -47,11 +48,11 @@ local function report(h, st)
 		return
 	end
 	h.seq = (h.seq or 0) + 1
-	local n, key = math.ceil(#json / radar.CHUNK), h.key .. "/" .. h.seq
-	for i = 1, n do
-		send("ue.radar.chunk", { key = key, i = i, n = n, data = string.sub(json, (i - 1) * radar.CHUNK + 1, i * radar.CHUNK) })
+	local parts, key = bridge_core.chunks(json, radar.CHUNK), h.key .. "/" .. h.seq
+	for i, data in ipairs(parts) do
+		send("ue.radar.chunk", { key = key, i = i, n = #parts, data = data })
 	end
-	send("ue.radar.own", { key = h.key, chunks = n, seq = h.seq })
+	send("ue.radar.own", { key = h.key, chunks = #parts, seq = h.seq })
 end
 
 --- §5: ask the controller for this host's full target, at most once per ASK ticks. True when it asked.

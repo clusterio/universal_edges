@@ -7,6 +7,7 @@
 -- { e = kJ }. Once a second the tile reports each linked network's per-class flows, stock and link totals to the hub
 -- (ue.power.report, §6.1).
 local bridge = require("modules/universal_edges/runtime/bridge")
+local bridge_core = require("modules/universal_edges/runtime/bridge_core")
 local connectors = require("modules/universal_edges/edges/connectors")
 local geometry = require("modules/universal_edges/edges/geometry_core")
 local detect = require("modules/universal_edges/transports/detect")
@@ -307,11 +308,11 @@ function power.sample()
 			return
 		end
 		st.seq = (st.seq or 0) + 1
-		local n, key = math.ceil(#json / CHUNK), "power/" .. st.seq
-		for i = 1, n do
-			send("ue.power.chunk", { key = key, i = i, n = n, data = string.sub(json, (i - 1) * CHUNK + 1, i * CHUNK) })
+		local parts, key = bridge_core.chunks(json, CHUNK), "power/" .. st.seq
+		for i, data in ipairs(parts) do
+			send("ue.power.chunk", { key = key, i = i, n = #parts, data = data })
 		end
-		send("ue.power.report", { chunks = n, seq = st.seq })
+		send("ue.power.report", { chunks = #parts, seq = st.seq })
 	end
 end
 

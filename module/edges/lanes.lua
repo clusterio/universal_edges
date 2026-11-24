@@ -48,12 +48,12 @@ local function send_all(side, cid, dir, msgs)
 	for _, m in ipairs(msgs or {}) do
 		m.edge, m.epoch, m.cid, m.dir = side.id, side.epoch, cid, dir
 		if m.body and #m.body > lanes.CHUNK then
-			local n = math.ceil(#m.body / lanes.CHUNK)
+			local parts = bridge_core.chunks(m.body, lanes.CHUNK)
 			local key = side.id .. "/" .. cid .. "/" .. (dir or m.k) .. "/" .. m.seq
-			for i = 1, n do
-				send("ue.chunk", { key = key, i = i, n = n, data = string.sub(m.body, (i - 1) * lanes.CHUNK + 1, i * lanes.CHUNK) })
+			for i, data in ipairs(parts) do
+				send("ue.chunk", { key = key, i = i, n = #parts, data = data })
 			end
-			m.body, m.chunks = nil, n
+			m.body, m.chunks = nil, #parts
 		end
 		send("ue.lane", m)
 	end
