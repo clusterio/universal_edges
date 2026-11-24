@@ -24,10 +24,11 @@ export type NetSpec = {
 };
 /**
  * links: pairs of network indices; link i's key is `l<i>` on both sides. delay: ticks for reports, targets, offers
- * and acks alike.
+ * and acks alike; lanes: a link's offers and acks take this many ticks instead (a slow or far hop).
  */
 export type WorldOpts = {
 	nets: NetSpec[]; links: [number, number][]; delay: number; seed: number; knobs?: Partial<Knobs>;
+	lanes?: Record<string, number>;
 };
 
 const J = 1000 / 60; // J that 1 kW gives in a tick
@@ -36,6 +37,7 @@ const TW = 1e9; // the prototype's 1 TW limit, kW
 const ACC_J = 5e6;
 const ACC_KW = 300;
 const STALE = 300; // §6.3: a target older than this (ticks) is none
+const OWN_S = 1; // #38: seconds of the tile's own demand its budget may keep (power.lua)
 const BACKOFF_MIN = 300; // the stream lane's re-offer backoff (ledger_core.lua), doubling to BACKOFF_MAX
 const BACKOFF_MAX = 3600;
 const ROUND = 0; // the hub's round, at this tick of every 60
@@ -46,7 +48,7 @@ const zero = (): Flows => ({ so: 0, po: 0, se: 0, to: 0, pd: 0, sd: 0, td: 0 });
 
 /**
  * One end of a link: its interface (§5: mode, limits, energy and buffer in J) and its endpoint's data (§6.2–§6.3:
- * n and b in kJ, tat, owe in J, sent and got in kJ, and the share q it holds in J) and its
+ * n and b in kJ, tat, owe in J, sent and got in kJ, and the share it holds out of the pool, hold, in J) and its
  * outbound stream lane (acked, next, backoff).
  */
 export class End {
@@ -61,7 +63,7 @@ export class End {
 	tat = -Infinity;
 	busy = false;
 	owe = 0;
-	q = 0;
+	hold = 0;
 	sent = 0;
 	got = 0;
 	acked = 0;
@@ -103,6 +105,10 @@ export class Net {
 	arrived = -1;
 	sums = zero();
 	samples = 0;
+	/** #38: the tile's own demand at its last report (kW), and the part of the pool its budget keeps for it (J). */
+	own = 0;
+	mark = 0;
+	markAt = 0;
 	constructor(readonly id: number, readonly spec: NetSpec, readonly phase: number) {
 		this.accC = (spec.acc ?? 0) * ACC_J;
 		this.accR = (spec.acc ?? 0) * ACC_KW;
@@ -249,7 +255,7 @@ export class World {
 		for (const n of this.nets) {
 			held += n.accE;
 			for (const e of n.ends) {
-				held += e.e + e.q - e.owe + (e.sent - e.partner.got) * 1000;
+				held += e.e + e.hold - e.owe + (e.sent - e.partner.got) * 1000;
 			}
 		}
 		return held + this.lost - (this.initial + this.generated - this.consumed);
@@ -275,7 +281,7 @@ export class World {
 		const r = { owe: 0, paid: 0, cancelled: 0, unpaid: 0, lane: 0, dropped: 0 };
 		for (const e of this.links[i]) {
 			r.owe += e.owe;
-			const held = Math.min(e.owe, e.q);
+			const held = Math.min(e.owe, e.hold);
 			e.owe -= held;
 			r.paid += held;
 			const { a, c } = e.net.pool();
@@ -287,14 +293,14 @@ export class World {
 			}
 			e.gone = true;
 			const others = e.net.pool();
-			const left = e.e + e.q - held;
+			const left = e.e + e.hold - held;
 			const put = Math.max(0, Math.min(left, others.c - others.a));
 			if (put > 0) {
 				e.net.write(others.a + put, others.c);
 			}
 			r.dropped += this.toAcc(e.net, left - put);
 			e.e = 0;
-			e.q = 0;
+			e.hold = 0;
 			e.buf = 0;
 		}
 		for (const e of this.links[i]) {
@@ -320,8 +326,8 @@ export class World {
 		return joules - put;
 	}
 
-	private later(f: () => void): void {
-		const at = this.tick + this.o.delay;
+	private later(f: () => void, key?: string): void {
+		const at = this.tick + (key !== undefined ? this.o.lanes?.[key] ?? this.o.delay : this.o.delay);
 		const list = this.queue.get(at);
 		if (list) {
 			list.push(f);
@@ -367,51 +373,67 @@ export class World {
 		}
 	}
 
+	/** #38: an end takes a part of its pool's budget (power.lua's sending). */
+	private sending(o: End): boolean {
+		return o.n > 0 && this.tick - o.tat <= STALE && !o.off && !o.partner.gone;
+	}
+
 	/**
-	 * #38, the tile's budget (power.lua), at every poll: the ends that don't send (no fresh n, or off) pay what they
-	 * owe from what they hold, put the rest back into the pool as far as it has room and pay the rest of their owe from
-	 * the pool; the pool is then shared by n over the sending ends that lack any, busy lanes included, each taking at
-	 * most what it still lacks. Each pays its owe from what it takes and holds the rest (q) out of the pool until its
-	 * send.
+	 * #38, the tile's budget (power.lua), at every poll: the energy the pool has beyond the mark kept for the tile's
+	 * own demand is shared by weight over the sending ends that lack any (n, busy lanes included, each taking at most
+	 * its owe and n less what it holds) and the tile's own demand (its kW, up to OWN_S seconds of it in the mark).
+	 * Each end pays its owe from what it takes and holds the rest out of the pool until its send; the own part stays in
+	 * the pool, marked. An end that doesn't send pays its owe from the pool only at its own poll (main's pay step).
 	 */
-	private budget(n: Net): void {
+	private budget(n: Net, self: End): void {
 		const p = n.pool();
-		const ends = n.ends.filter(o => !o.gone).sort((x, y) => x.key.localeCompare(y.key));
-		const senders: End[] = [];
-		const others: End[] = [];
-		let sum = 0;
-		for (const o of ends) {
-			if (o.n > 0 && this.tick - o.tat <= STALE && !o.off && !o.partner.gone) {
-				senders.push(o);
-				sum += o.owe + 1000 * o.n > o.q ? o.n : 0; // one that holds all it can send takes no part
-			} else {
-				others.push(o);
-			}
-		}
+		const ends = n.ends.filter(o => !o.gone && this.sending(o)).sort((x, y) => x.key.localeCompare(y.key));
 		let a = p.a;
-		for (const o of others) {
-			let pay = Math.min(o.owe, o.q);
-			const back = Math.min(o.q - pay, Math.max(0, p.c - a));
-			o.owe -= pay;
-			o.q -= pay + back;
-			a += back;
-			pay = Math.min(o.owe, a);
-			o.owe -= pay;
+		let m = Math.min(Math.max(0, n.mark - (this.tick - n.markAt) * n.own * 1000 / 60), a); // spent at its demand
+		if (!this.sending(self)) {
+			const pay = Math.min(self.owe, a - m);
+			self.owe -= pay;
 			a -= pay;
 		}
-		const split = a;
-		for (const o of senders) {
-			const lack = o.owe + 1000 * o.n - o.q;
+		const lackOwn = 1000 * n.own * OWN_S - m;
+		let sum = lackOwn > 0 ? n.own : 0;
+		for (const o of ends) {
+			sum += o.owe + 1000 * o.n > o.hold ? o.n : 0; // one that holds all it can send takes no part
+		}
+		const split = a - m;
+		for (const o of ends) {
+			const lack = o.owe + 1000 * o.n - o.hold;
 			const x = lack > 0 ? Math.min(split * o.n / sum, lack) : 0;
-			const q = o.q + x;
-			const pay = Math.min(o.owe, q);
+			const hold = o.hold + x;
+			const pay = Math.min(o.owe, hold);
 			o.owe -= pay;
-			o.q = q - pay;
+			o.hold = hold - pay;
 			a -= x;
 		}
+		if (lackOwn > 0) {
+			m += Math.min(split * n.own / sum, lackOwn);
+		}
+		n.mark = m;
+		n.markAt = this.tick;
 		if (a !== p.a) {
 			n.write(Math.max(0, a), p.c);
 		}
+	}
+
+	/**
+	 * #38: what an end that doesn't send holds pays its owe and goes back into its pool as far as the pool has room,
+	 * then into the accumulators; the rest waits for the next sample.
+	 */
+	private release(e: End): void {
+		const pay = Math.min(e.owe, e.hold);
+		e.owe -= pay;
+		e.hold -= pay;
+		const p = e.net.pool();
+		const back = Math.min(e.hold, Math.max(0, p.c - p.a));
+		if (back > 0) {
+			e.net.write(p.a + back, p.c);
+		}
+		e.hold = this.toAcc(e.net, e.hold - back); // what fits nowhere stays held
 	}
 
 	/**
@@ -423,9 +445,9 @@ export class World {
 			return;
 		}
 		const n = e.net;
-		this.budget(n);
+		this.budget(n, e);
 		const p = n.pool();
-		const q = e.q;
+		const q = e.hold;
 		if (this.tick - e.tat > STALE) {
 			built(e);
 			return;
@@ -445,7 +467,7 @@ export class World {
 			this.moved += 1000 * x;
 			const take = Math.min(1000 * x, q); // from what it holds, already out of the pool
 			e.owe += 1000 * x - take;
-			e.q = q - take;
+			e.hold = q - take;
 			this.offer(e);
 		}
 	}
@@ -458,7 +480,7 @@ export class World {
 		e.next = this.tick + e.backoff;
 		e.backoff = Math.min(2 * e.backoff, BACKOFF_MAX);
 		const total = e.sent;
-		this.later(() => this.credit(e.partner, total));
+		this.later(() => this.credit(e.partner, total), e.key);
 	}
 
 	/** Task 7's credit (§6.4, T2): only what fits, at one fill ratio over the pool; the ack carries the total got. */
@@ -476,7 +498,7 @@ export class World {
 			}
 		}
 		const recv = r.got;
-		this.later(() => this.ack(r.partner, recv));
+		this.later(() => this.ack(r.partner, recv), r.key);
 	}
 
 	/**
@@ -568,6 +590,9 @@ export class World {
 			if (e.off || this.tick - e.tat > STALE) {
 				built(e);
 			}
+			if (e.hold > 0 && !this.sending(e)) {
+				this.release(e);
+			}
 			if (e.seen === "built") {
 				own.to += e.o;
 				own.td += e.d;
@@ -590,14 +615,15 @@ export class World {
 			let c = 0;
 			for (const e of n.ends) {
 				if (!e.gone) {
-					a += e.e + e.q - e.owe;
-					c += e.buf;
+					a += e.e + e.hold - e.owe;
+					c += e.buf + e.hold; // #38: what an end holds counts as stock in a buffer of its own
 				}
 			}
 			const f = zero();
 			for (const k of FIELDS) {
 				f[k] = Math.floor(n.sums[k] / SAMPLES);
 			}
+			n.own = f.pd + f.sd;
 			const net: NetT = { a: Math.floor(a / 1000), c: Math.floor(c / 1000), f,
 				l: ready.map(e => [e.key, e.sent, e.got]) };
 			this.later(() => this.hub.report(n.id, { nets: [net] }));

@@ -366,6 +366,8 @@ end)
 -- each asked for 1,000 kJ. c1's lane is busy at its poll (a far partner's ack still on its way), so it sends nothing
 -- and keeps its share; then the tile's own consumers draw the pool empty. c2 still sends its share from what it holds
 -- and owes nothing (as marks on the pool, both shares were drawn away and c2 sent on credit), and c1 still holds its.
+-- Then the side is deactivated, so nothing on the network polls: c1's share goes back into the pool by the next
+-- sample (it stayed out of the network before).
 t.case("power hub: a link's share is held out of the pool, for a busy lane and against the tile's draw (#38)", function(ctx)
 	local c1, c2
 	ctx.at(500, function()
@@ -386,22 +388,28 @@ t.case("power hub: a link's share is held out of the pool, for a busy lane and a
 	end)
 	ctx.at(800, function()
 		ctx.expect(eei(c1).electric_buffer_size == 10e6 and eei(c2).electric_buffer_size == 10e6, "both buffers at b")
-		eei(c1).energy, eei(c2).energy, c1.data.owe, c2.data.owe, c1.data.q, c2.data.q = 1e6, 1e6, 0, 0, 0, 0
+		eei(c1).energy, eei(c2).energy, c1.data.owe, c2.data.owe, c1.data.hold, c2.data.hold = 1e6, 1e6, 0, 0, 0, 0
 		c1.data.stats.sent, c2.data.stats.sent = 0, 0
 		targets({ [c1.key] = { n = 1000, b = 10000, k = 0 }, [c2.key] = { n = 1000, b = 10000, k = 0 } })
 		local poll = connectors.types.power.poll
 		c1.idle = function() return false end -- its lane busy; dropped again in this tick, before any save
 		poll(c1, game.tick)
 		c1.idle = nil
-		ctx.expect(c1.data.stats.sent == 0 and math.abs(c1.data.q - 1e6) < 1, "c1 busy, holding its 1 MJ: sent " ..
-			c1.data.stats.sent .. ", holds " .. c1.data.q)
-		ctx.expect(math.abs(c2.data.q - 1e6) < 1 and eei(c1).energy + eei(c2).energy < 1, "c2 holds its 1 MJ, the pool " ..
-			"is spent: " .. c2.data.q .. ", " .. (eei(c1).energy + eei(c2).energy))
+		ctx.expect(c1.data.stats.sent == 0 and math.abs(c1.data.hold - 1e6) < 1, "c1 busy, holding its 1 MJ: sent " ..
+			c1.data.stats.sent .. ", holds " .. c1.data.hold)
+		ctx.expect(math.abs(c2.data.hold - 1e6) < 1 and eei(c1).energy + eei(c2).energy < 1, "c2 holds its 1 MJ, the pool " ..
+			"is spent: " .. c2.data.hold .. ", " .. (eei(c1).energy + eei(c2).energy))
 		eei(c1).energy, eei(c2).energy = 0, 0 -- the tile's own consumers draw what the pool has
 		poll(c2, game.tick)
 		ctx.expect(c2.data.stats.sent == 1000 and c2.data.owe < 1, "c2 sends its share from its hold: sent " ..
 			c2.data.stats.sent .. ", owes " .. c2.data.owe)
-		ctx.expect(math.abs(c1.data.q - 1e6) < 1, "c1 still holds its share: " .. c1.data.q)
+		ctx.expect(math.abs(c1.data.hold - 1e6) < 1, "c1 still holds its share: " .. c1.data.hold)
+		loop.activation("ph-hold", false) -- nothing on the network polls now: the report's sample gives the share back
+	end)
+	ctx.at(811, function()
+		ctx.expect(c1.data.hold == 0 and math.abs(eei(c1).energy + eei(c2).energy - 1e6) < 1, "c1's 1 MJ back in " ..
+			"the pool within 10 ticks: holds " .. c1.data.hold .. ", pool " .. (eei(c1).energy + eei(c2).energy))
+		loop.activation("ph-hold", true)
 	end)
 end)
 
@@ -723,6 +731,8 @@ do
 		if drain[tick] then
 			local x = drain[tick]
 			x.data.n = math.ceil(x.data.eei.energy / 1000) -- the pool's whole energy, so no debt is left to drain the refill
+			local st = storage.universal_edges.power_report
+			st.own, st.marks = {}, {} -- #38: and no part kept for the tile's own demand (its sink)
 			connectors.types.power.poll(x, tick)
 			x.data.n = 0
 			emptied[tick] = x.data.eei.energy < 1 and true or ("energy " .. x.data.eei.energy .. ", idle " ..
