@@ -334,8 +334,13 @@ export class Router {
 		this.byName = undefined;
 	}
 
-	/** D43: the tile's reservations as the controller knows them, at its start; then the whole station list (§7.3). */
+	/**
+	 * D43: the tile's reservations as the controller knows them, at its start; then the whole station list (§7.3). The
+	 * changes since the last broadcast go out first, so this.sent is the list the tile gets, and the next broadcast's
+	 * diff covers it (#20).
+	 */
 	resync(tile: number): void {
+		this.broadcastStations();
 		this.pending.add(tile);
 		const reservations = [...this.routes.values()].filter(r => r.stop?.tile === tile)
 			.map(r => ({ trace: r.trace, unit: r.stop!.unit }));
