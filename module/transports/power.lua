@@ -406,15 +406,15 @@ local schedule = { per_tick = 4, interval = 60 }
 
 --- #38: the pool is shared by weight over its network's sending links (their n) and the tile's own consumers (their
 --- demand in kW at the last report), so neither the order the links poll in nor their credit decides who it feeds.
---- Every poll first budgets the pool: a link that doesn't send pays its owe from the pool only at its own poll (main's
---- pay step); then what the pool has beyond the mark kept for the tile's own demand is shared by weight over the
---- sending links that lack any, each taking at most what it still lacks (its owe and n less what it holds), and the
---- tile's own demand, which keeps at most OWN_S seconds of it. A link pays its owe from what it takes and holds the
---- rest (d.hold, J) out of the pool for its own send (§6.3 step 4), so the tile's own consumers can't draw it away,
---- and a link whose lane is busy (a far partner's ack still on its way) keeps its share for the poll it can send at.
---- The own part stays in the pool, marked; the mark falls at the demand's rate, so later polls in the second don't
---- share it again. power.sample gives back what links that don't send hold. One sending link with no own demand gets
---- the whole pool, as before.
+--- Every poll, and every credit as the energy comes in, first budgets the pool: a link that doesn't send pays its owe
+--- from the pool only at its own poll (main's pay step); then what the pool has beyond the mark kept for the tile's own
+--- demand is shared by weight over the sending links that lack any, each taking at most what it still lacks (its owe
+--- and n less what it holds), and the tile's own demand, which keeps at most OWN_S seconds of it. A link pays its owe
+--- from what it takes and holds the rest (d.hold, J) out of the pool for its own send (§6.3 step 4), so the tile's own
+--- consumers can't draw it away, and a link whose lane is busy (a far partner's ack still on its way) keeps its share
+--- for the poll it can send at. The own part stays in the pool, marked; the mark falls at the demand's rate, so later
+--- budgets in the second don't share it again. power.sample gives back what links that don't send hold. One sending
+--- link with no own demand gets the whole pool, as before.
 -- ponytail: a link whose lane stays busy (its partner never acks) holds up to 1000·n out of its tile's network until
 -- it stops sending; give it back after some ticks busy if a relay's own load ever misses that.
 local OWN_S = 1
@@ -432,12 +432,12 @@ local function budget(g, tick, self)
 	table.sort(eps, function(x, y) return x.key < y.key end) -- the shares don't depend on pairs' order
 	local D, mark = (st.own or {})[g.id] or 0, st.marks[g.id]
 	local a = g.a
-	local m = mark and math.min(math.max(0, mark.m - (tick - mark.t) * D * 1000 / 60), a) or 0 -- spent at its demand
-	if not sending(self, tick) then
+	local m = mark and math.max(0, math.min(mark.m - (tick - mark.t) * D * 1000 / 60, a)) or 0 -- spent at its demand
+	if self and not sending(self, tick) then
 		local p = math.min(self.data.owe, a - m)
 		self.data.owe, a = self.data.owe - p, a - p
 	end
-	local own = 1000 * D * OWN_S - m
+	local own = D > 0 and 1000 * D * OWN_S - m or 0
 	local sum = own > 0 and D or 0
 	for _, o in ipairs(eps) do
 		local d = o.data
@@ -543,7 +543,9 @@ connectors.register_type({
 			return { [KEY] = 0 }
 		end
 		write(g, g.a + 1000 * x)
+		g.a = g.a + 1000 * x
 		ep.data.stats.got = ep.data.stats.got + x
+		budget(g, game.tick) -- #38: shared as it comes in, before the tile's own consumers draw it
 		return { [KEY] = x }
 	end,
 	--- §6.4, plan review S4: what the link owes is paid from what it holds (#38), then its pool as far as it holds. The

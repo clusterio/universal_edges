@@ -379,23 +379,24 @@ export class World {
 	}
 
 	/**
-	 * #38, the tile's budget (power.lua), at every poll: the energy the pool has beyond the mark kept for the tile's
-	 * own demand is shared by weight over the sending ends that lack any (n, busy lanes included, each taking at most
-	 * its owe and n less what it holds) and the tile's own demand (its kW, up to OWN_S seconds of it in the mark).
-	 * Each end pays its owe from what it takes and holds the rest out of the pool until its send; the own part stays in
-	 * the pool, marked. An end that doesn't send pays its owe from the pool only at its own poll (main's pay step).
+	 * #38, the tile's budget (power.lua), at every poll and every credit: the energy the pool has beyond the mark kept
+	 * for the tile's own demand is shared by weight over the sending ends that lack any (n, busy lanes included, each
+	 * taking at most its owe and n less what it holds) and the tile's own demand (its kW, up to OWN_S seconds of it in
+	 * the mark). Each end pays its owe from what it takes and holds the rest out of the pool until its send; the own
+	 * part stays in the pool, marked. An end that doesn't send pays its owe from the pool only at its own poll (main's
+	 * pay step); a credit's budget has no such end.
 	 */
-	private budget(n: Net, self: End): void {
+	private budget(n: Net, self?: End): void {
 		const p = n.pool();
 		const ends = n.ends.filter(o => !o.gone && this.sending(o)).sort((x, y) => x.key.localeCompare(y.key));
 		let a = p.a;
-		let m = Math.min(Math.max(0, n.mark - (this.tick - n.markAt) * n.own * 1000 / 60), a); // spent at its demand
-		if (!this.sending(self)) {
+		let m = Math.max(0, Math.min(n.mark - (this.tick - n.markAt) * n.own * 1000 / 60, a)); // spent at its demand
+		if (self && !this.sending(self)) {
 			const pay = Math.min(self.owe, a - m);
 			self.owe -= pay;
 			a -= pay;
 		}
-		const lackOwn = 1000 * n.own * OWN_S - m;
+		const lackOwn = n.own > 0 ? 1000 * n.own * OWN_S - m : 0;
 		let sum = lackOwn > 0 ? n.own : 0;
 		for (const o of ends) {
 			sum += o.owe + 1000 * o.n > o.hold ? o.n : 0; // one that holds all it can send takes no part
@@ -495,6 +496,7 @@ export class World {
 			if (x > 0) {
 				r.net.write(p.a + 1000 * x, p.c);
 				r.got += x;
+				this.budget(r.net); // #38: shared as it comes in, before the tile's own draw takes it
 			}
 		}
 		const recv = r.got;

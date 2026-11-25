@@ -503,6 +503,28 @@ test("#38: behind a slow hop, the relays' own loads keep a part and the far tile
 	assert.ok(Math.abs(w.ledger()) <= 1e-6 * w.moved, `ledger ${w.ledger()} J`);
 });
 
+// #38, PR review: a chain whose throughput the small buffer limits (b factor 0.5), 40 hops, every tile past the
+// steam loaded 1 MW. Budgeted only at polls, the energy a credit brought sat in the pool for the tile's own machines to
+// draw first, so each relay fed itself before the next and the last ten tiles got nothing (main: the worst tile 0.10).
+// A credit now budgets the pool as the energy comes in.
+test("#38: in a chain short of throughput, the far tiles still get a part (budget at each credit)", () => {
+	const hops = 40;
+	const nets: NetSpec[] = [{ steam: 60_000 }, ...Array.from({ length: hops }, () => ({ load: () => 1_000 }))];
+	const w = new World({ nets, links: Array.from({ length: hops }, (_, i): [number, number] => [i, i + 1]), delay: 2,
+		seed: 1, knobs: { factor: 0.5 } });
+	const got = nets.map(() => 0);
+	for (let t = 0; t < 600 * 60; t++) {
+		w.step();
+		if (t >= 480 * 60) {
+			w.nets.forEach((n, i) => { got[i] += n.u.sq; });
+		}
+	}
+	const sat = got.slice(1).map(x => x / (120 * 60));
+	assert.ok(sat[hops - 1] >= 0.9, `far tile ${sat[hops - 1].toFixed(3)}`);
+	assert.ok(Math.min(...sat) >= 0.25, `worst tile ${Math.min(...sat).toFixed(3)}`);
+	assert.ok(Math.abs(w.ledger()) <= 1e-6 * w.moved, `ledger ${w.ledger()} J`);
+});
+
 // #38, PR review: a link that doesn't poll (its side deactivated, its partner restarting) at its debt cap waits for
 // its own poll or teardown to pay, as on main; it took the whole pool ahead of the live links before.
 test("#38: a link that doesn't poll doesn't pay its owe ahead of the links that send", () => {
