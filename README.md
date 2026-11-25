@@ -21,6 +21,21 @@ pnpm run -r --if-present prepare
 
 `prepare` compiles the plugin, bundles its web page and zips its mod to `dist/universal_edges_<mod version>.zip`. The mod's version is the package's, kept in step in `mod/info.json` and `module/module.json`. Add the plugin to the controller's plugin list with `npx clusteriocontroller plugin add ./external_plugins/universal_edges` and to each host's with `npx clusteriohost plugin add ./external_plugins/universal_edges`, from the checkout (a path needs the `./`). Upload the mod with `npx clusterioctl mod upload external_plugins/universal_edges/dist/universal_edges_<mod version>.zip`, and add it to the instances' mod pack with `npx clusterioctl mod-pack edit <pack> --add-mods universal_edges:<mod version>`.
 
+## Metrics
+
+The controller's `/metrics` endpoint carries these, labelled by `instance_id`:
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `clusterio_universal_edges_task_total` | `task`, `kind` | The Lua runtime's counters: scheduler task runs, units, deferrals, drops and so on. |
+| `clusterio_universal_edges_lane_batches_total` | `result` | Lane batches by result: sent, delivered, held, stale, rejected and so on. |
+| `clusterio_universal_edges_power_link_energy_kj` | `link`, `direction` (`sent`, `got`) | Energy a power link has sent or got. A running total that restarts at 0 when the link is rebuilt, so it's a gauge: read it with `deriv()`. |
+| `clusterio_universal_edges_power_link_send_kj` | `link` | What the power hub gave the link to send this second. |
+| `clusterio_universal_edges_power_flow_kw` | `class` (`solar_output`, `primary_output`, `secondary_output`, `tertiary_output`, `primary_demand`, `secondary_demand`, `tertiary_demand`) | The instance's linked electric networks' mean flows, less UE's own interfaces, summed. |
+| `clusterio_universal_edges_power_stock_kj`, `clusterio_universal_edges_power_capacity_kj` | | The linked networks' stored energy (less what their links owe, so it can go below 0) and capacity, summed. |
+
+The power series come from each instance's latest power report, so only instances with a linked electric network have them. They go when the report is over 5 s old or the instance stops.
+
 ## Test and lint
 
 Run these from inside the Clusterio checkout, where Oxlint is installed:

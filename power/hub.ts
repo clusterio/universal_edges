@@ -136,6 +136,8 @@ export class PowerHub {
 	readonly peaks = new Map<string, { minute: number; max: number }[]>();
 	/** The buffer (kJ) each link key was assigned last round: a floor on its pool's c (Task 5 ruling C). */
 	private assigned = new Map<string, number>();
+	/** Last round's targets per tile, for the metrics (issue #34). */
+	sent = new Map<number, Record<string, TargetT>>();
 	private readonly knobs: Knobs;
 
 	constructor(private port: PowerPort, knobs: Partial<Knobs> = {}) {
@@ -228,6 +230,7 @@ export class PowerHub {
 				this.peaks.delete(key);
 			}
 		}
+		this.sent = out;
 		for (const [id, l] of out) {
 			this.port.send(id, { l });
 		}
