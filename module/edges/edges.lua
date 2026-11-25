@@ -105,7 +105,11 @@ bridge.on("universal_edges", "ue.edge.sync", function(p)
 	local s = storage.universal_edges
 	-- FC4 (circuit-link spec C5 b): a side the sync turns inactive reads as silence, as after activation(active=false).
 	-- The controller sends no such message first when it knows of no active state, e.g. after its own restart.
-	for _, side in ipairs(core.reset(s.edges)) do
+	-- #22: logged as the activation handler logs a deactivation, so quiet circuit links after a restart are explained.
+	local was, ended = core.reset(s.edges)
+	for i, side in ipairs(was) do
+		send("trace", { op = "ue.edge", phase = "deactivated", trace = "sync." .. game.tick, tick = game.tick,
+			edge = side.id, epoch = ended[i], reason = "sync" })
 		marks.recolor(side)
 		lanes.deactivated(side)
 	end

@@ -118,16 +118,17 @@ function core.epoch_ok(side, epoch)
 end
 
 --- A start, crash or rollback, and every sync, leave every side inactive (§6.2). Returns the sides that were active,
---- which the caller deactivates as if each had been sent a ue.edge.activation(active=false).
+--- which the caller deactivates as if each had been sent a ue.edge.activation(active=false), and each one's ended epoch.
 function core.reset(sides)
-	local was = {}
+	local was, ended = {}, {}
 	for _, side in pairs(sides) do
 		if side.active then
 			was[#was + 1] = side
+			ended[#was] = side.epoch
 		end
 		side.active, side.epoch = false, nil
 	end
-	return was
+	return was, ended
 end
 
 return core

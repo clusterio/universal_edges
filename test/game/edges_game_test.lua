@@ -128,18 +128,45 @@ t.case("edges: activation takes an epoch once, a deactivation stales old batches
 	ctx.expect_ipc("universal_edges:out", '"phase":"deactivated"')
 end)
 
-t.case("edges: a sync is authoritative: absent sides are dropped and every side is left inactive", function(ctx)
+-- #22: sp1a-off's deactivated hook counts its calls by endpoint key, so a sync's deactivation is seen at the hook too.
+local off = {}
+ue.connectors.register_type({
+	name = "sp1a-off",
+	lanes = function() return {} end,
+	schedule = { per_tick = 1, interval = 60 },
+	build = function() return "ready" end,
+	teardown = function() end,
+	poll = function() end,
+	deactivated = function(e)
+		off[e.key] = (off[e.key] or 0) + 1
+	end,
+})
+
+t.case("edges: a sync is authoritative: absent sides are dropped and every side is left inactive; an active one is " ..
+	"deactivated once and logged with reason sync (#22)", function(ctx)
+	local KEEP = { connectors = { { cid = "c1", type = "sp1a-off", pos = 2, width = 1, params = {} } } }
 	ctx.at(20, function()
-		deliver("ue.edge.sync", { edges = { record("sp1a-keep", 1), record("sp1a-drop", 2) } })
+		deliver("ue.edge.sync", { edges = { record("sp1a-keep", 1, KEEP), record("sp1a-drop", 2) } })
 		deliver("ue.edge.activation", { id = "sp1a-keep", active = true, epoch = "0000ed9e.e3", trace = "0000ed9e.e3" })
+		ctx.expect(side("sp1a-keep").active and off["sp1a-keep/c1"] == nil, "active, its hook not yet called")
 	end)
 	ctx.at(21, function()
-		deliver("ue.edge.sync", { edges = { record("sp1a-keep", 1) } })
+		deliver("ue.edge.sync", { edges = { record("sp1a-keep", 1, KEEP) } })
 		ctx.expect(side("sp1a-drop") == nil, "a side absent from the sync is dropped")
 		ctx.expect(side("sp1a-keep") and not side("sp1a-keep").active, "the others are left inactive")
 		local applied = queued("ue.edge.applied")
 		ctx.expect(#applied == 1 and applied[1].sync == true and applied[1].revision == 1, "reported, marked sync")
+		ctx.expect(off["sp1a-keep/c1"] == 1, "the active side's endpoint had its deactivated hook once")
+		local logged = traced("deactivated", "sp1a-keep")
+		ctx.expect(#logged == 1 and logged[1].reason == "sync" and logged[1].epoch == "0000ed9e.e3",
+			"logged as deactivated, reason sync, with the epoch it ended")
 	end)
+	ctx.at(22, function()
+		deliver("ue.edge.sync", { edges = { record("sp1a-keep", 1, KEEP) } })
+		ctx.expect(off["sp1a-keep/c1"] == 1, "a second sync finds the side inactive: no further call")
+		ctx.expect(#traced("deactivated", "sp1a-keep") == 0, "and no further trace")
+	end)
+	ctx.expect_ipc("universal_edges:out", '"reason":"sync"')
 end)
 
 t.case("edges: 40 edges in one sync leave as 40 applied reports under the soft limit", function(ctx)
