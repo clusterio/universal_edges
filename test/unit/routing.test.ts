@@ -314,7 +314,8 @@ test("resync sends the tile's reservations and the whole station list; routes ro
 		w.sent.find(m => m.kind === "ue.route.resync"),
 		{ to: 1, kind: "ue.route.resync", payload: { reservations: [{ trace: "r1", unit: 11 }] } },
 	);
-	const stations = w.sent.filter(m => m.kind === "ue.route.stations" && m.to === 1);
+	const after = w.sent.slice(w.sent.findIndex(m => m.kind === "ue.route.resync"));
+	const stations = after.filter(m => m.kind === "ue.route.stations" && m.to === 1);
 	assert.equal(stations[0].payload.full, true, "a resync's list replaces the tile's");
 	assert.ok(w.logs.some(l => l.op === "ue.routing" && l.phase === "resync" && l.fields.reservations === 1));
 	const saved = JSON.parse(JSON.stringify(w.router.toJSON()));
@@ -754,6 +755,53 @@ test("a tile resynced but not yet reported in gets the broadcast's changes too: 
 	w.sent.length = 0;
 	w.router.broadcastStations();
 	assert.equal(w.sent.filter(m => m.kind === "ue.route.stations" && m.to === 5).length, 1, "reported in: sent once");
+});
+
+/** Tile `to`'s station list (name → free) as panel.lua builds it from the ue.route.stations messages in `sent`. */
+function tileList(sent: Sent[], to: number) {
+	const names = new Map<string, number>();
+	for (const { payload: p } of sent.filter(m => m.kind === "ue.route.stations" && m.to === to)) {
+		if (p.full) {
+			names.clear();
+		}
+		for (const e of p.set) {
+			names.set(e.name, e.free);
+		}
+		for (const g of p.gone) {
+			names.delete(g.name);
+		}
+	}
+	return Object.fromEntries(names);
+}
+const truth = (router: Router) => Object.fromEntries(router.stationEntries().map(e => [e.name, e.free]));
+
+test("a change undone between a resync and the next broadcast doesn't stick on the resynced tile (#20)", () => {
+	const w = world({ stations2: [station(21, "R MID", { limit: 3 })] });
+	w.router.broadcastStations();
+	w.router.receive(2, "ue.route.report", { stations: [station(21, "R MID", { limit: 3, count: 1 })] });
+	w.router.resync(5);
+	const parts = w.sent.filter(m => m.kind === "ue.route.stations" && m.to === 5).map(m => m.payload);
+	assert.equal(parts[0].full, true, "the resync's list replaces the tile's");
+	assert.deepEqual(parts.flatMap(p => p.set.map((e: { name: string }) => e.name)), ["HOME4", "R MID", "R WEST"]);
+	assert.deepEqual(tileList(w.sent, 5), truth(w.router), "R MID free 2");
+	w.router.receive(2, "ue.route.report", { stations: [station(21, "R MID", { limit: 3 })] });
+	w.router.receive(5, "ue.route.report", { full: true });
+	w.router.broadcastStations();
+	assert.deepEqual(tileList(w.sent, 5), truth(w.router), "R MID back to free 3");
+	assert.deepEqual(tileList(w.sent, 1), truth(w.router), "the other tiles agree");
+});
+
+test("a name added and removed between a resync and the next broadcast is gone from the resynced tile (#20)", () => {
+	const w = world();
+	w.router.broadcastStations();
+	w.router.receive(2, "ue.route.report", { stations: [station(22, "B")] });
+	w.router.resync(5);
+	assert.equal(tileList(w.sent, 5).B, -1, "the full list has B");
+	w.router.receive(2, "ue.route.report", { stops_gone: [22] });
+	w.router.receive(5, "ue.route.report", { full: true });
+	w.router.broadcastStations();
+	assert.deepEqual(tileList(w.sent, 5), truth(w.router), "B is gone");
+	assert.deepEqual(tileList(w.sent, 1), truth(w.router), "the other tiles agree");
 });
 
 test("the list's diff and gone go by (surface, name): a name on a second planet comes and goes alone (R35)", () => {
