@@ -288,6 +288,131 @@ t.case("power hub: a link sends n, owes what its pool lacks, and pays it from th
 	end)
 end)
 
+-- #38: a short relay pool is shared over its links by their n, whatever order they poll in. Side a: c1 and c2 on one
+-- network, both owing their whole buffer (10 MJ), holding 2 MJ; c1 asked for 1,000 kJ, c2 for 3,000. Before the fix the
+-- first to poll paid its owe from all 2 MJ and sent it, and the other, still at its cap, sent nothing.
+t.case("power hub: a short pool is shared over its links by their n, whichever polls first (#38)", function(ctx)
+	local c1, c2
+	ctx.at(500, function()
+		local fa = layouts.edge(loop, "ph-split", 27600, 12, {
+			{ cid = "c1", type = "power", pos = 2, width = 2, params = {} },
+			{ cid = "c2", type = "power", pos = 7, width = 2, params = {} },
+		}, 12)
+		local p1, p2 = layouts.put(fa, "substation", 3, 1), layouts.put(fa, "substation", 8, 1)
+		local W, script = defines.wire_connector_id, defines.wire_origin.script
+		p1.get_wire_connector(W.pole_copper, true).connect_to(p2.get_wire_connector(W.pole_copper, true), false, script)
+	end)
+	ctx.at(700, function()
+		c1, c2 = ep("ph-split-x", "c1"), ep("ph-split-x", "c2")
+		ctx.expect(c1 and c2 and c1.state == "ready" and c2.state == "ready", "both links ready")
+		if c1 and c2 then
+			targets({ [c1.key] = { n = 0, b = 10000, k = 0 }, [c2.key] = { n = 0, b = 10000, k = 0 } })
+		end
+	end)
+	ctx.at(800, function()
+		ctx.expect(eei(c1).electric_buffer_size == 10e6 and eei(c2).electric_buffer_size == 10e6, "both buffers at b")
+		eei(c1).energy, eei(c2).energy, c1.data.owe, c2.data.owe = 1e6, 1e6, 10e6, 10e6
+		c1.data.stats.sent, c2.data.stats.sent = 0, 0
+		targets({ [c1.key] = { n = 1000, b = 10000, k = 0 }, [c2.key] = { n = 3000, b = 10000, k = 0 } })
+	end)
+	ctx.at(950, function()
+		ctx.expect(c1.data.stats.sent == 500 and c2.data.stats.sent == 1500, "the 2 MJ split 1:3, as their n: sent " ..
+			c1.data.stats.sent .. " and " .. c2.data.stats.sent)
+		ctx.expect(eei(c1).energy + eei(c2).energy < 1, "the pool spent")
+		ctx.expect(math.abs(c1.data.owe - 10e6) < 1 and math.abs(c2.data.owe - 10e6) < 1, "each still owes its buffer: " ..
+			c1.data.owe .. ", " .. c2.data.owe)
+	end)
+end)
+
+-- #38, the other order: the same pool, with c2 polled before c1 (both called straight away, ahead of the walk). Before
+-- the fix c2 paid its owe from all 2 MJ and sent it, and c1 sent nothing.
+t.case("power hub: a short pool is shared over its links by their n, the other link polled first (#38)", function(ctx)
+	local c1, c2
+	ctx.at(500, function()
+		local fa = layouts.edge(loop, "ph-split2", 27700, 12, {
+			{ cid = "c1", type = "power", pos = 2, width = 2, params = {} },
+			{ cid = "c2", type = "power", pos = 7, width = 2, params = {} },
+		}, 12)
+		local p1, p2 = layouts.put(fa, "substation", 3, 1), layouts.put(fa, "substation", 8, 1)
+		local W, script = defines.wire_connector_id, defines.wire_origin.script
+		p1.get_wire_connector(W.pole_copper, true).connect_to(p2.get_wire_connector(W.pole_copper, true), false, script)
+	end)
+	ctx.at(700, function()
+		c1, c2 = ep("ph-split2-x", "c1"), ep("ph-split2-x", "c2")
+		ctx.expect(c1 and c2 and c1.state == "ready" and c2.state == "ready", "both links ready")
+		if c1 and c2 then
+			targets({ [c1.key] = { n = 0, b = 10000, k = 0 }, [c2.key] = { n = 0, b = 10000, k = 0 } })
+		end
+	end)
+	ctx.at(800, function()
+		ctx.expect(eei(c1).electric_buffer_size == 10e6 and eei(c2).electric_buffer_size == 10e6, "both buffers at b")
+		eei(c1).energy, eei(c2).energy, c1.data.owe, c2.data.owe = 1e6, 1e6, 10e6, 10e6
+		c1.data.stats.sent, c2.data.stats.sent = 0, 0
+		targets({ [c1.key] = { n = 1000, b = 10000, k = 0 }, [c2.key] = { n = 3000, b = 10000, k = 0 } })
+		local poll = connectors.types.power.poll
+		poll(c2, game.tick)
+		poll(c1, game.tick)
+		ctx.expect(c1.data.stats.sent == 500 and c2.data.stats.sent == 1500, "the 2 MJ split 1:3 at once: sent " ..
+			c1.data.stats.sent .. " and " .. c2.data.stats.sent)
+	end)
+	ctx.at(950, function()
+		ctx.expect(c1.data.stats.sent == 500 and c2.data.stats.sent == 1500, "and nothing more: sent " ..
+			c1.data.stats.sent .. " and " .. c2.data.stats.sent)
+		ctx.expect(eei(c1).energy + eei(c2).energy < 1, "the pool spent")
+	end)
+end)
+
+-- #38, PR review: what a link holds is out of the pool. Side a: c1 and c2 on one network holding 2 MJ, owing nothing,
+-- each asked for 1,000 kJ. c1's lane is busy at its poll (a far partner's ack still on its way), so it sends nothing
+-- and keeps its share; then the tile's own consumers draw the pool empty. c2 still sends its share from what it holds
+-- and owes nothing (as marks on the pool, both shares were drawn away and c2 sent on credit), and c1 still holds its.
+-- Then the side is deactivated, so nothing on the network polls: c1's share goes back into the pool by the next
+-- sample (it stayed out of the network before).
+t.case("power hub: a link's share is held out of the pool, for a busy lane and against the tile's draw (#38)", function(ctx)
+	local c1, c2
+	ctx.at(500, function()
+		local fa = layouts.edge(loop, "ph-hold", 27900, 12, {
+			{ cid = "c1", type = "power", pos = 2, width = 2, params = {} },
+			{ cid = "c2", type = "power", pos = 7, width = 2, params = {} },
+		}, 12)
+		local p1, p2 = layouts.put(fa, "substation", 3, 1), layouts.put(fa, "substation", 8, 1)
+		local W, script = defines.wire_connector_id, defines.wire_origin.script
+		p1.get_wire_connector(W.pole_copper, true).connect_to(p2.get_wire_connector(W.pole_copper, true), false, script)
+	end)
+	ctx.at(700, function()
+		c1, c2 = ep("ph-hold-x", "c1"), ep("ph-hold-x", "c2")
+		ctx.expect(c1 and c2 and c1.state == "ready" and c2.state == "ready", "both links ready")
+		if c1 and c2 then
+			targets({ [c1.key] = { n = 0, b = 10000, k = 0 }, [c2.key] = { n = 0, b = 10000, k = 0 } })
+		end
+	end)
+	ctx.at(800, function()
+		ctx.expect(eei(c1).electric_buffer_size == 10e6 and eei(c2).electric_buffer_size == 10e6, "both buffers at b")
+		eei(c1).energy, eei(c2).energy, c1.data.owe, c2.data.owe, c1.data.hold, c2.data.hold = 1e6, 1e6, 0, 0, 0, 0
+		c1.data.stats.sent, c2.data.stats.sent = 0, 0
+		targets({ [c1.key] = { n = 1000, b = 10000, k = 0 }, [c2.key] = { n = 1000, b = 10000, k = 0 } })
+		local poll = connectors.types.power.poll
+		c1.idle = function() return false end -- its lane busy; dropped again in this tick, before any save
+		poll(c1, game.tick)
+		c1.idle = nil
+		ctx.expect(c1.data.stats.sent == 0 and math.abs(c1.data.hold - 1e6) < 1, "c1 busy, holding its 1 MJ: sent " ..
+			c1.data.stats.sent .. ", holds " .. c1.data.hold)
+		ctx.expect(math.abs(c2.data.hold - 1e6) < 1 and eei(c1).energy + eei(c2).energy < 1, "c2 holds its 1 MJ, the pool " ..
+			"is spent: " .. c2.data.hold .. ", " .. (eei(c1).energy + eei(c2).energy))
+		eei(c1).energy, eei(c2).energy = 0, 0 -- the tile's own consumers draw what the pool has
+		poll(c2, game.tick)
+		ctx.expect(c2.data.stats.sent == 1000 and c2.data.owe < 1, "c2 sends its share from its hold: sent " ..
+			c2.data.stats.sent .. ", owes " .. c2.data.owe)
+		ctx.expect(math.abs(c1.data.hold - 1e6) < 1, "c1 still holds its share: " .. c1.data.hold)
+		loop.activation("ph-hold", false) -- nothing on the network polls now: the report's sample gives the share back
+	end)
+	ctx.at(811, function()
+		ctx.expect(c1.data.hold == 0 and math.abs(eei(c1).energy + eei(c2).energy - 1e6) < 1, "c1's 1 MJ back in " ..
+			"the pool within 10 ticks: holds " .. c1.data.hold .. ", pool " .. (eei(c1).energy + eei(c2).energy))
+		loop.activation("ph-hold", true)
+	end)
+end)
+
 -- Plan ruling 26 (model F3): a buffer change rewrites the pool at one fill ratio, so an interface shrunk to its stored
 -- energy isn't left full (room 0, drawing nothing) until the pool's next write. Side a: two links on one network, c1 at
 -- 40 of 100 MJ given b = 20 MJ (so it shrinks to 40 MJ), c2 empty at 10 MJ: after c1's poll they hold 32 and 8 MJ.
@@ -606,6 +731,8 @@ do
 		if drain[tick] then
 			local x = drain[tick]
 			x.data.n = math.ceil(x.data.eei.energy / 1000) -- the pool's whole energy, so no debt is left to drain the refill
+			local st = storage.universal_edges.power_report
+			st.own, st.marks = {}, {} -- #38: and no part kept for the tile's own demand (its sink)
 			connectors.types.power.poll(x, tick)
 			x.data.n = 0
 			emptied[tick] = x.data.eei.energy < 1 and true or ("energy " .. x.data.eei.energy .. ", idle " ..

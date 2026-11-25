@@ -59,7 +59,7 @@ end
 
 --- The pool of this interface's network (§4): every power endpoint's interface with the same electric_network_id, this
 --- one included. Returns { a, c, eps }: the pool's energy and capacity in J, and the endpoints whose interfaces are in
---- it. nil while the interface stands on no network.
+--- it, and its id. nil while the interface stands on no network.
 --- ponytail: grouping by electric_network_id doesn't join sub-networks behind a power switch, which share one
 --- parent_network. Group by parent if a relay ever sits behind a switch.
 local function read(ep)
@@ -68,7 +68,7 @@ local function read(ep)
 	if not id then
 		return nil
 	end
-	local g = { a = 0, c = 0, eps = {} }
+	local g = { id = id, a = 0, c = 0, eps = {} }
 	for _, o in pairs(storage.universal_edges.eps.power) do
 		local x = o.data.eei
 		if x and x.valid and x.electric_network_id == id then
@@ -199,6 +199,33 @@ local function sums()
 	return s.power_report
 end
 
+--- #38: the endpoint takes a part of its pool's budget: a fresh n above 0, and it polls.
+local function sending(ep, tick)
+	local d = ep.data
+	return (d.n or 0) > 0 and d.tat ~= nil and tick - d.tat <= stale() and polling(ep)
+end
+
+--- #38: what a link that doesn't send holds (d.hold, J) pays its owe, then goes back into its pool as far as it has
+--- room (into its own interface while it stands on no network), then into the border pole's accumulators. The rest
+--- waits for the next sample.
+local function release(ep)
+	local d = ep.data
+	local p = math.min(d.owe or 0, d.hold)
+	d.owe, d.hold = (d.owe or 0) - p, d.hold - p
+	local g, eei = read(ep), d.eei
+	local back = 0
+	if g then
+		back = math.min(d.hold, math.max(0, g.c - g.a))
+		if back > 0 then
+			write(g, g.a + back)
+		end
+	elseif eei and eei.valid then
+		back = math.min(d.hold, math.max(0, eei.electric_buffer_size - eei.energy))
+		eei.energy = eei.energy + back
+	end
+	d.hold = to_accumulators(ep, d.hold - back)
+end
+
 --- §4, plan ruling 4: every network with a link interface, by electric_network_id: { parent, eps, ready }, where ready
 --- counts the ready, open endpoints among eps; and the interfaces to put in the built state (plan review S3): those whose
 --- endpoint isn't polling or has no fresh target, whatever the poll does for its own reasons.
@@ -269,6 +296,11 @@ end
 function power.sample()
 	snapshot(true) -- F4: before anything below writes
 	local st = sums()
+	for _, ep in pairs(storage.universal_edges.eps.power or {}) do
+		if (ep.data.hold or 0) > 0 and not sending(ep, game.tick) then
+			release(ep) -- #38: nothing on its network may poll again (a server start, partners down, off its network)
+		end
+	end
 	local by, idle = networks()
 	for id, n in pairs(by) do
 		st.nets[id] = st.nets[id] or {}
@@ -281,13 +313,17 @@ function power.sample()
 	if st.n < SAMPLES then
 		return
 	end
-	local nets = {}
+	local nets, own, marks = {}, {}, {}
+	for id in pairs(by) do
+		marks[id] = (st.marks or {})[id]
+	end
 	for id, n in pairs(by) do
 		if n.ready > 0 then
 			local acc, a, c, l = st.nets[id], 0, 0, {}
 			for _, ep in ipairs(n.eps) do
 				local x, d = ep.data.eei, ep.data
-				a, c = a + x.energy - (d.owe or 0), c + x.electric_buffer_size
+				-- #38: what a link holds counts as stock in a buffer of its own, so a stays within c
+				a, c = a + x.energy + (d.hold or 0) - (d.owe or 0), c + x.electric_buffer_size + (d.hold or 0)
 				if polling(ep) then
 					l[#l + 1] = { ep.key, d.stats.sent, d.stats.got }
 				end
@@ -297,9 +333,10 @@ function power.sample()
 				f[k] = math.floor(acc[k] / acc.k * KW)
 			end
 			nets[#nets + 1] = { a = math.floor(a / 1000), c = math.floor(c / 1000), f = f, l = l }
+			own[id] = f.pd + f.sd -- #38: the tile's own demand, kW, its part of the budget
 		end
 	end
-	st.n, st.nets = 0, {}
+	st.n, st.nets, st.own, st.marks = 0, {}, own, marks
 	if #nets > 0 then
 		local json = helpers.table_to_json({ nets = nets })
 		if #json <= CHUNK then
@@ -367,6 +404,65 @@ end)
 
 local schedule = { per_tick = 4, interval = 60 }
 
+--- #38: the pool is shared by weight over its network's sending links (their n) and the tile's own consumers (their
+--- demand in kW at the last report), so neither the order the links poll in nor their credit decides who it feeds.
+--- Every poll, and every credit as the energy comes in, first budgets the pool: a link that doesn't send pays its owe
+--- from the pool only at its own poll (main's pay step); then what the pool has beyond the mark kept for the tile's own
+--- demand is shared by weight over the sending links that lack any, each taking at most what it still lacks (its owe
+--- and n less what it holds), and the tile's own demand, which keeps at most OWN_S seconds of it. A link pays its owe
+--- from what it takes and holds the rest (d.hold, J) out of the pool for its own send (§6.3 step 4), so the tile's own
+--- consumers can't draw it away, and a link whose lane is busy (a far partner's ack still on its way) keeps its share
+--- for the poll it can send at. The own part stays in the pool, marked; the mark falls at the demand's rate, so later
+--- budgets in the second don't share it again. power.sample gives back what links that don't send hold. One sending
+--- link with no own demand gets the whole pool, as before.
+-- ponytail: a link whose lane stays busy (its partner never acks) holds up to 1000·n out of its tile's network until
+-- it stops sending; give it back after some ticks busy if a relay's own load ever misses that.
+local OWN_S = 1
+local function budget(g, tick, self)
+	local st = sums()
+	st.marks = st.marks or {}
+	local eps = {}
+	for _, o in ipairs(g.eps) do
+		local d = o.data
+		d.owe, d.hold = d.owe or 0, d.hold or 0 -- plan ruling 6: an endpoint built before the power hub has no owe
+		if sending(o, tick) then
+			eps[#eps + 1] = o
+		end
+	end
+	table.sort(eps, function(x, y) return x.key < y.key end) -- the shares don't depend on pairs' order
+	local D, mark = (st.own or {})[g.id] or 0, st.marks[g.id]
+	local a = g.a
+	local m = mark and math.max(0, math.min(mark.m - (tick - mark.t) * D * 1000 / 60, a)) or 0 -- spent at its demand
+	if self and not sending(self, tick) then
+		local p = math.min(self.data.owe, a - m)
+		self.data.owe, a = self.data.owe - p, a - p
+	end
+	local own = D > 0 and 1000 * D * OWN_S - m or 0
+	local sum = own > 0 and D or 0
+	for _, o in ipairs(eps) do
+		local d = o.data
+		sum = sum + (d.owe + 1000 * d.n > d.hold and d.n or 0) -- one that holds all it can send takes no part
+	end
+	local split = a - m
+	for _, o in ipairs(eps) do
+		local d = o.data
+		local lack = d.owe + 1000 * d.n - d.hold
+		local x = lack > 0 and math.min(split * d.n / sum, lack) or 0
+		local h = d.hold + x
+		local p = math.min(d.owe, h)
+		d.owe, d.hold, a = d.owe - p, h - p, a - x
+	end
+	if own > 0 then
+		m = m + math.min(split * D / sum, own)
+	end
+	st.marks[g.id] = { m = m, t = tick }
+	if a ~= g.a then
+		a = math.max(0, a)
+		write(g, a)
+		g.a = a
+	end
+end
+
 connectors.register_type({
 	name = "power",
 	lanes = function() return { ab = "stream", ba = "stream" } end,
@@ -403,7 +499,7 @@ connectors.register_type({
 			built(x)
 		end
 	end,
-	--- §6.3, with the pay step before the freshness check (plan ruling 3).
+	--- §6.3, with the pay step, now the network's budget (#38), before the freshness check (plan ruling 3).
 	poll = function(ep, tick)
 		snapshot()
 		detect.check(ep)
@@ -413,13 +509,8 @@ connectors.register_type({
 		if not g then
 			return
 		end
-		local owe = d.owe or 0 -- plan ruling 6: an endpoint built before the power hub has none
-		local p = math.min(owe, g.a)
-		if p > 0 then
-			write(g, g.a - p)
-			g.a, owe = g.a - p, owe - p
-		end
-		d.owe = owe
+		budget(g, tick, ep)
+		local owe, q = d.owe, d.hold
 		if not d.tat or tick - d.tat > stale() then
 			built(eei)
 			return
@@ -430,21 +521,18 @@ connectors.register_type({
 			eei.electric_buffer_size = B
 			write(g, g.a) -- plan ruling 26: one fill ratio again, so a buffer shrunk to its energy isn't left full
 		end
-		-- §6.3 step 4: this second's amount, once per poll and nothing carried over (plan review B1), at most the pool's
-		-- energy plus this link's buffer less what it owes already.
+		-- §6.3 step 4: this second's amount, once per poll and nothing carried over (plan review B1), at most what this
+		-- link holds of the pool plus its buffer less what it owes already.
 		-- ponytail: n is a second's worth for a poll every 60 ticks; a poll after a wake can come at 45 ticks (the 3/4
 		-- rule, edges/lanes.lua), but ep:idle gates the extra send so energy is conserved. Scale it by the ticks since the
 		-- last poll if a type's walk ever stretches polls past 60 (over about 240 power endpoints on one tile at per_tick 4).
 		local dir = out_dir(ep)
-		local x = math.min(d.n, math.floor((g.a + 1000 * d.b - owe) / 1000))
+		local x = math.min(d.n, math.floor((q + 1000 * d.b - owe) / 1000))
 		if x > 0 and ep:idle(dir) and ep:can_send(dir) then
 			ep:send(dir, { [KEY] = x }) -- first: a refused send (MAX_TOTAL) raises before anything is taken
 			d.stats.sent = d.stats.sent + x
-			local take = math.min(1000 * x, g.a)
-			if take > 0 then
-				write(g, g.a - take)
-			end
-			d.owe = owe + 1000 * x - take
+			local take = math.min(1000 * x, q) -- from what it holds, already out of the pool
+			d.owe, d.hold = owe + 1000 * x - take, q - take
 		end
 	end,
 	--- T2: add only what fits, at one fill ratio over the pool, and credit exactly that (§6.4).
@@ -455,17 +543,23 @@ connectors.register_type({
 			return { [KEY] = 0 }
 		end
 		write(g, g.a + 1000 * x)
+		g.a = g.a + 1000 * x
 		ep.data.stats.got = ep.data.stats.got + x
+		budget(g, game.tick) -- #38: shared as it comes in, before the tile's own consumers draw it
 		return { [KEY] = x }
 	end,
-	--- §6.4, plan review S4: what the link owes is paid from its pool as far as it holds. The rest stays owed for the
-	--- lane's refund, which comes after teardown, to cancel; it is logged with the most a refund may cancel (the lane's
-	--- unacknowledged send). Then the interface's energy goes into the network's other link interfaces and then the
-	--- border pole's accumulators; what fits nowhere is dropped and logged.
+	--- §6.4, plan review S4: what the link owes is paid from what it holds (#38), then its pool as far as it holds. The
+	--- rest stays owed for the lane's refund, which comes after teardown, to cancel; it is logged with the most a refund
+	--- may cancel (the lane's unacknowledged send). Then the interface's energy and the rest of what the link held go into
+	--- the network's other link interfaces and then the border pole's accumulators; what fits nowhere is dropped and
+	--- logged.
 	teardown = function(ep)
 		snapshot()
 		local d, eei = ep.data, ep.data.eei
-		local owe = d.owe or 0
+		local q = d.hold or 0
+		local p = math.min(d.owe or 0, q)
+		local owe = (d.owe or 0) - p
+		q, d.hold, d.owe = q - p, 0, owe
 		if owe > 0 then
 			local g = read(ep)
 			local x = g and math.min(owe, g.a) or 0
@@ -479,11 +573,11 @@ connectors.register_type({
 					edge = ep.edge, cid = ep.cid, amount = d.owe / 1000, refundable = pending and pending[KEY] or 0 })
 			end
 		end
+		local left = to_pool(ep, (eei and eei.valid and eei.energy or 0) + q)
+		if left > 0 then
+			dropped(ep, left)
+		end
 		if eei and eei.valid then
-			local left = to_pool(ep, eei.energy)
-			if left > 0 then
-				dropped(ep, left)
-			end
 			eei.destroy()
 		end
 	end,
