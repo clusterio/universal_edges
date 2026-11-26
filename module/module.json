@@ -1,6 +1,6 @@
 {
 	"name": "universal_edges",
-	"version": "2.2.1",
+	"version": "3.0.0",
 	"dependencies": { "clusterio": "*" },
 	"load": ["control.lua"],
 	"require": ["globals.lua"]
