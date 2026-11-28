@@ -989,3 +989,52 @@ t.case("power hub: a 400-tick-old target is fresh at game.speed 10 and stale at 
 		ctx.expect(eei(x).electric_interface_mode == MODE.tertiary_input_output, "400 ticks old at speed 1: built")
 	end)
 end)
+
+-- #50: a lane's total for a key stops at 2^49 kJ. Past 2^48 sent, a link sends under a fresh key, which both lanes start
+-- at 0, and the partner credits it in full. stats.sent is set just under 2^48; the lane's own total stays small, so this
+-- checks the rotation, not the cap.
+t.case("power hub: past 2^48 kJ sent a link sends under a fresh key, credited in full (#50)", function(ctx)
+	local x, y
+	local function lane_sent(e, key)
+		for _, lane in pairs(e.tx) do
+			if lane.sent and lane.sent[key] then
+				return lane.sent[key]
+			end
+		end
+		return nil
+	end
+	--- What happened, for a failure's message.
+	local function seen()
+		local out = {}
+		for dir, lane in pairs(x.tx) do
+			for k, v in pairs(lane.sent or {}) do
+				out[#out + 1] = dir .. "." .. k .. "=" .. v
+			end
+		end
+		return "gen " .. tostring(x.data.gen) .. ", stats.sent " .. string.format("%.0f", x.data.stats.sent) ..
+			", lanes " .. table.concat(out, " ") .. ", got " .. tostring(y.data.stats.got)
+	end
+	ctx.at(500, function() bare("ph-key", 28500) end)
+	ctx.at(1199, function()
+		x, y = pair("ph-key")
+		ctx.expect(x ~= nil, "the link is ready at both ends")
+		eei(x).energy, eei(y).energy = 9e6, 0
+	end)
+	one_send(ctx, 1200, "ph-key", "x", 2000, 10000, 20000)
+	-- a tick before one_send's own step at 1300, which reads stats.sent to see the send happen
+	ctx.at(1290, function()
+		ctx.expect(x.data.gen == nil and lane_sent(x, "e") == 2000, "under 2^48: the key e, 2,000 kJ: " .. seen())
+		x.data.stats.sent = 2 ^ 48 - 1000 -- the next 3,000 kJ would pass 2^48
+	end)
+	one_send(ctx, 1300, "ph-key", "x", 3000, 10000, 20000)
+	ctx.at(1400, function()
+		ctx.expect(x.data.gen == 1 and lane_sent(x, "e1") == 3000, "a fresh key e1 from 0: " .. seen())
+		ctx.expect(lane_sent(x, "e") == 2000, "e's total stays where it was")
+		ctx.expect(y.data.stats.got == 5000, "the partner credited both keys in full: " .. y.data.stats.got)
+	end)
+	one_send(ctx, 1400, "ph-key", "x", 1000, 10000, 20000)
+	ctx.at(1500, function()
+		ctx.expect(x.data.gen == 1 and lane_sent(x, "e1") == 4000, "it stays on e1: " .. seen())
+		ctx.expect(y.data.stats.got == 6000, "credited: " .. y.data.stats.got)
+	end)
+end)
