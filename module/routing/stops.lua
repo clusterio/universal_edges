@@ -6,6 +6,61 @@ local base = require("modules/universal_edges/routing/base")
 
 local stops = { events = {} }
 
+--- Issue #28's proxy stops: never a station, only a name for a train bound for another tile (mod/data.lua).
+stops.PROXY = "ue-proxy-stop"
+
+--- The stops named name on surface (every name when nil) that are real stations, not proxies.
+function stops.real(name, surface)
+	local out = {}
+	for _, stop in pairs(game.train_manager.get_train_stops{ station_name = name, surface = surface }) do
+		if stop.name ~= stops.PROXY then
+			out[#out + 1] = stop
+		end
+	end
+	return out
+end
+
+--- #28: one proxy stop, train limit 0, for every name in the station list (§7.9) on each of its surfaces that exists here,
+--- so a train bound for another tile is destination_full, not no_path, and raises no alert. Factorio checks the limit
+--- before the path, so they stand on no rail, all at the surface's origin. A name with a stop here gets one too: harmless,
+--- the limit adds nothing. Called after each station-list message. keep: a full list's first part, whose other parts are
+--- still to come, removes nothing, so no train flips to no_path between parts; the next message clears what went.
+-- ponytail: proxies are the player force's only; give each force its own if a cluster ever runs trains on another force.
+function stops.sync_proxies(keep)
+	local r = base.state()
+	if not (r and r.list and prototypes.entity[stops.PROXY]) then
+		return -- an old mod without the prototype: trains raise no_path as before
+	end
+	r.proxies = r.proxies or {}
+	for surface, have in pairs(r.proxies) do
+		local want = game.get_surface(surface) and r.list[surface] or {}
+		for name, stop in pairs(have) do
+			if not stop.valid or not (keep or want[name]) then
+				if stop.valid then
+					stop.destroy()
+				end
+				have[name] = nil
+			end
+		end
+	end
+	for surface, names in pairs(r.list) do
+		local s = game.get_surface(surface)
+		if s then
+			local have = r.proxies[surface] or {}
+			r.proxies[surface] = have
+			for name in pairs(names) do
+				if not have[name] then
+					local stop = s.create_entity{ name = stops.PROXY, position = { 0, 0 }, force = "player" }
+					if stop then
+						stop.backer_name, stop.trains_limit, stop.destructible = name, 0, false
+						have[name] = stop
+					end
+				end
+			end
+		end
+	end
+end
+
 --- The station row (contracts.ts Station): surface is its registry entry's, read once at registration (R31); limit is
 --- 4294967295 when the stop has none; count includes reservations.
 function stops.row(stop, surface)
@@ -67,7 +122,7 @@ end
 function stops.rebuild()
 	local r = base.state()
 	r.stops, r.fast = {}, {}
-	for _, stop in pairs(game.train_manager.get_train_stops{}) do
+	for _, stop in ipairs(stops.real()) do
 		local entry = entry_of(stop)
 		r.stops[stop.unit_number] = entry
 		r.fast[stop.unit_number] = circuit(stop) and entry or nil
@@ -83,7 +138,7 @@ function stops.on_built(e)
 	if not (ent and ent.valid) then
 		return
 	end
-	if ent.type == "train-stop" then
+	if ent.type == "train-stop" and ent.name ~= stops.PROXY then
 		stops.add(ent)
 	elseif track(ent) then
 		base.state().dirty = true
