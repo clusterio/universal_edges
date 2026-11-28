@@ -187,6 +187,10 @@ export class PowerHub {
 		}
 		for (const group of groups(pools)) {
 			const { u, shares } = solve(group, this.knobs.h, this.knobs.tau);
+			// #49: what the group can supply this second (kW): every pool's offers and its stock above target, the way
+			// solve counts them. Vanilla's maximum production on one network.
+			const { h, tau } = this.knobs;
+			const supply = group.reduce((t, p) => t + p.so + p.po + p.se + p.to + Math.max(0, p.a - h * p.c) / tau, 0);
 			group.forEach((p, i) => {
 				p.x = shares[i].x;
 				p.y = shares[i].y;
@@ -195,10 +199,11 @@ export class PowerHub {
 				p.cap = c.cap;
 				// power hub spec §8.3 (2026-10-20 burst headroom): the -y/u_m cap exists so a tile's OWN class-m
 				// entities share at u_m. A pool with nothing of its own (no offers, no accumulators) has none to share
-				// with, so the link's stock is the only limit and a burst is covered like one network's remote
-				// accumulators. Not when the group is short (sp or sq < 1): the cap shares the brownout fairly (S5).
+				// with, so a burst is covered up to what the whole group can supply, as on one network. Not CAP_MAX
+				// (#49): the cap is what the game shows as the network's maximum production, and 1 TW misled players.
+				// Not when the group is short (sp or sq < 1): the cap shares the brownout fairly (S5).
 				if (u.sp >= 1 && u.sq >= 1 && shares[i].y <= 0 && p.so + p.po + p.se + p.to === 0 && p.td === 0) {
-					p.cap = CAP_MAX;
+					p.cap = Math.max(p.cap, Math.min(CAP_MAX, supply));
 				}
 			});
 			tree(group);

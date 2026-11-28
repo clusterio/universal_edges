@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { NetT, TargetsT } from "../../power/contracts.js";
-import { CAP_MAX } from "../../power/solve.js";
 import { B_FLOW, B_MAX, B_MIN, PowerHub, STALE_MS } from "../../power/hub.js";
 
 type Flows = { so: number; po: number; se: number; to: number; pd: number; sd: number; td: number };
@@ -43,22 +42,22 @@ test("a pair: the exporter sends the importer's load each second, in secondary_i
 	assert.deepEqual({ ...a, k: 0 }, { n: 20_000, b: 160_000, m: "secondary_input", k: 0 });
 	near(a.k, 20_000, "the export's cap");
 	assert.deepEqual({ ...b, k: 0 }, { n: 0, b: 160_000, m: "secondary_output", k: 0 });
-	assert.equal(b.k, CAP_MAX, "the import has nothing of its own: the cap is CAP_MAX (2026-10-20 burst headroom)");
+	near(b.k, 30_000, "the import has nothing of its own: the cap is what the group can supply (burst headroom, #49)");
 });
 
-test("an importing pool with no offers and no tertiary demand gets the cap CAP_MAX over its links; any own offer or " +
-	"td keeps −y / u_m (§8.3, 2026-10-20 burst headroom)", () => {
+test("an importing pool with no offers and no tertiary demand gets the group's supply as its cap over its links, not " +
+	"CAP_MAX; any own offer or td keeps −y / u_m (§8.3, 2026-10-20 burst headroom, #49)", () => {
 	const imp = (f: Partial<Flows>) => {
 		const out = hub().round({ 1: [at({ se: 30_000 }, ["e1/1", 0, 0])], 2: [at(f, ["e1/1", 0, 0])] });
 		return out.get(2)!["e1/1"];
 	};
-	assert.equal(imp({ sd: 20_000 }).k, CAP_MAX, "nothing of its own");
+	near(imp({ sd: 20_000 }).k, 30_000, "nothing of its own: the group's 30 MW offer");
 	assert.equal(imp({ sd: 20_000 }).m, "secondary_output", "the class is unchanged");
 	near(imp({ sd: 20_000, so: 1 }).k, 30_000, "a 1 kW solar offer");
 	near(imp({ sd: 20_000, td: 100 }).k, 30_000, "an accumulator charging");
 	const two = hub().round({ 1: [at({ se: 30_000 }, ["e1/1", 0, 0])],
 		2: [at({ sd: 20_000 }, ["e1/1", 0, 0], ["e1/2", 0, 0])] }).get(2)!;
-	assert.equal(two["e1/1"].k + two["e1/2"].k, CAP_MAX, "split over its links as today");
+	near(two["e1/1"].k + two["e1/2"].k, 30_000, "split over its links as today");
 });
 
 test("a chain: a relay forwards in the same round; a loop: breadth-first from the lowest instance id, links in key " +
@@ -69,8 +68,8 @@ test("a chain: a relay forwards in the same round; a loop: breadth-first from th
 	assert.equal(chain.get(2)!["e2/1"].n, 30_000, "the relay forwards without waiting for its delivery");
 	assert.equal(chain.get(2)!["e1/1"].n, 0);
 	assert.equal(chain.get(2)!["e1/1"].m, "secondary_output", "the relay's y is 0: the marginal class");
-	assert.equal(chain.get(2)!["e1/1"].k + chain.get(2)!["e2/1"].k, CAP_MAX,
-		"a relay has nothing of its own: CAP_MAX (2026-10-20)");
+	near(chain.get(2)!["e1/1"].k + chain.get(2)!["e2/1"].k, 50_000,
+		"a relay has nothing of its own: the group's supply (2026-10-20, #49)");
 	const loop = {
 		1: [at({ se: 50_000 }, ["e1/1", 0, 0], ["e3/1", 0, 0])],
 		2: [at({}, ["e1/1", 0, 0], ["e2/1", 0, 0])],
@@ -217,4 +216,13 @@ test("buffers: past a 3.3 GW peak, 3 × the peak, over B_MAX (#37)", () => {
 	clock.t = 600_000;
 	out = round(pair(3_400_000));
 	assert.equal(out.get(1)!["e1/1"].b, 10_200_000, "3.4 GW: 10.2 GJ, just over B_MAX");
+});
+
+test("#49: the burst cap counts the group's stock above target and stays within CAP_MAX", () => {
+	// an idle importer with nothing of its own (its own cap −y / u_m is 0); the exporter holds 30,000 kJ against its
+	// 10,000 kJ target, so the group can supply its 30 MW offer and (30,000 − 10,000) / 8 more
+	const out = hub().round({ 1: [net({ se: 30_000 }, 30_000, 20_000, ["e1/1", 0, 0])], 2: [at({}, ["e1/1", 0, 0])] });
+	near(out.get(2)!["e1/1"].k, 30_000 + 20_000 / 8, "offers plus stock above target over τ");
+	const huge = hub().round({ 1: [at({ se: 2e9 }, ["e1/1", 0, 0])], 2: [at({}, ["e1/1", 0, 0])] });
+	assert.equal(huge.get(2)!["e1/1"].k, 1e9, "never above the interface's 1 TW");
 });
