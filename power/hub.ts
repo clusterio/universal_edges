@@ -20,10 +20,16 @@ export const STALE_MS = 5000;
 /** §8.5: a link's peak is the largest of its last five one-minute maxima (plan review B5). */
 export const MINUTE_MS = 60_000;
 export const PEAK_MINUTES = 5;
-/** §8.5: the buffer is factor × peak within [B_MIN, B_MAX] kJ (D37). */
+/**
+ * §8.5: the buffer is factor × peak within [B_MIN, B_MAX] kJ (D37), and never under B_FLOW × peak (issue #37). A link
+ * sends at most its buffer a second (power.lua's poll), so B_MAX alone held every link to 10 GW. Energy moves in
+ * one-second lumps and a pool sits half full, so 2 × peak leaves room for one lump only; the model needed 3 × peak
+ * for a 27 GW chain with 30-tick hops.
+ */
 export const B_FACTOR = 8; // Task 5's model (with TAU 8, solve.ts)
 export const B_MIN = 10_000;
 export const B_MAX = 10_000_000;
+export const B_FLOW = 3;
 
 /** One side of a link as its tile reported it; n, what it sends this second, is 0 unless the tree makes it sender. */
 type Side = { key: string; pool: P; sent: number; got: number; n: number };
@@ -236,7 +242,10 @@ export class PowerHub {
 		}
 	}
 
-	/** §8.5: this minute's maximum takes net (kJ); the buffer is factor × the largest of the last five minutes'. */
+	/**
+	 * §8.5: this minute's maximum takes net (kJ); the buffer is factor × the largest of the last five minutes' within
+	 * [B_MIN, B_MAX], and at least B_FLOW × it (#37).
+	 */
 	private buffer(key: string, net: number, now: number): number {
 		const minute = Math.floor(now / MINUTE_MS);
 		const kept = (this.peaks.get(key) ?? []).filter(m => m.minute > minute - PEAK_MINUTES);
@@ -248,6 +257,7 @@ export class PowerHub {
 		}
 		this.peaks.set(key, kept);
 		const peak = Math.max(...kept.map(m => m.max));
-		return Math.min(B_MAX, Math.max(B_MIN, Math.ceil(this.knobs.factor * peak)));
+		const sized = Math.min(B_MAX, Math.max(B_MIN, Math.ceil(this.knobs.factor * peak)));
+		return Math.max(sized, Math.ceil(B_FLOW * peak));
 	}
 }
