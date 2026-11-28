@@ -17,6 +17,25 @@ local scheduler = require("modules/universal_edges/runtime/scheduler")
 
 local power = {}
 local NAME, KEY = "ue-link-interface", "e"
+--- #50: a lane's total for a key stops at ledger_core.MAX_TOTAL (2^49 kJ, about 8 months at 27 GW), and a send past it
+--- raises and fails the link. Once the link's sends under its key pass half of that, it sends under a fresh one ("e1",
+--- "e2", …), which both lanes start at 0; the old key's last total still acks and refunds as before. Every hook below
+--- takes a bag of any of these keys. stats.sent counts both directions, so it rotates early, never late.
+local ROTATE = 2 ^ 48
+
+--- The key this link sends under now.
+local function key_of(d)
+	return d.gen and KEY .. d.gen or KEY
+end
+
+--- A power bag's kJ over its keys (a power lane carries only power keys).
+local function bag_kj(bag)
+	local n = 0
+	for _, v in pairs(bag or {}) do
+		n = n + v
+	end
+	return n
+end
 local ALL = {} -- get_accumulators_energy's filter: {} is every accumulator; one shared table (review M3)
 local send = bridge.channel("universal_edges")
 local MODE = defines.electric_interface_mode
@@ -530,7 +549,10 @@ connectors.register_type({
 		local dir = out_dir(ep)
 		local x = math.min(d.n, math.floor((q + 1000 * d.b - owe) / 1000))
 		if x > 0 and ep:idle(dir) and ep:can_send(dir) then
-			ep:send(dir, { [KEY] = x }) -- first: a refused send (MAX_TOTAL) raises before anything is taken
+			if d.stats.sent - (d.gen_at or 0) + x > ROTATE then
+				d.gen, d.gen_at = (d.gen or 0) + 1, d.stats.sent -- #50: a fresh key, its total from 0
+			end
+			ep:send(dir, { [key_of(d)] = x }) -- first: a refused send (MAX_TOTAL) raises before anything is taken
 			d.stats.sent = d.stats.sent + x
 			local take = math.min(1000 * x, q) -- from what it holds, already out of the pool
 			d.owe, d.hold = owe + 1000 * x - take, q - take
@@ -539,15 +561,19 @@ connectors.register_type({
 	--- T2: add only what fits, at one fill ratio over the pool, and credit exactly that (§6.4).
 	credit = function(ep, _, bag)
 		local g = read(ep)
-		local x = g and math.min(bag[KEY] or 0, math.floor((g.c - g.a) / 1000)) or 0
+		local room, x, out = g and math.floor((g.c - g.a) / 1000) or 0, 0, {}
+		for k, v in pairs(bag) do -- #50: an old key catching up and the new one can come in one offer
+			out[k] = math.max(0, math.min(v, room - x))
+			x = x + out[k]
+		end
 		if x <= 0 then
-			return { [KEY] = 0 }
+			return out
 		end
 		write(g, g.a + 1000 * x)
 		g.a = g.a + 1000 * x
 		ep.data.stats.got = ep.data.stats.got + x
 		budget(g, game.tick) -- #38: shared as it comes in, before the tile's own consumers draw it
-		return { [KEY] = x }
+		return out
 	end,
 	--- §6.4, plan review S4: what the link owes is paid from what it holds (#38), then its pool as far as it holds. The
 	--- rest stays owed for the lane's refund, which comes after teardown, to cancel; it is logged with the most a refund
@@ -571,7 +597,7 @@ connectors.register_type({
 			if d.owe >= 1 then
 				local pending = ep:pending(out_dir(ep))
 				send("trace", { op = "ue.power", phase = "debt_unpaid", level = "warn", tick = game.tick, trace = ep.trace,
-					edge = ep.edge, cid = ep.cid, amount = d.owe / 1000, refundable = pending and pending[KEY] or 0 })
+					edge = ep.edge, cid = ep.cid, amount = d.owe / 1000, refundable = bag_kj(pending) })
 			end
 		end
 		local left = to_pool(ep, (eei and eei.valid and eei.energy or 0) + q)
@@ -585,7 +611,7 @@ connectors.register_type({
 	--- §6.4, T5 bent on purpose: what the link owes is cancelled first (that energy never left the pool); the rest goes
 	--- back into the pool, then the accumulators; what fits nowhere is dropped and logged.
 	refund = function(ep, _, bag)
-		local d, joules = ep.data, (bag[KEY] or 0) * 1000
+		local d, joules = ep.data, bag_kj(bag) * 1000
 		local cancel = math.min(d.owe or 0, joules)
 		if cancel > 0 then
 			d.owe = d.owe - cancel
