@@ -20,22 +20,49 @@ function stops.real(name, surface)
 	return out
 end
 
+--- #53: the proxies' own force. Factorio copies a same-named stop's train limit, on the same force, into a stop renamed
+--- to that name, so on the player's force a stop a player named after a remote station took a proxy's 0. A train still
+--- reads destination_full for a limit-0 stop on another force (headless probe, 2.1.24); friend and cease-fire both ways
+--- so nothing of the player's treats them as enemies.
+stops.FORCE = "ue-proxy"
+local function proxy_force()
+	local f = game.forces[stops.FORCE]
+	if not f then
+		local ok, made = pcall(game.create_force, stops.FORCE)
+		if not ok then
+			return nil -- all 64 forces taken: no proxies, trains raise no_path as before
+		end
+		f = made
+		local player = game.forces.player
+		f.set_friend(player, true)
+		f.set_cease_fire(player, true)
+		player.set_friend(f, true)
+		player.set_cease_fire(f, true)
+	end
+	return f
+end
+
 --- #28: one proxy stop, train limit 0, for every name in the station list (§7.9) on each of its surfaces that exists here,
 --- so a train bound for another tile is destination_full, not no_path, and raises no alert. Factorio checks the limit
 --- before the path, so they stand on no rail, all at the surface's origin. A name with a stop here gets one too: harmless,
 --- the limit adds nothing. Called after each station-list message. keep: a full list's first part, whose other parts are
 --- still to come, removes nothing, so no train flips to no_path between parts; the next message clears what went.
--- ponytail: proxies are the player force's only; give each force its own if a cluster ever runs trains on another force.
+-- ponytail: one proxy force for every train force; give each its own if a cluster ever runs trains on another force.
 function stops.sync_proxies(keep)
 	local r = base.state()
 	if not (r and r.list and prototypes.entity[stops.PROXY]) then
 		return -- an old mod without the prototype: trains raise no_path as before
 	end
+	local force = proxy_force()
+	if not force then
+		return
+	end
 	r.proxies = r.proxies or {}
 	for surface, have in pairs(r.proxies) do
 		local want = game.get_surface(surface) and r.list[surface] or {}
 		for name, stop in pairs(have) do
-			if not stop.valid or not (keep or want[name]) then
+			-- a proxy from before #53, on the player's force, goes and is made again on its own
+			if not stop.valid or stop.force.name ~= stops.FORCE or not (keep or want[name]) then
 				if stop.valid then
 					stop.destroy()
 				end
@@ -50,9 +77,10 @@ function stops.sync_proxies(keep)
 			r.proxies[surface] = have
 			for name in pairs(names) do
 				if not have[name] then
-					local stop = s.create_entity{ name = stops.PROXY, position = { 0, 0 }, force = "player" }
+					local stop = s.create_entity{ name = stops.PROXY, position = { 0, 0 }, force = force }
 					if stop then
-						stop.backer_name, stop.trains_limit, stop.destructible = name, 0, false
+						stop.backer_name = name -- first: a rename copies a same-named stop's limit (#53)
+						stop.trains_limit, stop.destructible = 0, false
 						have[name] = stop
 					end
 				end

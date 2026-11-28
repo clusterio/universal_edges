@@ -2361,6 +2361,18 @@ t.case("routing: a remote name gets a proxy stop, so its train is destination_fu
 			"a proxy is not a stop here")
 		stops.rebuild()
 		ctx.expect(storage.universal_edges.routing.stops[p.unit_number] == nil, "nor in the stop registry")
+		-- #53: Factorio copies a same-named stop's limit, on the same force, into a stop renamed to that name. A
+		-- player's stop named after a remote station must keep no limit, not take the proxy's 0.
+		local sp = game.get_surface("sp3b")
+		local rail = assert(sp.create_entity{ name = "straight-rail", position = { X + 1, Y + 21 },
+			direction = defines.direction.east, force = "player" }, "rail")
+		local real = assert(sp.create_entity{ name = "train-stop", position = { X + 1, Y + 23 },
+			direction = defines.direction.east, force = "player" }, "a player's stop")
+		real.backer_name = NAME
+		ctx.expect(real.trains_limit == 4294967295, "a player's stop named after it keeps no limit: " .. real.trains_limit)
+		ctx.expect(p.force.name ~= "player", "the proxy isn't on the player's force: " .. p.force.name)
+		real.destroy()
+		rail.destroy()
 	end)
 	ctx.at(3883, function()
 		ctx.expect(tr.state == defines.train_state.destination_full, "the proxy makes it destination_full: " ..
