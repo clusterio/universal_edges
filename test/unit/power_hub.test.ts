@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { NetT, TargetsT } from "../../power/contracts.js";
 import { CAP_MAX } from "../../power/solve.js";
-import { B_MAX, B_MIN, PowerHub, STALE_MS } from "../../power/hub.js";
+import { B_FLOW, B_MAX, B_MIN, PowerHub, STALE_MS } from "../../power/hub.js";
 
 type Flows = { so: number; po: number; se: number; to: number; pd: number; sd: number; td: number };
 const F0: Flows = { so: 0, po: 0, se: 0, to: 0, pd: 0, sd: 0, td: 0 };
@@ -173,8 +173,8 @@ test("a key reported once, or whose partner's report is stale or dropped, sends 
 	assert.deepEqual(out.get(1), { "e1/1": { n: 0, b: 160_000, k: 0 } }, "dropped: no send, no m; the peak still held");
 });
 
-test("buffers: 8 × the largest network amount over five one-minute maxima, both sides, within [10 MJ, 10 GJ] " +
-	"(§8.5, D37, plan review B5)", () => {
+test("buffers: 8 × the largest network amount over five one-minute maxima, both sides, within [10 MJ, 10 GJ] up to " +
+	"a 3.3 GW peak (§8.5, D37, plan review B5)", () => {
 	const { clock, round } = hub();
 	const pair = (load: number) => ({
 		1: [at({ se: 10_000_000 }, ["e1/1", 0, 0])],
@@ -190,7 +190,31 @@ test("buffers: 8 × the largest network amount over five one-minute maxima, both
 		assert.equal(out.get(2)!["e1/1"].b, want, `both sides, at ${s} s`);
 	}
 	clock.t = 1_000_000;
-	assert.equal(round(pair(5_000_000)).get(1)!["e1/1"].b, B_MAX, "40 GJ, at most 10 GJ");
+	assert.equal(round(pair(3_000_000)).get(1)!["e1/1"].b, B_MAX, "3 GW: 24 GJ, at most 10 GJ (3 × 3 GW is 9 GJ)");
 	clock.t = 1_400_000;
 	assert.equal(round(pair(1_000)).get(1)!["e1/1"].b, B_MIN, "five minutes on: 8 MJ, at least 10 MJ");
+});
+
+// #37: B_MAX alone held a link to 10 GW (it sends at most its buffer a second). Past 3.3 GW the buffer is 3 × the
+// peak, on both sides, and it keeps it for the peak's five minutes like the 8 × rule.
+test("buffers: past a 3.3 GW peak, 3 × the peak, over B_MAX (#37)", () => {
+	const { clock, round } = hub();
+	const pair = (load: number) => ({
+		1: [at({ se: 30_000_000 }, ["e1/1", 0, 0])],
+		2: [at({ sd: load }, ["e1/1", 0, 0])],
+	});
+	assert.equal(B_FLOW, 3);
+	clock.t = 0;
+	let out = round(pair(27_000_000));
+	assert.equal(out.get(1)!["e1/1"].n, 27_000_000, "27 GW sent");
+	assert.equal(out.get(1)!["e1/1"].b, 81_000_000, "27 GW: 81 GJ");
+	assert.equal(out.get(2)!["e1/1"].b, 81_000_000, "both sides");
+	clock.t = 60_000;
+	assert.equal(round(pair(5_000_000)).get(1)!["e1/1"].b, 81_000_000, "the 27 GW peak is kept");
+	clock.t = 300_000;
+	out = round(pair(5_000_000));
+	assert.equal(out.get(1)!["e1/1"].b, 15_000_000, "five minutes on: 5 GW, 15 GJ");
+	clock.t = 600_000;
+	out = round(pair(3_400_000));
+	assert.equal(out.get(1)!["e1/1"].b, 10_200_000, "3.4 GW: 10.2 GJ, just over B_MAX");
 });

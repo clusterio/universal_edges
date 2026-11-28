@@ -641,3 +641,37 @@ test("#38: a link that leaves its network and joins one brings what it holds and
 	const err = net.pool().a + c1.hold + c2.hold - c2.owe + 1000 * (c2.sent - 500) - (1e6 + held - 5e6);
 	assert.ok(Math.abs(err) < 1, `conserved: ${err} J`);
 });
+
+// #37: a link sent at most its buffer a second, and the buffer stopped at 10 GJ, so every link carried at most 10 GW.
+// A 20-tile chain fed from one end, 27 GW of uneven loads along it (the far tile small, some relays empty): with
+// enough steam every tile must get full power, and short of it every tile the same share, as on one network
+// (vanilla: min(1, generation / demand)). Main gave 0.31 to 0.37 with enough; short, the far tile 0.20 and the
+// nearest 0.46 of the 0.74 each should have.
+for (const [name, steam] of [["enough", 30e6], ["short", 20e6]] as const) {
+	for (const delay of [2, 30]) {
+		test(`#37: a 20-tile chain carrying 27 GW, ${name}, ${delay}-tick hops: every tile gets the same share`, () => {
+			const len = 20;
+			// load weights by tile: none on the steam tile, the far tile 1, the rest uneven
+			const weights = Array.from({ length: len }, (_, i) => [5, 0, 1, 3, 0, 2, 1, 4][i % 8]);
+			weights[0] = 0;
+			weights[len - 1] = 1;
+			const sum = weights.reduce((s, x) => s + x, 0);
+			const nets: NetSpec[] = weights.map(x => (x > 0 ? { load: () => 27e6 * x / sum } : {}));
+			nets[0] = { steam };
+			const w = new World({ nets, links: Array.from({ length: len - 1 }, (_, i): [number, number] => [i, i + 1]),
+				delay, seed: 1 });
+			const got = nets.map(() => 0);
+			for (let t = 0; t < 240 * 60; t++) {
+				w.step();
+				if (t >= 120 * 60) {
+					w.nets.forEach((n, i) => { got[i] += n.u.sq; });
+				}
+			}
+			const share = Math.min(1, steam / 27e6);
+			const sat = got.map(x => x / (120 * 60)).filter((_, i) => weights[i] > 0);
+			assert.ok(sat.every(x => Math.abs(x - share) <= 0.01),
+				`share ${share.toFixed(3)}, tiles ${sat.map(x => x.toFixed(3)).join(", ")}`);
+			assert.ok(Math.abs(w.ledger()) <= 1e-6 * w.moved, `ledger ${w.ledger()} J`);
+		});
+	}
+}
