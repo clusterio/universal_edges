@@ -24,9 +24,10 @@ local function waiting(state)
 	return state == STATE.no_path or state == STATE.destination_full
 end
 
---- A stop named name on surface, the train's own (R33): a stop on another planet of this tile is not local.
+--- A stop named name on surface, the train's own (R33): a stop on another planet of this tile is not local, nor is a
+--- proxy (#28).
 function routes.is_local(name, surface)
-	return #game.train_manager.get_train_stops{ station_name = name, surface = surface } > 0
+	return #stops.real(name, surface) > 0
 end
 
 local function current_station(tr)
@@ -179,7 +180,7 @@ local function firsts(tr, dest)
 			goals[#goals + 1], keys[#keys + 1] = goal, "c:" .. c.key
 		end
 	end
-	for _, stop in pairs(game.train_manager.get_train_stops{ station_name = dest, surface = here }) do
+	for _, stop in ipairs(stops.real(dest, here)) do
 		if stop.connected_rail then -- a stop on no rail makes the search raise (playtest 2026-10-10)
 			goals[#goals + 1], keys[#keys + 1] = stop, "s:" .. stop.unit_number
 		end
@@ -456,8 +457,8 @@ scheduler.periodic{
 
 --- The controller's answer (§6.3): no route or no train, ignored; a manual or captured train left alone (FR M1, plan
 --- ruling 9); a train off its leg ends moved_on and is checked again; ok puts in the next hop (held while the train
---- waits at a stop, B); local drops the carried hop so the train paths to the local stop that won; any other failure
---- leaves the route unrouted for the quiet retry.
+--- waits at a stop, B); local drops the carried hop so the train paths to the local stop that won; no_path and
+--- unknown_station raise the train's No path alert (#28); any other failure leaves the route unrouted for the quiet retry.
 bridge.on("universal_edges", "ue.route.reply", function(p)
 	if type(p.trace) ~= "string" or type(p.ok) ~= "boolean" then
 		return false
@@ -485,6 +486,13 @@ bridge.on("universal_edges", "ue.route.reply", function(p)
 		route.unrouted = not routes.set_hop(tr, route, hops[1]) or route.held ~= nil -- a held hop isn't in yet (B)
 	elseif p.reason == "local" then
 		routes.remove_hop(tr, route)
+	elseif p.reason == "no_path" or p.reason == "unknown_station" then
+		-- #28: a proxy stop turns a train's real no_path into destination_full, so the engine's alert would never come;
+		-- the controller found no way (or no such station: a proxy can outlive its name until the next list message), so
+		-- raise vanilla's own. The quiet retry asks every 5 s and raises it again.
+		for _, player in pairs(tr.front_stock.force.connected_players) do
+			player.add_alert(tr.front_stock, defines.alert_type.train_no_path)
+		end
 	end
 end)
 

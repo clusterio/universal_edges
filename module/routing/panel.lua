@@ -10,6 +10,7 @@
 -- with a pencil that renames the open stop to it.
 local bridge = require("modules/universal_edges/runtime/bridge")
 local base = require("modules/universal_edges/routing/base")
+local stops = require("modules/universal_edges/routing/stops")
 local scheduler = require("modules/universal_edges/runtime/scheduler")
 local sync = require("modules/universal_edges/schedules/sync")
 
@@ -608,6 +609,7 @@ bridge.on("universal_edges", "ue.route.stations", function(p)
 			names[g.name] = nil
 		end
 	end
+	stops.sync_proxies(p.full) -- #28
 	for _, player in pairs(game.connected_players) do
 		if player.gui.screen[NAME] then
 			panel.show(player, true)

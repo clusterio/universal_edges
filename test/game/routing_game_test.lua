@@ -2325,3 +2325,66 @@ t.case("routing: only a locomotive's window opens the panel, a wagon's doesn't",
 		seams.clear(id, "t2")
 	end)
 end)
+
+-- #28: proxy stops. Ticks 3880-3890, on its own ground far from every rig (x, y = -40000).
+t.case("routing: a remote name gets a proxy stop, so its train is destination_full, not no_path; proxies are never " ..
+	"stations (#28)", function(ctx)
+	local X, Y, NAME, GONE = -40000, -40000, "RT28 FAR", "RT28 GONE"
+	local tr
+	local function proxy(name)
+		return (storage.universal_edges.routing.proxies or {}).sp3b and storage.universal_edges.routing.proxies.sp3b[name]
+	end
+	ctx.at(3880, function()
+		local s = game.get_surface("sp3b")
+		s.request_to_generate_chunks({ X + 40, Y }, 2)
+		s.force_generate_chunk_requests()
+		for i = 0, 39 do
+			assert(s.create_entity{ name = "straight-rail", position = { X + 1 + 2 * i, Y + 1 }, direction = defines.direction.east,
+				force = "player" }, "rail " .. i)
+		end
+		local loco = assert(s.create_entity{ name = "locomotive", position = { X + 10, Y + 1 }, direction = defines.direction.east,
+			force = "player" }, "loco")
+		loco.get_inventory(defines.inventory.fuel).insert{ name = "coal", count = 10 }
+		tr = loco.train
+		tr.get_schedule().add_record{ station = NAME }
+		tr.manual_mode = false
+	end)
+	ctx.at(3881, function()
+		ctx.expect(tr.state == defines.train_state.no_path, "no proxy yet: no_path")
+		deliver("ue.route.stations", { set = { { surface = "sp3b", name = NAME, tiles = { "t9" }, free = 1 },
+			{ surface = "sp3b", name = GONE, tiles = { "t9" }, free = 1 } }, gone = {} })
+		local p = proxy(NAME)
+		ctx.expect(p and p.valid and p.name == stops.PROXY and p.trains_limit == 0 and p.backer_name == NAME,
+			"a proxy with limit 0 for the name")
+		ctx.expect(proxy(GONE) and proxy(GONE).valid, "and one for the other name")
+		ctx.expect(#stops.real(NAME, "sp3b") == 0 and not routes.is_local(NAME, game.get_surface("sp3b").index),
+			"a proxy is not a stop here")
+		stops.rebuild()
+		ctx.expect(storage.universal_edges.routing.stops[p.unit_number] == nil, "nor in the stop registry")
+	end)
+	ctx.at(3883, function()
+		ctx.expect(tr.state == defines.train_state.destination_full, "the proxy makes it destination_full: " ..
+			tostring(tr.state))
+		local gone = proxy(GONE)
+		deliver("ue.route.stations", { set = {}, gone = { { surface = "sp3b", name = GONE } } })
+		ctx.expect(not gone.valid and proxy(GONE) == nil, "a gone name's proxy goes")
+		ctx.expect(proxy(NAME).valid, "the other stays")
+		local trace = routes.trace_of(tr)
+		ctx.expect(trace ~= nil, "the waiting train asked")
+		deliver("ue.route.reply", { trace = trace, ok = false, reason = "no_path" }) -- raises the alert; no player here
+	end)
+	ctx.at(3886, function()
+		local other = "RT28 OTHER"
+		deliver("ue.route.stations", { full = true, set = { { surface = "sp3b", name = other, tiles = { "t9" }, free = 1 } },
+			gone = {} })
+		ctx.expect(proxy(NAME) and proxy(NAME).valid and proxy(other).valid,
+			"a full list's first part removes nothing: its other parts are still to come")
+		deliver("ue.route.stations", { set = {}, gone = {} })
+		ctx.expect(proxy(NAME) == nil and proxy(other).valid, "the next message clears a name the full list left out")
+		deliver("ue.route.stations", { set = {}, gone = { { surface = "sp3b", name = other } } })
+		ctx.expect(proxy(other) == nil, "the last proxy goes")
+		for _, c in ipairs(tr.carriages) do
+			c.destroy()
+		end
+	end)
+end)

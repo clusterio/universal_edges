@@ -133,3 +133,17 @@ do
 	sink.variation_weights = nil
 	data:extend({ sink })
 end
+
+-- The proxy stop (issue #28): one per remote station name on each surface, train limit 0, so a train bound for another
+-- tile shows destination_full (no alert) instead of no_path. Factorio checks the limit before the path, so it needs no
+-- rail and does the same from anywhere on the surface ([probe] 2026-11-28). Nothing to see, select, mine or blueprint.
+do
+	local proxy = table.deepcopy(data.raw["train-stop"]["train-stop"])
+	proxy.name, proxy.hidden, proxy.minable, proxy.flags = "ue-proxy-stop", true, nil, NOFLAGS
+	proxy.selectable_in_game, proxy.collision_mask, proxy.chart_name = false, { layers = {} }, false
+	proxy.animations, proxy.top_animations, proxy.rail_overlay_animations = nil, nil, nil
+	proxy.light1, proxy.light2, proxy.circuit_connector, proxy.draw_circuit_wires = nil, nil, nil, false
+	proxy.fast_replaceable_group, proxy.next_upgrade, proxy.corpse, proxy.dying_explosion = nil, nil, nil, nil
+	proxy.factoriopedia_simulation = nil
+	data:extend({ proxy })
+end
